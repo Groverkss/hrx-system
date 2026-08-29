@@ -16,6 +16,7 @@ DEFAULT_ENABLED = [
     "amdgpu",
     "llvmir",
     "spirv",
+    "xdna",
     "x86",
 ]
 
@@ -25,6 +26,7 @@ SUPPORTED_VALUES = [
     "spirv",
     "vm",
     "wasm",
+    "xdna",
     "x86",
 ]
 
@@ -52,6 +54,14 @@ selects.config_setting_group(
     match_all = [
         "//loom/config/target/arch:amdgpu",
         "//loom/config/emit:amdgpu",
+    ],
+)
+
+selects.config_setting_group(
+    name = "xdna_artifacts",
+    match_all = [
+        "//loom/config/target/arch:xdna",
+        "//loom/config/emit:xdna",
     ],
 )
 

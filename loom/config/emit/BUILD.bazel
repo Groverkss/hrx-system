@@ -19,6 +19,7 @@ SUPPORTED_VALUES = [
     "llvmir",
     "spirv",
     "wasm",
+    "xdna",
 ]
 
 iree_string_list_flag(
@@ -50,5 +51,6 @@ iree_string_list_flag(
         "llvmir",
         "spirv",
         "wasm",
+        "xdna",
     ]
 ]

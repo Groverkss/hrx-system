@@ -45,6 +45,7 @@ CMAKE_LOOM_TARGET_DEFINES = (
     ("spirv", "LOOM_TARGET_SPIRV"),
     ("vm", "LOOM_TARGET_VM"),
     ("wasm", "LOOM_TARGET_WASM"),
+    ("xdna", "LOOM_TARGET_XDNA"),
     ("x86", "LOOM_TARGET_X86"),
 )
 CMAKE_LOOM_IMPORTER_DEFINES = (
@@ -64,6 +65,7 @@ REPOSITORY_BUILD_LOOM_TARGETS = (
     "spirv",
     "vm",
     "wasm",
+    "xdna",
     "x86",
 )
 REPOSITORY_BUILD_LOOM_IMPORTERS = ("mlir", "tilelang")

@@ -12,6 +12,9 @@
 #ifndef LOOM_CONFIG_TARGET_HAVE_AMDGPU
 #define LOOM_CONFIG_TARGET_HAVE_AMDGPU 0
 #endif  // LOOM_CONFIG_TARGET_HAVE_AMDGPU
+#ifndef LOOM_CONFIG_TARGET_HAVE_XDNA
+#define LOOM_CONFIG_TARGET_HAVE_XDNA 0
+#endif  // LOOM_CONFIG_TARGET_HAVE_XDNA
 #ifndef LOOM_CONFIG_TARGET_HAVE_LLVMIR
 #define LOOM_CONFIG_TARGET_HAVE_LLVMIR 0
 #endif  // LOOM_CONFIG_TARGET_HAVE_LLVMIR
@@ -28,7 +31,8 @@
 #define LOOM_CONFIG_TARGET_HAVE_ANY_PROVIDER                           \
   (LOOM_CONFIG_TARGET_HAVE_AMDGPU || LOOM_CONFIG_TARGET_HAVE_LLVMIR || \
    LOOM_CONFIG_TARGET_HAVE_SPIRV || LOOM_CONFIG_TARGET_HAVE_WASM ||    \
-   LOOM_CONFIG_TARGET_HAVE_X86 || LOOM_CONFIG_TARGET_HAVE_VM)
+   LOOM_CONFIG_TARGET_HAVE_X86 || LOOM_CONFIG_TARGET_HAVE_VM ||        \
+   LOOM_CONFIG_TARGET_HAVE_XDNA)
 
 #if LOOM_CONFIG_TARGET_HAVE_VM
 #include "loom/target/arch/vm/provider.h"
@@ -37,6 +41,9 @@
 #if LOOM_CONFIG_TARGET_HAVE_AMDGPU
 #include "loom/target/arch/amdgpu/provider.h"
 #endif  // LOOM_CONFIG_TARGET_HAVE_AMDGPU
+#if LOOM_CONFIG_TARGET_HAVE_XDNA
+#include "loom/target/arch/amd/xdna/aie2p/provider.h"
+#endif  // LOOM_CONFIG_TARGET_HAVE_XDNA
 #if LOOM_CONFIG_TARGET_HAVE_LLVMIR
 #include "loom/target/arch/llvmir/provider.h"
 #endif  // LOOM_CONFIG_TARGET_HAVE_LLVMIR
@@ -58,6 +65,9 @@ static const loom_target_provider_t* const kConfiguredTargetProviders[] = {
 #if LOOM_CONFIG_TARGET_HAVE_AMDGPU
     &loom_amdgpu_target_provider,
 #endif  // LOOM_CONFIG_TARGET_HAVE_AMDGPU
+#if LOOM_CONFIG_TARGET_HAVE_XDNA
+    &loom_aie2p_target_provider,
+#endif  // LOOM_CONFIG_TARGET_HAVE_XDNA
 #if LOOM_CONFIG_TARGET_HAVE_LLVMIR
     &loom_llvmir_target_provider,
 #endif  // LOOM_CONFIG_TARGET_HAVE_LLVMIR
