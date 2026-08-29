@@ -189,6 +189,10 @@ void loom_low_allocation_storage_lease_unit_index_insert(
     uint32_t storage_lease_index) {
   const loom_low_allocation_storage_lease_t* lease =
       &index->instances[storage_lease_index];
+  if (loom_low_reg_class_uses_explicit_physical_registers(
+          &descriptor_set->reg_classes[lease->descriptor_reg_class_id])) {
+    return;
+  }
   const uint32_t root_ordinal =
       loom_low_allocation_storage_lease_unit_root_ordinal(lease->location_kind);
   const uint32_t storage_key = loom_low_reg_class_storage_key(

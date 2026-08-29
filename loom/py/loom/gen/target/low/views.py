@@ -243,6 +243,7 @@ def _view_register_classes(
     validation.validate_register_classes(
         view_spec.key,
         view_spec.reg_classes,
+        compiled.physical_registers,
         alias_set_count=max((reg_class.alias_set_id for reg_class in compiled.reg_classes), default=0),
     )
     for reg_class in view_spec.reg_classes:

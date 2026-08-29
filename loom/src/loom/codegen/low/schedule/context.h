@@ -15,6 +15,7 @@
 #include "loom/codegen/low/function.h"
 #include "loom/codegen/low/memory_access.h"
 #include "loom/codegen/low/schedule/dependency_index.h"
+#include "loom/codegen/low/schedule/resource_calendar.h"
 #include "loom/codegen/low/schedule/storage_relation_index.h"
 #include "loom/codegen/low/schedule/types.h"
 #include "loom/codegen/low/target_binding.h"
@@ -27,6 +28,22 @@ extern "C" {
 #endif
 
 #define LOOM_LOW_SCHEDULE_PAIR_AFFINITY_RECORD_NONE UINT32_MAX
+
+typedef struct loom_low_schedule_dependency_endpoint_t {
+  // Descriptor-local attachment row, or LOOM_LOW_ID_NONE.
+  uint16_t attachment_index;
+  // Target timing event observed at this endpoint, or NONE.
+  uint16_t timing_event_id;
+  // Kind of descriptor attachment named by attachment_index.
+  loom_low_schedule_dependency_attachment_kind_t attachment_kind;
+} loom_low_schedule_dependency_endpoint_t;
+
+typedef struct loom_low_schedule_state_access_t {
+  // Node performing the architectural-state access, or NONE.
+  uint32_t node_index;
+  // Descriptor attachment carrying the access timing event.
+  loom_low_schedule_dependency_endpoint_t endpoint;
+} loom_low_schedule_state_access_t;
 
 typedef struct loom_low_schedule_hazard_state_t {
   // Hazard kind tracked by this state.
@@ -54,15 +71,15 @@ typedef struct loom_low_schedule_hazard_state_t {
 } loom_low_schedule_hazard_state_t;
 
 typedef struct loom_low_schedule_state_read_record_t {
-  // Node that reads an architectural state register.
-  uint32_t node_index;
+  // Architectural-state read retained until a later write subsumes it.
+  loom_low_schedule_state_access_t access;
   // Next outstanding read record for the same descriptor register class.
   uint32_t next_record;
 } loom_low_schedule_state_read_record_t;
 
 typedef struct loom_low_schedule_state_chain_read_record_t {
-  // Node that reads an architectural state value produced by the key node.
-  uint32_t reader_node;
+  // Architectural-state read of the value produced by the key node.
+  loom_low_schedule_state_access_t access;
   // Next state-chain read record for the same producer node.
   uint32_t next_record;
 } loom_low_schedule_state_chain_read_record_t;
@@ -98,9 +115,25 @@ typedef struct loom_low_schedule_storage_read_record_t {
   uint32_t unit_count;
   // Register part mask read by reader_node.
   loom_low_register_part_mask_t read_mask;
+  // Descriptor-local operand row for the read, or LOOM_LOW_ID_NONE.
+  uint16_t descriptor_operand_index;
+  // Timing event observed by the read, or LOOM_LOW_TIMING_EVENT_NONE.
+  uint16_t timing_event_id;
   // Next outstanding storage-read record for the same value ordinal.
   uint32_t next_record;
 } loom_low_schedule_storage_read_record_t;
+
+typedef struct loom_low_schedule_effect_frontier_entry_t {
+  // Node carrying the outstanding descriptor effect.
+  uint32_t node_index;
+  // Descriptor-local effect row, or LOOM_LOW_ID_NONE for structural effects.
+  uint16_t effect_ordinal;
+  // Timing event observed by the effect, or LOOM_LOW_TIMING_EVENT_NONE.
+  uint16_t timing_event_id;
+  // Borrowed alias summary from the function memory-access table or immutable
+  // memory-space summary storage, retained for every outstanding effect.
+  const loom_low_memory_access_summary_t* summary;
+} loom_low_schedule_effect_frontier_entry_t;
 
 typedef struct loom_low_schedule_edge_source_record_t {
   // Structural source value being traced toward a packet producer.
@@ -132,8 +165,8 @@ typedef struct loom_low_schedule_value_record_t {
   loom_value_id_t value_id;
   // Same-block producer node index, or NONE for block arguments/external defs.
   uint32_t producer_node;
-  // First same-class state writer after the producer, or NONE.
-  uint32_t state_next_write_node;
+  // First same-class architectural-state writer after the producer.
+  loom_low_schedule_state_access_t state_next_write;
   // Register units contributed to the pressure model.
   uint32_t unit_count;
   // Live units currently charged to this value in the pressure model.
@@ -202,6 +235,8 @@ typedef struct loom_low_schedule_build_state_t {
   loom_low_schedule_dependency_index_t dependency_index;
   // Node indices in final scheduled order.
   uint32_t* scheduled_node_indices;
+  // Contiguous node groups sharing an abstract issue cycle.
+  loom_low_schedule_issue_group_t* issue_groups;
   // Pressure-model steps in scheduled order for scored strategy runs.
   loom_low_schedule_pressure_step_t* pressure_steps;
   // Candidate decisions in scheduled order when requested.
@@ -214,10 +249,9 @@ typedef struct loom_low_schedule_build_state_t {
   loom_low_schedule_hazard_gap_t* hazard_gaps;
   // Schedule-class model quality summaries in schedule-class order.
   loom_low_schedule_model_summary_t* model_summaries;
-  // Per-resource next issue cycle available to descriptor-resource scoring.
-  uint32_t* resource_ready_issue_cycles;
-  // Earliest issue cycle at which each node's latency-bearing dependencies are
-  // ready.
+  // Capacity-aware resource occupancy for the current scheduled block.
+  loom_low_schedule_resource_calendar_t resource_calendar;
+  // Earliest issue cycle allowed by each node's latency-bearing dependencies.
   uint32_t* node_ready_issue_cycles;
   // Target-provided issue cost for completion waits required by each node.
   uint16_t* node_completion_wait_cycles;
@@ -245,15 +279,13 @@ typedef struct loom_low_schedule_build_state_t {
     // Highest dense one-based alias-set ID, or zero when none are present.
     uint16_t alias_set_count;
   } pressure_limits;
-  // Most recent architectural-state writer node, dense by register class.
-  uint32_t* state_last_write_nodes;
+  // Most recent architectural-state writer, dense by register class.
+  loom_low_schedule_state_access_t* state_last_writes;
   // First architectural-state writer in the current block, dense by register
   // class.
-  uint32_t* state_first_write_nodes;
-  // Most recent non-writing state-ordering node, dense by register class.
-  uint32_t* state_ordering_frontier_nodes;
-  // Most recent state-edge consumer indexed by producer schedule node.
-  uint32_t* state_last_dependency_consumer_nodes;
+  loom_low_schedule_state_access_t* state_first_writes;
+  // Most recent non-writing state-ordering access, dense by register class.
+  loom_low_schedule_state_access_t* state_ordering_frontiers;
   // Outstanding architectural-state read lists, dense by register class.
   uint32_t* state_read_heads;
   // Outstanding state-read records used by state_read_heads.
@@ -303,15 +335,10 @@ typedef struct loom_low_schedule_build_state_t {
     // Number of touched value ordinals in the current block.
     iree_host_size_t touched_count;
   } storage_reads;
-  // Scratch effect-frontier read node indices, reused for each block.
-  uint32_t* effect_read_nodes;
-  // Borrowed summaries for effect_read_nodes. Each summary belongs to the
-  // function's memory-access table or immutable memory-space summary storage.
-  const loom_low_memory_access_summary_t** effect_read_summaries;
-  // Scratch effect-frontier write node indices, reused for each block.
-  uint32_t* effect_write_nodes;
-  // Borrowed summaries for effect_write_nodes, with the same owners as reads.
-  const loom_low_memory_access_summary_t** effect_write_summaries;
+  // Scratch outstanding effect reads, reused for each block.
+  loom_low_schedule_effect_frontier_entry_t* effect_read_entries;
+  // Scratch outstanding effect writes, reused for each block.
+  loom_low_schedule_effect_frontier_entry_t* effect_write_entries;
   // Optional source-derived memory access records for the function.
   const loom_low_memory_access_record_t* memory_access_records;
   // Per-resource aggregate resource pressure, dense by descriptor resource id
@@ -321,6 +348,8 @@ typedef struct loom_low_schedule_build_state_t {
   iree_host_size_t matrix_coexecution_source_use_count;
   // Number of populated scheduled_node_indices entries.
   iree_host_size_t scheduled_node_count;
+  // Number of populated issue-group entries.
+  iree_host_size_t issue_group_count;
   // Number of error diagnostics emitted while attempting scheduling.
   uint32_t error_count;
   // Terminal hard-scheduling failure recorded during schedule construction.
