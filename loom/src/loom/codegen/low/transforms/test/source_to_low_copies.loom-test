@@ -1,0 +1,49 @@
+// RUN: pass source-to-low
+
+test.target<low_core> @test_target
+
+func.def target(@test_target) @copied_scalar_operand(%a: index, %b: index, %c: index) -> (index) {
+  %result = index.madd %a, %b, %c : index
+  func.return %result : index
+}
+
+// ----
+test.target<low_core> @test_target
+
+low.func.def target<test.low.core>(@test_target) abi(object_function) @copied_scalar_operand(%a: reg<test.i32>, %b: reg<test.i32>, %c: reg<test.i32>) -> (reg<test.i32>) asm {
+  %9 = test.mul.i32 %a, %b
+  %10 = copy %c : reg<test.i32> -> reg<test.phys>
+  %result = test.add.i32.phys_rhs %9, %10
+  return %result
+}
+
+// ====
+// RUN: pass source-to-low
+
+test.target<low_core> @test_target
+
+func.def target(@test_target) @copied_per_lane_aggregate(%lhs: vector<4xi32>, %rhs: vector<4xi32>) -> (vector<4xi32>) {
+  %result = vector.addi %lhs, %rhs : vector<4xi32>
+  func.return %result : vector<4xi32>
+}
+
+// ----
+test.target<low_core> @test_target
+
+low.func.def target<test.low.core>(@test_target) abi(object_function) @copied_per_lane_aggregate(%lhs: reg<test.i32 x4>, %rhs: reg<test.i32 x4>) -> (reg<test.i32 x4>) asm {
+  %7 = copy %rhs : reg<test.i32 x4> -> reg<test.phys x4>
+  %8 = slice %lhs[0] : reg<test.i32 x4> -> reg<test.i32>
+  %9 = slice %7[0] : reg<test.phys x4> -> reg<test.phys>
+  %10 = test.add.i32.phys_rhs %8, %9
+  %11 = slice %lhs[1] : reg<test.i32 x4> -> reg<test.i32>
+  %12 = slice %7[1] : reg<test.phys x4> -> reg<test.phys>
+  %13 = test.add.i32.phys_rhs %11, %12
+  %14 = slice %lhs[2] : reg<test.i32 x4> -> reg<test.i32>
+  %15 = slice %7[2] : reg<test.phys x4> -> reg<test.phys>
+  %16 = test.add.i32.phys_rhs %14, %15
+  %17 = slice %lhs[3] : reg<test.i32 x4> -> reg<test.i32>
+  %18 = slice %7[3] : reg<test.phys x4> -> reg<test.phys>
+  %19 = test.add.i32.phys_rhs %17, %18
+  %result = concat(%10, %13, %16, %19) : (reg<test.i32>, reg<test.i32>, reg<test.i32>, reg<test.i32>) -> reg<test.i32 x4>
+  return %result
+}
