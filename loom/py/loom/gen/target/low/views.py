@@ -264,6 +264,7 @@ def _view_register_classes(
         view_spec.key,
         view_spec.reg_classes,
         compiled.physical_registers,
+        tuple(view for view in compiled.spec.physical_register_views if view.reg_class in classes_by_name),
         alias_set_count=max((reg_class.alias_set_id for reg_class in compiled.reg_classes), default=0),
     )
     for reg_class in view_spec.reg_classes:
