@@ -23,8 +23,6 @@
 #include "loom/codegen/low/lower/report.h"
 #include "loom/codegen/low/lower/rules.h"
 #include "loom/codegen/low/lower/source_plan.h"
-#include "loom/codegen/low/memory_access.h"
-#include "loom/codegen/low/memory_access_builder.h"
 #include "loom/codegen/low/source_memory_plan.h"
 #include "loom/ir/local_value_domain.h"
 #include "loom/ir/module.h"
@@ -99,9 +97,6 @@ typedef struct loom_low_lowering_frame_t {
   loom_type_t* result_types;
   // Optional source selection and memory report analysis state.
   loom_low_lower_report_state_t report;
-  // Actual emitted memory accesses collected in function scratch and published
-  // into options.table_arena after lowering.
-  loom_low_memory_access_builder_t memory_access_builder;
   // Descriptor set used to build rule_descriptor_maps.
   const loom_low_descriptor_set_t* rule_descriptor_map_set;
   // Per-policy-rule-set descriptor-ref to descriptor-row maps.
