@@ -179,6 +179,7 @@ loom_check_test_suite(
   NAME
     loom_check_file_test
   SRCS
+    "test/source_low/numeric_index.loom-test"
     "test/source_low/numeric_scalar_i32.loom-test"
     "test/source_low/packed_dot_integer.loom-test"
     "test/source_low/packed_i8_arithmetic.loom-test"
@@ -188,6 +189,7 @@ loom_check_test_suite(
   RUNNER
     ::loom-check
   DATA
+    "${PROJECT_SOURCE_DIR}/loom/src/loom/test/corpus/source_low/numeric_index.loom-test"
     "${PROJECT_SOURCE_DIR}/loom/src/loom/test/corpus/source_low/numeric_scalar_i32.loom-test"
     "${PROJECT_SOURCE_DIR}/loom/src/loom/test/corpus/source_low/packed_dot_integer.loom-test"
     "${PROJECT_SOURCE_DIR}/loom/src/loom/test/corpus/source_low/packed_i8_arithmetic.loom-test"
