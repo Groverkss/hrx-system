@@ -647,6 +647,10 @@ typedef enum loom_low_lower_emit_kind_e {
   // register lane, and threads one scalar accumulator operand through the
   // emitted results.
   LOOM_LOW_LOWER_EMIT_DESCRIPTOR_OP_ACCUMULATE_LANES = 6,
+  // Projects consecutive register units with low.slice.
+  LOOM_LOW_LOWER_EMIT_REGISTER_SLICE = 7,
+  // Concatenates register values with low.concat.
+  LOOM_LOW_LOWER_EMIT_REGISTER_CONCAT = 8,
 } loom_low_lower_emit_kind_t;
 
 typedef uint16_t loom_low_lower_emit_flags_t;
@@ -718,6 +722,8 @@ typedef struct loom_low_lower_emit_t {
   // the emit does not consume a source memory plan. RECORD_SOURCE_MEMORY marks
   // memory packets; address-only emits use the plan without recording it.
   uint16_t source_memory_ordinal;
+  // Register-unit offset consumed by REGISTER_SLICE.
+  uint16_t structural_offset;
 } loom_low_lower_emit_t;
 
 typedef uint16_t loom_low_lower_rule_flags_t;
