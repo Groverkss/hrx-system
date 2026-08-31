@@ -11,6 +11,7 @@
 #include "loom/target/arch/amd/xdna/aie2p/contracts/core_lower_rules.h"
 #include "loom/target/arch/amd/xdna/aie2p/descriptors/core_descriptors.h"
 #include "loom/target/arch/amd/xdna/aie2p/lower/lower.h"
+#include "loom/target/arch/amd/xdna/aie2p/lower/storage.h"
 
 static iree_status_t loom_aie2p_map_type(void* user_data,
                                          loom_low_lower_context_t* context,
@@ -109,6 +110,37 @@ static iree_status_t loom_aie2p_map_argument(
 
 #include "loom/target/arch/amd/xdna/aie2p/contracts/core_index.inl"
 
+static iree_status_t loom_aie2p_preselect_op(void* user_data,
+                                             loom_low_lower_context_t* context,
+                                             const loom_op_t* source_op,
+                                             loom_low_lower_plan_t* out_plan) {
+  (void)user_data;
+  return loom_aie2p_select_storage_plan(context, source_op, out_plan);
+}
+
+static void loom_aie2p_mark_plan_storage_demands(
+    void* user_data, loom_low_lower_context_t* context,
+    const loom_op_t* source_op, loom_low_lower_plan_t plan) {
+  (void)user_data;
+  loom_aie2p_mark_storage_plan_demands(context, source_op, plan);
+}
+
+static void loom_aie2p_describe_plan(void* user_data,
+                                     loom_low_lower_context_t* context,
+                                     const loom_op_t* source_op,
+                                     loom_low_lower_plan_t plan,
+                                     loom_low_lower_plan_report_t* out_report) {
+  (void)user_data;
+  loom_aie2p_describe_storage_plan(context, source_op, plan, out_report);
+}
+
+static iree_status_t loom_aie2p_emit_op(void* user_data,
+                                        loom_low_lower_context_t* context,
+                                        const loom_op_t* source_op,
+                                        loom_low_lower_plan_t plan) {
+  (void)user_data;
+  return loom_aie2p_emit_storage_plan(context, source_op, plan);
+}
 
 static const loom_low_lower_policy_t kAie2pCoreLowLowerPolicy = {
     .name = IREE_SVL("amd-xdna-aie2p-core-low-lower"),
@@ -116,6 +148,14 @@ static const loom_low_lower_policy_t kAie2pCoreLowLowerPolicy = {
     .map_type = {.fn = loom_aie2p_map_type, .user_data = NULL},
     .map_argument = {.fn = loom_aie2p_map_argument, .user_data = NULL},
     .contract = LOOM_AIE2P_CORE_CONTRACT,
+    .preselect_op = {.fn = loom_aie2p_preselect_op, .user_data = NULL},
+    .mark_plan_storage_demands =
+        {
+            .fn = loom_aie2p_mark_plan_storage_demands,
+            .user_data = NULL,
+        },
+    .describe_plan = {.fn = loom_aie2p_describe_plan, .user_data = NULL},
+    .emit_op = {.fn = loom_aie2p_emit_op, .user_data = NULL},
 };
 
 const loom_low_lower_policy_t* loom_aie2p_core_low_lower_policy(void) {
