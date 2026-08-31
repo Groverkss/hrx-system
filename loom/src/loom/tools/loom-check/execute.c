@@ -412,6 +412,9 @@ static loom_text_print_flags_t loom_check_pass_print_flags(
     const loom_test_case_t* test_case) {
   loom_text_print_flags_t flags =
       LOOM_TEXT_PRINT_DEFAULT | LOOM_TEXT_PRINT_PREFER_LOW_ASM;
+  if (iree_all_bits_set(test_case->output_flags, LOOM_TEST_OUTPUT_LOW_ASM)) {
+    flags |= LOOM_TEXT_PRINT_PRESERVE_LOW_ASM;
+  }
   if (iree_all_bits_set(test_case->output_flags, LOOM_TEST_OUTPUT_LOCATIONS)) {
     flags |= LOOM_TEXT_PRINT_LOCATIONS;
   }
@@ -603,8 +606,15 @@ static iree_status_t loom_check_execute_pass_with_output(
         .report = pass_report_ref,
     };
     if (iree_status_is_ok(status)) {
-      status = loom_pass_tool_run_flat_pipeline(module, test_case->pipeline,
-                                                &run_options, &run_result);
+      const iree_string_view_t pipeline =
+          iree_string_view_trim(test_case->pipeline);
+      if (pipeline.size > 0 && pipeline.data[0] == '@') {
+        status = loom_pass_tool_run_pipeline_symbol(module, pipeline,
+                                                    &run_options, &run_result);
+      } else {
+        status = loom_pass_tool_run_flat_pipeline(module, pipeline,
+                                                  &run_options, &run_result);
+      }
     }
     loom_target_legalizer_registry_storage_deinitialize(
         &legalizer_registry_storage);

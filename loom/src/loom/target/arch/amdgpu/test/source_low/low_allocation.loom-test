@@ -212,7 +212,7 @@ low.func.def target<amdgpu.rdna3.core>(@target) @scc_active_conflict_reports_fai
 
 // ====
 
-// RUN: pass low-materialize-allocation{budgets=amdgpu.scc=1}
+// RUN: with-low-asm pass low-materialize-allocation{budgets=amdgpu.scc=1}
 
 amdgpu.target<gfx1100> @target
 
@@ -246,7 +246,7 @@ low.func.def target<amdgpu.rdna3.core>(@target) @scc_compare_rematerializes_acti
 
 // ====
 
-// RUN: pass low-materialize-allocation{budgets=amdgpu.scc=1}
+// RUN: with-low-asm pass low-materialize-allocation{budgets=amdgpu.scc=1}
 
 amdgpu.target<gfx1100> @target
 
@@ -280,7 +280,7 @@ low.func.def target<amdgpu.rdna3.core>(@target) @scc_u64_compare_rematerializes_
 
 // ====
 
-// RUN: pass low-materialize-allocation{budgets=amdgpu.vgpr=5}
+// RUN: with-low-asm pass low-materialize-allocation{budgets=amdgpu.vgpr=5}
 
 amdgpu.target<gfx1100> @target
 
@@ -324,7 +324,7 @@ low.func.def target<amdgpu.rdna3.core>(@target) @vop2_f32_rematerializes_spill_p
 
 // ====
 
-// RUN: pass low-materialize-allocation{budgets=amdgpu.vgpr=5}
+// RUN: with-low-asm pass low-materialize-allocation{budgets=amdgpu.vgpr=5}
 
 amdgpu.target<gfx1100> @target
 

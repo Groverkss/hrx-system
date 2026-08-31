@@ -162,7 +162,7 @@ func.def @nested_while_write_blocks_outer_load_cse(%cond: i1, %buffer: buffer, %
 // Descriptor-backed low ops must expose their descriptor effects through the
 // generic op trait cache. test.add.i32 is pure even though low.op's static
 // vtable default is conservative.
-// RUN: pass cse
+// RUN: with-low-asm pass cse
 
 test.target<low_core> @test_target
 
@@ -184,7 +184,7 @@ low.func.def target<test.low.core>(@test_target) @descriptor_low_ops_cse(%lhs: r
 
 // Descriptor-backed convergent low ops derive PURE and CONVERGENT from the
 // descriptor effect rows. The pure bit is not enough to make them CSE-able.
-// RUN: pass cse
+// RUN: with-low-asm pass cse
 
 test.target<low_core> @test_target
 
@@ -208,7 +208,7 @@ low.func.def target<test.low.core>(@test_target) @descriptor_low_convergent_ops_
 // Descriptor-backed packets that write target state are not value-CSE
 // candidates. The second packet may have identical operands, but erasing it
 // would erase its architectural state update.
-// RUN: pass cse
+// RUN: with-low-asm pass cse
 
 test.target<low_core> @test_target
 
@@ -231,7 +231,7 @@ low.func.def target<test.low.core>(@test_target) @descriptor_low_state_writes_do
 
 // Descriptor-backed packets with hidden target-state reads must not CSE across
 // an intervening write to the same state register class.
-// RUN: pass cse
+// RUN: with-low-asm pass cse
 
 test.target<low_core> @test_target
 
@@ -258,7 +258,7 @@ low.func.def target<test.low.core>(@test_target) @descriptor_low_implicit_state_
 // replacement packet. The rhs-zero form still reads/writes hidden target state,
 // so an intervening state write keeps the two replacements in distinct state
 // epochs.
-// RUN: pass low-select-operand-forms,cse,low-dce
+// RUN: with-low-asm pass low-select-operand-forms,cse,low-dce
 
 test.target<low_core> @test_target
 
@@ -407,7 +407,7 @@ low.func.def target<test.low.core>(@test_target) @consumed_results_do_not_cse(%l
 
 // Descriptor-backed reads are CSE candidates until a descriptor-backed write
 // invalidates the read scope.
-// RUN: pass cse
+// RUN: with-low-asm pass cse
 
 test.target<low_core> @test_target
 
@@ -430,7 +430,7 @@ low.func.def target<test.low.core>(@test_target) @descriptor_low_reads_cse(%ptr:
 // ====
 
 // Descriptor-backed writes are barriers for descriptor-backed reads.
-// RUN: pass cse
+// RUN: with-low-asm pass cse
 
 test.target<low_core> @test_target
 
@@ -523,7 +523,7 @@ low.func.def target<test.low.core>(@test_target) @low_entry_constants_cse_into_c
 
 // Pure low ops in a non-entry CFG block can be reused by blocks dominated by
 // that block. This is ordinary CFG dominance CSE, not speculation.
-// RUN: pass cse
+// RUN: with-low-asm pass cse
 
 test.target<low_core> @test_target
 

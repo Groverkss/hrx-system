@@ -27,7 +27,7 @@ low.func.def target<test.low.core>(@test_target) @spill(%a: reg<test.i32>, %b: r
 
 // ====
 
-// RUN: pass low-materialize-allocation{budgets=test.i32=2}
+// RUN: with-low-asm pass low-materialize-allocation{budgets=test.i32=2}
 
 test.target<low_core> @test_target
 
@@ -82,7 +82,7 @@ low.func.def target<test.low.core>(@test_target) @live_in_spill_diagnostic() -> 
 
 // ====
 
-// RUN: pass low-materialize-allocation{budgets=test.i32=2}
+// RUN: with-low-asm pass low-materialize-allocation{budgets=test.i32=2}
 
 test.target<low_core> @test_target
 
@@ -122,7 +122,7 @@ low.func.def target<test.low.core>(@test_target) @block_arg_spill(%row: reg<test
 
 // ====
 
-// RUN: pass low-materialize-allocation{budgets=test.i32=5}
+// RUN: with-low-asm pass low-materialize-allocation{budgets=test.i32=5}
 
 test.target<low_core> @test_target
 
@@ -159,7 +159,7 @@ low.func.def target<test.low.core>(@test_target) @wide_slice_reload_cluster(%blo
 
 // ====
 
-// RUN: pass low-materialize-allocation{budgets=test.i32=9}
+// RUN: with-low-asm pass low-materialize-allocation{budgets=test.i32=9}
 
 test.target<low_core> @test_target
 
