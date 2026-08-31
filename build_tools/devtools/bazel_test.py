@@ -44,6 +44,37 @@ class BazelTest(unittest.TestCase):
             env=None,
         )
 
+    def test_bazel_execution_root_uses_configured_arguments(self):
+        completed = subprocess.CompletedProcess(
+            args=[],
+            returncode=0,
+            stdout="C:/b/execroot\n",
+            stderr="",
+        )
+        with mock.patch.object(
+            bazel_dev,
+            "run_captured",
+            return_value=completed,
+        ) as run_captured:
+            result = bazel_dev.bazel_execution_root(
+                bazel="bazel",
+                bazel_args=["--config=asan", "--//example:mode=full"],
+                cwd=bazel_dev.REPO_ROOT,
+                env=None,
+            )
+
+        self.assertEqual(result, Path("C:/b/execroot"))
+        self.assertEqual(
+            run_captured.call_args.args[0],
+            [
+                "bazel",
+                "info",
+                "--config=asan",
+                "--//example:mode=full",
+                "execution_root",
+            ],
+        )
+
     def test_bazel_launch_metadata_queries_graph_providers(self):
         execution_root = bazel_dev.REPO_ROOT / ".tmp/test-execution-root"
         completed = subprocess.CompletedProcess(
@@ -80,7 +111,7 @@ class BazelTest(unittest.TestCase):
                 bazel_dev,
                 "bazel_execution_root",
                 return_value=execution_root,
-            ),
+            ) as query_execution_root,
         ):
             result, metadata = bazel_dev.resolve_bazel_launch_metadata(
                 bazel="bazel",
@@ -117,6 +148,12 @@ class BazelTest(unittest.TestCase):
         self.assertEqual(
             query_argv[-2:], ["--config=asan", "config(//pkg:tool, target)"]
         )
+        query_execution_root.assert_called_once_with(
+            bazel="bazel",
+            bazel_args=["--config=asan"],
+            cwd=bazel_dev.REPO_ROOT,
+            env=None,
+        )
 
     def test_bazel_launch_metadata_batches_configured_targets(self):
         execution_root = bazel_dev.REPO_ROOT / ".tmp/test-execution-root"
@@ -150,7 +187,7 @@ class BazelTest(unittest.TestCase):
                 bazel_dev,
                 "bazel_execution_root",
                 return_value=execution_root,
-            ),
+            ) as query_execution_root,
         ):
             result, metadata_by_target = (
                 bazel_dev.resolve_bazel_launch_metadata_for_targets(
@@ -177,6 +214,12 @@ class BazelTest(unittest.TestCase):
         self.assertEqual(
             run_captured.call_args.args[0][-2:],
             ["--config=fuzzer", "config(set(//a:a_fuzz //z:z_fuzz), target)"],
+        )
+        query_execution_root.assert_called_once_with(
+            bazel="bazel",
+            bazel_args=["--config=fuzzer"],
+            cwd=bazel_dev.REPO_ROOT,
+            env=None,
         )
 
     def test_bazel_launch_metadata_rejects_control_environment_collision(self):
