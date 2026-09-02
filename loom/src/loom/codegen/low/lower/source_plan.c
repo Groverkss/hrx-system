@@ -466,7 +466,8 @@ static bool loom_low_lower_source_op_requires_emission(
       loom_op_effective_traits(context->module, source_op);
   if (iree_any_bit_set(traits, LOOM_TRAIT_TERMINATOR | LOOM_TRAIT_HINT |
                                    LOOM_TRAIT_UNIQUE_IDENTITY |
-                                   LOOM_TRAIT_CONVERGENT)) {
+                                   LOOM_TRAIT_CONVERGENT |
+                                   LOOM_TRAIT_OBSERVABLE_EFFECT)) {
     return true;
   }
   return loom_traits_may_read(traits) || loom_traits_may_write(traits);

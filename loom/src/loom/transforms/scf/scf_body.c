@@ -133,7 +133,7 @@ static loom_scf_body_effect_flags_t loom_scf_body_operation_effects(
   if (iree_any_bit_set(
           traits, LOOM_TRAIT_NON_DETERMINISTIC | LOOM_TRAIT_UNKNOWN_EFFECTS |
                       LOOM_TRAIT_HINT | LOOM_TRAIT_POISON_BOUNDARY |
-                      LOOM_TRAIT_CONVERGENT)) {
+                      LOOM_TRAIT_CONVERGENT | LOOM_TRAIT_OBSERVABLE_EFFECT)) {
     flags |= LOOM_SCF_BODY_EFFECT_ORDERED;
   }
   if (flags == 0 && !iree_any_bit_set(traits, LOOM_TRAIT_PURE)) {
