@@ -105,6 +105,10 @@ iree_status_t loom_view_load_coalescing_rewrite(
   *out_changed = false;
   loom_op_t* next_op = op->next_op;
   if (!next_op || !loom_view_load_isa(next_op)) return iree_ok_status();
+  if (loom_view_load_memory_flags(op) != 0 ||
+      loom_view_load_memory_flags(next_op) != 0) {
+    return iree_ok_status();
+  }
 
   const loom_value_id_t view = loom_view_load_view(op);
   if (view != loom_view_load_view(next_op)) {
@@ -180,7 +184,7 @@ iree_status_t loom_view_load_coalescing_rewrite(
   loom_value_id_t value_checkpoint = loom_rewriter_value_checkpoint(rewriter);
   loom_op_t* vector_load_op = NULL;
   IREE_RETURN_IF_ERROR(loom_vector_load_build(
-      &rewriter->builder, vector_load_build_flags, view,
+      &rewriter->builder, vector_load_build_flags, /*instance_flags=*/0, view,
       loom_view_load_indices(op).values, loom_view_load_indices(op).count,
       loom_view_load_static_indices(op).i64_array,
       loom_view_load_static_indices(op).count, cache_policy.cache_scope,

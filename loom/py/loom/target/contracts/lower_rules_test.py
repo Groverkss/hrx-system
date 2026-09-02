@@ -75,6 +75,25 @@ from loom.target.test.descriptors import (
 )
 
 
+def test_memory_flags_do_not_shift_cache_policy_guard_indices() -> None:
+    table = ContractFragment(
+        name="test.memory-cache-attributes",
+        descriptor_set=TEST_LOW_CORE_DESCRIPTOR_SET,
+        cases=[
+            RecipeRule(
+                source_op=vector.vector_load,
+                guards=(
+                    Guard.attr_kind("cache_scope", "enum"),
+                    Guard.attr_kind("cache_temporal", "enum"),
+                    Guard.enum_attr_equals("cache_scope", "device"),
+                ),
+            )
+        ],
+    )
+    compiled = compile_lower_rule_set(table, dialect_ops={"vector": ALL_VECTOR_OPS})
+    assert [guard.attr_index for guard in compiled.guards] == [0, 1, 0]
+
+
 def _add_f32_flags_descriptor_set():
     descriptor = replace(
         TEST_LOW_ADD_F32_DESCRIPTOR,

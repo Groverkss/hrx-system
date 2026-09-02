@@ -82,3 +82,31 @@ func.def @bf16_pair_preserves_cache_policy(%view: view<4xbf16>) -> (bf16, bf16) 
   %b = vector.extract %5[1] : vector<2xbf16> -> bf16
   func.return %a, %b : bf16, bf16
 }
+
+// ====
+
+func.def @adjacent_volatile_f16_view_loads_stay_scalar(%input: buffer, %base: index) -> (f16, f16) {
+  %byte_base = index.constant 0 : offset
+  %element_stride = index.constant 1 : index
+  %view = buffer.view %input[%byte_base] : buffer -> view<32xf16>
+  %next = index.add %base, %element_stride : index
+  %a = view.load<volatile> %view[%base] : view<32xf16> -> f16
+  %b = view.load<volatile> %view[%next] : view<32xf16> -> f16
+  func.return %a, %b : f16, f16
+}
+
+// ====
+
+func.def @left_volatile_load_prevents_coalescing(%view: view<2xf16>) -> (f16, f16) {
+  %a = view.load<volatile> %view[0] : view<2xf16> -> f16
+  %b = view.load %view[1] : view<2xf16> -> f16
+  func.return %a, %b : f16, f16
+}
+
+// ====
+
+func.def @right_volatile_load_prevents_coalescing(%view: view<2xf16>) -> (f16, f16) {
+  %a = view.load %view[0] : view<2xf16> -> f16
+  %b = view.load<volatile> %view[1] : view<2xf16> -> f16
+  func.return %a, %b : f16, f16
+}

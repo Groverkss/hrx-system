@@ -22,9 +22,9 @@ TEST_F(SourceMemoryPlanTest, StaticDenseLoadIncludesViewBase) {
   int64_t static_indices[] = {3};
   loom_op_t* load_op = nullptr;
   IREE_ASSERT_OK(loom_vector_load_build(
-      &builder_, 0, loom_buffer_view_result(view_op), nullptr, 0,
-      static_indices, IREE_ARRAYSIZE(static_indices), 0, 0, VectorType1D(4),
-      LOOM_LOCATION_UNKNOWN, &load_op));
+      &builder_, 0, /*instance_flags=*/0, loom_buffer_view_result(view_op),
+      nullptr, 0, static_indices, IREE_ARRAYSIZE(static_indices), 0, 0,
+      VectorType1D(4), LOOM_LOCATION_UNKNOWN, &load_op));
 
   loom_value_fact_table_t facts = {0};
   ComputeFacts(&facts);
@@ -126,9 +126,9 @@ TEST_F(SourceMemoryPlanTest, StaticStridedLayoutClassifiesCompactness) {
                                           LOOM_LOCATION_UNKNOWN, &view_op));
     const int64_t static_indices[] = {0, 0};
     IREE_ASSERT_OK(loom_vector_load_build(
-        &builder_, 0, loom_buffer_view_result(view_op), nullptr, 0,
-        static_indices, IREE_ARRAYSIZE(static_indices), 0, 0, VectorType1D(1),
-        LOOM_LOCATION_UNKNOWN, &load_ops[i]));
+        &builder_, 0, /*instance_flags=*/0, loom_buffer_view_result(view_op),
+        nullptr, 0, static_indices, IREE_ARRAYSIZE(static_indices), 0, 0,
+        VectorType1D(1), LOOM_LOCATION_UNKNOWN, &load_ops[i]));
   }
 
   loom_value_fact_table_t facts = {0};
@@ -211,9 +211,9 @@ TEST_F(SourceMemoryPlanTest, DynamicStridedLayoutScalesDynamicOrigin) {
   const int64_t static_indices[] = {INT64_MIN, 0};
   loom_op_t* load_op = nullptr;
   IREE_ASSERT_OK(loom_vector_load_build(
-      &builder_, 0, loom_buffer_view_result(view_op), &row, 1, static_indices,
-      IREE_ARRAYSIZE(static_indices), 0, 0, VectorType1D(1),
-      LOOM_LOCATION_UNKNOWN, &load_op));
+      &builder_, 0, /*instance_flags=*/0, loom_buffer_view_result(view_op),
+      &row, 1, static_indices, IREE_ARRAYSIZE(static_indices), 0, 0,
+      VectorType1D(1), LOOM_LOCATION_UNKNOWN, &load_op));
 
   loom_value_fact_table_t facts = {0};
   ComputeFacts(&facts);
@@ -241,9 +241,9 @@ TEST_F(SourceMemoryPlanTest, DynamicStridedLayoutScalesStaticOrigin) {
   const int64_t static_indices[] = {3, 0};
   loom_op_t* load_op = nullptr;
   IREE_ASSERT_OK(loom_vector_load_build(
-      &builder_, 0, loom_buffer_view_result(view_op), nullptr, 0,
-      static_indices, IREE_ARRAYSIZE(static_indices), 0, 0, VectorType1D(1),
-      LOOM_LOCATION_UNKNOWN, &load_op));
+      &builder_, 0, /*instance_flags=*/0, loom_buffer_view_result(view_op),
+      nullptr, 0, static_indices, IREE_ARRAYSIZE(static_indices), 0, 0,
+      VectorType1D(1), LOOM_LOCATION_UNKNOWN, &load_op));
 
   loom_value_fact_table_t facts = {0};
   ComputeFacts(&facts);
@@ -272,9 +272,9 @@ TEST_F(SourceMemoryPlanTest, ExactDynamicStrideFoldsIntoStaticOffset) {
   const int64_t static_indices[] = {3, 0};
   loom_op_t* load_op = nullptr;
   IREE_ASSERT_OK(loom_vector_load_build(
-      &builder_, 0, loom_buffer_view_result(view_op), nullptr, 0,
-      static_indices, IREE_ARRAYSIZE(static_indices), 0, 0, VectorType1D(1),
-      LOOM_LOCATION_UNKNOWN, &load_op));
+      &builder_, 0, /*instance_flags=*/0, loom_buffer_view_result(view_op),
+      nullptr, 0, static_indices, IREE_ARRAYSIZE(static_indices), 0, 0,
+      VectorType1D(1), LOOM_LOCATION_UNKNOWN, &load_op));
 
   loom_value_fact_table_t facts = {0};
   ComputeFacts(&facts);
@@ -353,9 +353,9 @@ TEST_F(SourceMemoryPlanTest, FactOnlyRuntimeStrideIsNotMaterialized) {
   const int64_t static_indices[] = {INT64_MIN, 0};
   loom_op_t* load_op = nullptr;
   IREE_ASSERT_OK(loom_vector_load_build(
-      &builder_, 0, loom_buffer_view_result(view_op), &row, 1, static_indices,
-      IREE_ARRAYSIZE(static_indices), 0, 0, VectorType1D(1),
-      LOOM_LOCATION_UNKNOWN, &load_op));
+      &builder_, 0, /*instance_flags=*/0, loom_buffer_view_result(view_op),
+      &row, 1, static_indices, IREE_ARRAYSIZE(static_indices), 0, 0,
+      VectorType1D(1), LOOM_LOCATION_UNKNOWN, &load_op));
 
   loom_value_fact_table_t facts = {0};
   ComputeFacts(&facts);
@@ -384,14 +384,14 @@ TEST_F(SourceMemoryPlanTest, ViewMemoryOperationKindUsesInterfaceShape) {
   int64_t static_indices[] = {0};
   loom_op_t* load_op = nullptr;
   IREE_ASSERT_OK(loom_view_load_build(
-      &builder_, 0, loom_buffer_view_result(view_op), nullptr, 0,
-      static_indices, IREE_ARRAYSIZE(static_indices), 0, 0,
+      &builder_, 0, /*instance_flags=*/0, loom_buffer_view_result(view_op),
+      nullptr, 0, static_indices, IREE_ARRAYSIZE(static_indices), 0, 0,
       loom_type_scalar(LOOM_SCALAR_TYPE_I32), LOOM_LOCATION_UNKNOWN, &load_op));
   loom_op_t* store_op = nullptr;
   IREE_ASSERT_OK(loom_view_store_build(
-      &builder_, 0, value, loom_buffer_view_result(view_op), nullptr, 0,
-      static_indices, IREE_ARRAYSIZE(static_indices), 0, 0,
-      LOOM_LOCATION_UNKNOWN, &store_op));
+      &builder_, 0, /*instance_flags=*/0, value,
+      loom_buffer_view_result(view_op), nullptr, 0, static_indices,
+      IREE_ARRAYSIZE(static_indices), 0, 0, LOOM_LOCATION_UNKNOWN, &store_op));
   loom_op_t* atomic_reduce_op = nullptr;
   IREE_ASSERT_OK(loom_view_atomic_reduce_build(
       &builder_, 0, LOOM_ATOMIC_KIND_ADDI, value,
@@ -584,9 +584,9 @@ TEST_F(SourceMemoryPlanTest, DynamicDenseLoadTracksViewBaseBoundary) {
   int64_t static_indices[] = {3};
   loom_op_t* load_op = nullptr;
   IREE_ASSERT_OK(loom_vector_load_build(
-      &builder_, 0, loom_buffer_view_result(view_op), nullptr, 0,
-      static_indices, IREE_ARRAYSIZE(static_indices), 0, 0, VectorType1D(4),
-      LOOM_LOCATION_UNKNOWN, &load_op));
+      &builder_, 0, /*instance_flags=*/0, loom_buffer_view_result(view_op),
+      nullptr, 0, static_indices, IREE_ARRAYSIZE(static_indices), 0, 0,
+      VectorType1D(4), LOOM_LOCATION_UNKNOWN, &load_op));
 
   loom_value_fact_table_t facts = {0};
   ComputeFacts(&facts);
@@ -629,8 +629,8 @@ TEST_F(SourceMemoryPlanTest, DynamicDenseLoadFactorsScaledViewBase) {
   int64_t static_indices[] = {0};
   loom_op_t* load_op = nullptr;
   IREE_ASSERT_OK(loom_view_load_build(
-      &builder_, 0, loom_buffer_view_result(view_op), nullptr, 0,
-      static_indices, IREE_ARRAYSIZE(static_indices), 0, 0,
+      &builder_, 0, /*instance_flags=*/0, loom_buffer_view_result(view_op),
+      nullptr, 0, static_indices, IREE_ARRAYSIZE(static_indices), 0, 0,
       loom_type_scalar(LOOM_SCALAR_TYPE_I32), LOOM_LOCATION_UNKNOWN, &load_op));
 
   loom_value_fact_table_t facts = {0};
@@ -664,9 +664,9 @@ TEST_F(SourceMemoryPlanTest, SubtractedViewBaseKeepsSignedByteTerms) {
   int64_t indices[] = {0};
   loom_op_t* load_op = nullptr;
   IREE_ASSERT_OK(loom_view_load_build(
-      &builder_, 0, loom_buffer_view_result(view_op), nullptr, 0, indices,
-      IREE_ARRAYSIZE(indices), 0, 0, loom_type_scalar(LOOM_SCALAR_TYPE_I32),
-      LOOM_LOCATION_UNKNOWN, &load_op));
+      &builder_, 0, /*instance_flags=*/0, loom_buffer_view_result(view_op),
+      nullptr, 0, indices, IREE_ARRAYSIZE(indices), 0, 0,
+      loom_type_scalar(LOOM_SCALAR_TYPE_I32), LOOM_LOCATION_UNKNOWN, &load_op));
 
   loom_value_fact_table_t facts = {};
   ComputeFacts(&facts);
@@ -720,8 +720,8 @@ TEST_F(SourceMemoryPlanTest,
   int64_t static_indices[] = {0};
   loom_op_t* load_op = nullptr;
   IREE_ASSERT_OK(loom_view_load_build(
-      &builder_, 0, loom_buffer_view_result(view_op), nullptr, 0,
-      static_indices, IREE_ARRAYSIZE(static_indices), 0, 0,
+      &builder_, 0, /*instance_flags=*/0, loom_buffer_view_result(view_op),
+      nullptr, 0, static_indices, IREE_ARRAYSIZE(static_indices), 0, 0,
       loom_type_scalar(LOOM_SCALAR_TYPE_I32), LOOM_LOCATION_UNKNOWN, &load_op));
 
   loom_value_fact_table_t facts = {0};
@@ -772,11 +772,12 @@ TEST_F(SourceMemoryPlanTest,
       LOOM_LOCATION_UNKNOWN, &header_view_op));
   int64_t header_indices[] = {7};
   loom_op_t* base_load_op = nullptr;
-  IREE_ASSERT_OK(loom_view_load_build(
-      &builder_, 0, loom_buffer_view_result(header_view_op), nullptr, 0,
-      header_indices, IREE_ARRAYSIZE(header_indices), 0, 0,
-      loom_type_scalar(LOOM_SCALAR_TYPE_I32), LOOM_LOCATION_UNKNOWN,
-      &base_load_op));
+  IREE_ASSERT_OK(loom_view_load_build(&builder_, 0, /*instance_flags=*/0,
+                                      loom_buffer_view_result(header_view_op),
+                                      nullptr, 0, header_indices,
+                                      IREE_ARRAYSIZE(header_indices), 0, 0,
+                                      loom_type_scalar(LOOM_SCALAR_TYPE_I32),
+                                      LOOM_LOCATION_UNKNOWN, &base_load_op));
   loom_op_t* base_cast_op = nullptr;
   IREE_ASSERT_OK(
       loom_index_cast_build(&builder_, loom_view_load_result(base_load_op),
@@ -792,8 +793,8 @@ TEST_F(SourceMemoryPlanTest,
   int64_t static_indices[] = {2};
   loom_op_t* load_op = nullptr;
   IREE_ASSERT_OK(loom_view_load_build(
-      &builder_, 0, loom_buffer_view_result(view_op), nullptr, 0,
-      static_indices, IREE_ARRAYSIZE(static_indices), 0, 0,
+      &builder_, 0, /*instance_flags=*/0, loom_buffer_view_result(view_op),
+      nullptr, 0, static_indices, IREE_ARRAYSIZE(static_indices), 0, 0,
       loom_type_scalar(LOOM_SCALAR_TYPE_I32), LOOM_LOCATION_UNKNOWN, &load_op));
 
   loom_value_fact_table_t facts = {0};
@@ -832,8 +833,8 @@ TEST_F(SourceMemoryPlanTest, StaticOffsetCombinesWithRootAlignment) {
   int64_t static_indices[] = {1};
   loom_op_t* load_op = nullptr;
   IREE_ASSERT_OK(loom_view_load_build(
-      &builder_, 0, loom_buffer_view_result(view_op), nullptr, 0,
-      static_indices, IREE_ARRAYSIZE(static_indices), 0, 0,
+      &builder_, 0, /*instance_flags=*/0, loom_buffer_view_result(view_op),
+      nullptr, 0, static_indices, IREE_ARRAYSIZE(static_indices), 0, 0,
       loom_type_scalar(LOOM_SCALAR_TYPE_F32), LOOM_LOCATION_UNKNOWN, &load_op));
 
   loom_value_fact_table_t facts = {0};
@@ -861,9 +862,9 @@ TEST_F(SourceMemoryPlanTest, ExternalBufferArgHasNoComparableAliasScope) {
   int64_t static_indices[] = {3};
   loom_op_t* load_op = nullptr;
   IREE_ASSERT_OK(loom_vector_load_build(
-      &builder_, 0, loom_buffer_view_result(view_op), nullptr, 0,
-      static_indices, IREE_ARRAYSIZE(static_indices), 0, 0, VectorType1D(4),
-      LOOM_LOCATION_UNKNOWN, &load_op));
+      &builder_, 0, /*instance_flags=*/0, loom_buffer_view_result(view_op),
+      nullptr, 0, static_indices, IREE_ARRAYSIZE(static_indices), 0, 0,
+      VectorType1D(4), LOOM_LOCATION_UNKNOWN, &load_op));
 
   loom_value_fact_table_t facts = {0};
   ComputeFacts(&facts);
@@ -897,9 +898,9 @@ TEST_F(SourceMemoryPlanTest, NoaliasBufferArgFeedsComparableAliasScope) {
   int64_t static_indices[] = {3};
   loom_op_t* load_op = nullptr;
   IREE_ASSERT_OK(loom_vector_load_build(
-      &builder_, 0, loom_buffer_view_result(view_op), nullptr, 0,
-      static_indices, IREE_ARRAYSIZE(static_indices), 0, 0, VectorType1D(4),
-      LOOM_LOCATION_UNKNOWN, &load_op));
+      &builder_, 0, /*instance_flags=*/0, loom_buffer_view_result(view_op),
+      nullptr, 0, static_indices, IREE_ARRAYSIZE(static_indices), 0, 0,
+      VectorType1D(4), LOOM_LOCATION_UNKNOWN, &load_op));
 
   loom_value_fact_table_t facts = {0};
   ComputeFacts(&facts);

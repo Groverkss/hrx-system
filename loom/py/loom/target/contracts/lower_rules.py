@@ -13,7 +13,7 @@ from collections.abc import Hashable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from enum import Enum, unique
 
-from loom.dsl import ATTR_TYPE_ENUM, Op
+from loom.dsl import ATTR_TYPE_ENUM, ATTR_TYPE_FLAGS, Op
 from loom.error.target import (
     ERR_TARGET_002,
     ERR_TARGET_003,
@@ -592,8 +592,12 @@ class _LowerRuleSetCompiler:
 
         if guard.kind == GuardKind.ENUM_ATTR_EQUALS:
             attr_index = _source_attr_index(source_op, guard.field)
-            attr = source_op.attrs[attr_index]
-            if attr.attr_type != ATTR_TYPE_ENUM or attr.enum_def is None:
+            attr = source_op.attr(guard.field)
+            if (
+                attr is None
+                or attr.attr_type != ATTR_TYPE_ENUM
+                or attr.enum_def is None
+            ):
                 raise ValueError(
                     f"{source_op.name}: enum guard field '{guard.field}' "
                     "must name an enum attr"
@@ -883,10 +887,9 @@ class _LowerRuleSetCompiler:
             return
 
         if guard.kind == GuardKind.INSTANCE_FLAGS_HAS_ALL:
-            attr_index = _source_attr_index(source_op, guard.field)
-            attr = source_op.attrs[attr_index]
+            attr = source_op.attr(guard.field)
             enum_keyword = guard.enum_keyword
-            if attr.enum_def is None or enum_keyword is None:
+            if attr is None or attr.enum_def is None or enum_keyword is None:
                 raise ValueError(
                     f"{source_op.name}: instance-flags guard needs an enum keyword"
                 )
@@ -2230,7 +2233,15 @@ def _source_attr_index(source_op: Op, field: str) -> int:
     attr = source_op.attr(field)
     if attr is None:
         raise ValueError(f"{source_op.name}: source field '{field}' is not an attr")
-    return source_op.attrs.index(attr)
+    if attr.attr_type == ATTR_TYPE_FLAGS:
+        raise ValueError(
+            f"{source_op.name}: source field '{field}' is stored in instance flags"
+        )
+    return [
+        candidate
+        for candidate in source_op.attrs
+        if candidate.attr_type != ATTR_TYPE_FLAGS
+    ].index(attr)
 
 
 def _source_operand_index(source_op: Op, field: str) -> int:
