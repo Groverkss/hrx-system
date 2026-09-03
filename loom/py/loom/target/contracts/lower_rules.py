@@ -276,6 +276,7 @@ class LowerEmit:
     tied_result_count: int = 0
     source_memory_ordinal: int = LOWER_SOURCE_MEMORY_NONE
     structural_offset: int = 0
+    structural_unit_count: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -1330,6 +1331,7 @@ class _LowerRuleSetCompiler:
                 emit.result_type,
                 temporary_ordinals,
                 structural_offset=emit.unit_offset,
+                structural_unit_count=emit.unit_count or 0,
             )
             return
         if isinstance(emit, EmitRegisterConcat):
@@ -1549,6 +1551,7 @@ class _LowerRuleSetCompiler:
         temporary_ordinals: dict[str, int],
         *,
         structural_offset: int = 0,
+        structural_unit_count: int = 0,
     ) -> None:
         operand_refs = tuple(
             self._lower_value_ref(source_op, source, temporary_ordinals)
@@ -1568,7 +1571,9 @@ class _LowerRuleSetCompiler:
         flags = 0
         result_type_pattern_start = 0
         type_binding = result if result_type is None else result_type
-        if isinstance(type_binding, TypePattern):
+        if structural_unit_count != 0:
+            result_ref_start = result_bind_ref_start
+        elif isinstance(type_binding, TypePattern):
             _require_exact_result_type_pattern(
                 source_op,
                 "result",
@@ -1606,6 +1611,7 @@ class _LowerRuleSetCompiler:
                 result_ref_count=1,
                 result_bind_ref_start=result_bind_ref_start,
                 structural_offset=structural_offset,
+                structural_unit_count=structural_unit_count,
             )
         )
 
