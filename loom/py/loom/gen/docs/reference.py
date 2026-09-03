@@ -93,6 +93,8 @@ DIALECT_REFERENCE_SPECS = (
     DialectReferenceSpec("vector", "program"),
     DialectReferenceSpec("index", "program"),
     DialectReferenceSpec("kernel", "program"),
+    DialectReferenceSpec("group", "program"),
+    DialectReferenceSpec("pipeline", "program"),
     DialectReferenceSpec("target", "program"),
     DialectReferenceSpec("config", "program"),
     DialectReferenceSpec("check", "testing"),

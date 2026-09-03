@@ -87,3 +87,6 @@
   LOOM_KW_SCOPE = 78,  // "scope"
   LOOM_KW_ORDERING = 79,  // "ordering"
   LOOM_KW_PIPELINE = 80,  // "pipeline"
+  LOOM_KW_ACROSS = 81,  // "across"
+  LOOM_KW_ON = 82,  // "on"
+  LOOM_KW_CAPACITY = 83,  // "capacity"

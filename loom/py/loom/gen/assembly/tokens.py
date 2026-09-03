@@ -94,6 +94,9 @@ KEYWORD_MAP: dict[str, str] = {
     "scope": "LOOM_KW_SCOPE",
     "ordering": "LOOM_KW_ORDERING",
     "pipeline": "LOOM_KW_PIPELINE",
+    "across": "LOOM_KW_ACROSS",
+    "on": "LOOM_KW_ON",
+    "capacity": "LOOM_KW_CAPACITY",
 }
 
 # Maps Region(..., syntax=...) names to C parser/printer selector IDs. The

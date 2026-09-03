@@ -87,3 +87,6 @@
     [LOOM_KW_SCOPE] = (const uint8_t*)"\x05" "scope",
     [LOOM_KW_ORDERING] = (const uint8_t*)"\x08" "ordering",
     [LOOM_KW_PIPELINE] = (const uint8_t*)"\x08" "pipeline",
+    [LOOM_KW_ACROSS] = (const uint8_t*)"\x06" "across",
+    [LOOM_KW_ON] = (const uint8_t*)"\x02" "on",
+    [LOOM_KW_CAPACITY] = (const uint8_t*)"\x08" "capacity",
