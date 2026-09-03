@@ -117,6 +117,9 @@ class LowerAttrCopyKind(Enum):
     VALUE_FLOAT_BITS = "value_float_bits"
     I64_ARRAY_LANE_BYTE = "i64_array_lane_byte"
     SOURCE_MEMORY_STATIC_BYTE_OFFSET = "source_memory_static_byte_offset"
+    SOURCE_MEMORY_STATIC_BYTE_OFFSET_PLUS_LITERAL = (
+        "source_memory_static_byte_offset_plus_literal"
+    )
     SOURCE_MEMORY_STATIC_BYTE_OFFSET_QUOTIENT = (
         "source_memory_static_byte_offset_quotient"
     )
@@ -1940,6 +1943,8 @@ class _LowerRuleSetCompiler:
     ) -> LowerAttrCopy:
         if project.kind == SourceMemoryProjectKind.STATIC_BYTE_OFFSET:
             kind = LowerAttrCopyKind.SOURCE_MEMORY_STATIC_BYTE_OFFSET
+        elif project.kind == SourceMemoryProjectKind.STATIC_BYTE_OFFSET_PLUS_LITERAL:
+            kind = LowerAttrCopyKind.SOURCE_MEMORY_STATIC_BYTE_OFFSET_PLUS_LITERAL
         elif project.kind == SourceMemoryProjectKind.STATIC_BYTE_OFFSET_QUOTIENT:
             kind = LowerAttrCopyKind.SOURCE_MEMORY_STATIC_BYTE_OFFSET_QUOTIENT
         elif project.kind == SourceMemoryProjectKind.STATIC_BYTE_OFFSET_REMAINDER:
@@ -1956,7 +1961,12 @@ class _LowerRuleSetCompiler:
             kind=kind,
             target_name=target_name,
             dynamic_term_index=project.dynamic_term_index,
-            literal_i64=project.divisor,
+            literal_i64=(
+                project.literal_i64
+                if project.kind
+                == SourceMemoryProjectKind.STATIC_BYTE_OFFSET_PLUS_LITERAL
+                else project.divisor
+            ),
         )
 
     def _lower_source_op_project(
