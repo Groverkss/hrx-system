@@ -106,7 +106,8 @@ IREE_FLAG_LIST(string, root,
                "multiple roots. Roots must infer one homogeneous product. "
                "When omitted, --product selects its canonical roots; without "
                "either, public or retained command programs take precedence, "
-               "then kernel entries, then the whole module.");
+               "then kernel entries and public or retained kernel-scoped "
+               "pipelines, then the whole module.");
 IREE_FLAG(string, pipeline, "default",
           "Pass pipeline to run before artifact emission. Use 'default' or "
           "empty for the selected format's default compile pipeline. 'none' "
@@ -307,12 +308,6 @@ static iree_status_t loom_compile_materialize_config_set(
       run_module->module, &options, loom_run_session_block_pool(session), NULL);
 }
 
-static bool loom_compile_is_concrete_kernel_root(const loom_symbol_t* symbol) {
-  return symbol->defining_op != NULL &&
-         loom_symbol_implements(symbol, LOOM_SYMBOL_INTERFACE_KERNEL_ENTRY) &&
-         !loom_symbol_definition_is_declaration(symbol->definition);
-}
-
 static iree_status_t loom_compile_select_roots(
     loom_run_session_t* session, loom_run_module_t* run_module,
     const loom_compile_request_t* request, iree_allocator_t allocator) {
@@ -321,14 +316,16 @@ static iree_status_t loom_compile_select_roots(
   if (roots.count == 0 && request->product == LOOM_COMPILE_PRODUCT_KERNEL) {
     for (iree_host_size_t i = 0; i < run_module->module->symbols.count; ++i) {
       const loom_symbol_t* symbol = &run_module->module->symbols.entries[i];
-      if (loom_compile_is_concrete_kernel_root(symbol)) {
+      if (loom_compile_request_symbol_is_implicit_root(request->product,
+                                                       symbol)) {
         ++roots.count;
       }
     }
     if (roots.count == 0) {
       return iree_make_status(
           IREE_STATUS_INVALID_ARGUMENT,
-          "kernel product requires at least one kernel entry");
+          "kernel product requires a kernel entry or a public or retained "
+          "kernel-scoped pipeline root");
     }
     IREE_RETURN_IF_ERROR(iree_allocator_malloc_array(
         allocator, roots.count, sizeof(*implicit_root_values),
@@ -336,7 +333,8 @@ static iree_status_t loom_compile_select_roots(
     iree_host_size_t root_ordinal = 0;
     for (iree_host_size_t i = 0; i < run_module->module->symbols.count; ++i) {
       const loom_symbol_t* symbol = &run_module->module->symbols.entries[i];
-      if (!loom_compile_is_concrete_kernel_root(symbol)) {
+      if (!loom_compile_request_symbol_is_implicit_root(request->product,
+                                                        symbol)) {
         continue;
       }
       implicit_root_values[root_ordinal++] =
