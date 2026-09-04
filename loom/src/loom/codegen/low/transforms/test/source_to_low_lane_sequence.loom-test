@@ -1,0 +1,27 @@
+// RUN: pass source-to-low
+
+// The descriptor program emits one shared zero before its per-lane tail.
+// Each lane multiplies its operands and adds the same setup value.
+test.target<low_core> @test_target
+
+func.def target(@test_target) @shared_lane_setup(%lhs: vector<2xi32>, %rhs: vector<2xi32>) -> (vector<2xi32>) {
+  %result = vector.muli %lhs, %rhs : vector<2xi32>
+  func.return %result : vector<2xi32>
+}
+
+// ----
+test.target<low_core> @test_target
+
+low.func.def target<test.low.core>(@test_target) abi(object_function) @shared_lane_setup(%lhs: reg<test.i32 x2>, %rhs: reg<test.i32 x2>) -> (reg<test.i32 x2>) asm {
+  %7 = test.const.i32 0
+  %8 = slice %lhs[0] : reg<test.i32 x2> -> reg<test.i32>
+  %9 = slice %rhs[0] : reg<test.i32 x2> -> reg<test.i32>
+  %10 = test.mul.i32 %8, %9
+  %11 = test.add.i32 %10, %7
+  %12 = slice %lhs[1] : reg<test.i32 x2> -> reg<test.i32>
+  %13 = slice %rhs[1] : reg<test.i32 x2> -> reg<test.i32>
+  %14 = test.mul.i32 %12, %13
+  %15 = test.add.i32 %14, %7
+  %result = concat(%11, %15) : (reg<test.i32>, reg<test.i32>) -> reg<test.i32 x2>
+  return %result
+}
