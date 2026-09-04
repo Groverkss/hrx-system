@@ -42,6 +42,7 @@ from loom.target.contracts.emits import (
     DescriptorResultType,
     EmitDescriptorOp,
     EmitRegisterConcat,
+    EmitRegisterCopy,
     EmitRegisterSlice,
     ResultTypeBinding,
 )
@@ -94,6 +95,7 @@ class LowerEmitKind(Enum):
     DESCRIPTOR_OP_ACCUMULATE_LANES = "descriptor_op_accumulate_lanes"
     REGISTER_SLICE = "register_slice"
     REGISTER_CONCAT = "register_concat"
+    REGISTER_COPY = "register_copy"
 
 
 @unique
@@ -1339,6 +1341,16 @@ class _LowerRuleSetCompiler:
                 source_op,
                 LowerEmitKind.REGISTER_CONCAT,
                 emit.sources,
+                emit.result,
+                emit.result_type,
+                temporary_ordinals,
+            )
+            return
+        if isinstance(emit, EmitRegisterCopy):
+            self._append_structural_emit(
+                source_op,
+                LowerEmitKind.REGISTER_COPY,
+                (emit.source,),
                 emit.result,
                 emit.result_type,
                 temporary_ordinals,
