@@ -205,6 +205,25 @@ static uint64_t loom_low_lower_rule_attr_copy_float_bits(
   }
 }
 
+static int64_t loom_low_lower_rule_attr_copy_exact_i64(
+    loom_low_lower_context_t* context,
+    const loom_low_lower_rule_set_t* rule_set, const loom_op_t* source_op,
+    const loom_low_lower_attr_copy_t* attr_copy) {
+  const loom_value_id_t source_value_id = loom_low_lower_rule_source_value(
+      context->module, rule_set, source_op, attr_copy->value_ref_index);
+  const loom_value_fact_table_t* fact_table =
+      loom_low_lower_context_fact_table(context);
+  loom_value_facts_t facts = loom_value_facts_unknown();
+  const bool has_integer_facts = loom_low_lower_rule_integer_immediate_facts(
+      loom_low_lower_context_module(context), fact_table, source_value_id,
+      &facts);
+  IREE_ASSERT(has_integer_facts);
+  int64_t value = 0;
+  const bool has_value = loom_value_facts_as_exact_i64(facts, &value);
+  IREE_ASSERT(has_value);
+  return value;
+}
+
 static void loom_low_lower_rule_set_projected_bits_attr(
     const loom_low_lower_attr_copy_t* attr_copy, uint64_t bit_pattern,
     loom_named_attr_t* attr) {
@@ -397,6 +416,17 @@ static iree_status_t loom_low_lower_rule_build_attrs(
             (int64_t)((uint64_t)source_value << attr_copy->target_bit_offset));
         break;
       }
+      case LOOM_LOW_LOWER_ATTR_COPY_I64_ARRAY_ELEMENT_PLUS_LITERAL: {
+        loom_attribute_t source_attr =
+            source_attrs[attr_copy->source_attr_index];
+        int64_t projected_value = 0;
+        const bool has_projected_value = iree_checked_add_i64(
+            source_attr.i64_array[attr_copy->source_element_index],
+            attr_copy->literal_i64, &projected_value);
+        IREE_ASSERT(has_projected_value);
+        attrs[i].value = loom_attr_i64(projected_value);
+        break;
+      }
       case LOOM_LOW_LOWER_ATTR_COPY_I64_ARRAY_PACK_ELEMENTS: {
         IREE_ASSERT_LT(attr_copy->source_attr_index,
                        source_op->attribute_count);
@@ -480,22 +510,8 @@ static iree_status_t loom_low_lower_rule_build_attrs(
         attrs[i].value = loom_attr_i64(attr_copy->literal_i64);
         break;
       case LOOM_LOW_LOWER_ATTR_COPY_VALUE_EXACT_I64: {
-        const loom_value_id_t source_value_id =
-            loom_low_lower_rule_source_value(context->module, rule_set,
-                                             source_op,
-                                             attr_copy->value_ref_index);
-        const loom_value_fact_table_t* fact_table =
-            loom_low_lower_context_fact_table(context);
-        loom_value_facts_t facts = loom_value_facts_unknown();
-        const bool has_integer_facts =
-            loom_low_lower_rule_integer_immediate_facts(
-                loom_low_lower_context_module(context), fact_table,
-                source_value_id, &facts);
-        IREE_ASSERT(has_integer_facts);
-        int64_t source_value = 0;
-        const bool has_exact_value =
-            loom_value_facts_as_exact_i64(facts, &source_value);
-        IREE_ASSERT(has_exact_value);
+        const int64_t source_value = loom_low_lower_rule_attr_copy_exact_i64(
+            context, rule_set, source_op, attr_copy);
         if (attr_copy->target_bit_offset == 0) {
           attrs[i].value = loom_attr_i64(source_value);
           break;
@@ -506,6 +522,17 @@ static iree_status_t loom_low_lower_rule_build_attrs(
                        (uint64_t)INT64_MAX >> attr_copy->target_bit_offset);
         attrs[i].value = loom_attr_i64(
             (int64_t)((uint64_t)source_value << attr_copy->target_bit_offset));
+        break;
+      }
+      case LOOM_LOW_LOWER_ATTR_COPY_VALUE_EXACT_I64_I32_WORD: {
+        const uint64_t bit_pattern =
+            (uint64_t)loom_low_lower_rule_attr_copy_exact_i64(
+                context, rule_set, source_op, attr_copy);
+        const uint32_t word =
+            (uint32_t)(bit_pattern >> (attr_copy->source_element_index * 32));
+        int32_t signed_word = 0;
+        memcpy(&signed_word, &word, sizeof(signed_word));
+        attrs[i].value = loom_attr_i64(signed_word);
         break;
       }
       case LOOM_LOW_LOWER_ATTR_COPY_VALUE_EXACT_I64_NEGATE: {
@@ -665,6 +692,25 @@ static iree_status_t loom_low_lower_rule_build_attrs(
             context, rule_set, source_op, attr_copy);
         loom_low_lower_rule_set_projected_bits_attr(attr_copy, bit_pattern,
                                                     &attrs[i]);
+        break;
+      }
+      case LOOM_LOW_LOWER_ATTR_COPY_VALUE_FLOAT_AS_F32_I32: {
+        const uint32_t bit_pattern =
+            (uint32_t)loom_low_lower_rule_attr_copy_float_bits(
+                context, rule_set, source_op, attr_copy);
+        int32_t signed_bit_pattern = 0;
+        memcpy(&signed_bit_pattern, &bit_pattern, sizeof(signed_bit_pattern));
+        attrs[i].value = loom_attr_i64(signed_bit_pattern);
+        break;
+      }
+      case LOOM_LOW_LOWER_ATTR_COPY_VALUE_FLOAT_AS_F64_I32_WORD: {
+        const uint64_t bit_pattern = loom_low_lower_rule_attr_copy_float_bits(
+            context, rule_set, source_op, attr_copy);
+        const uint32_t word =
+            (uint32_t)(bit_pattern >> (attr_copy->source_element_index * 32));
+        int32_t signed_word = 0;
+        memcpy(&signed_word, &word, sizeof(signed_word));
+        attrs[i].value = loom_attr_i64(signed_word);
         break;
       }
       case LOOM_LOW_LOWER_ATTR_COPY_SOURCE_MEMORY_STATIC_BYTE_OFFSET:
