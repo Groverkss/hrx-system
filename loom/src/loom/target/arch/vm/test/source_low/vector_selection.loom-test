@@ -14,9 +14,9 @@ func.def target(@vm) @whole_vector_select(%condition: i1, %a: f32, %b: f32) -> (
 
 // ----
 low.func.def target<vm.core>(@vm) abi(vm_function) @whole_vector_select(%condition: reg<vm.value : i1>, %a: reg<vm.value : f32>, %b: reg<vm.value : f32>) -> (reg<vm.value : f32>, reg<vm.value : f32>) asm {
-  %18 = value.select %condition, %a, %b : reg<vm.value : f32>
-  %19 = value.select %condition, %b, %a : reg<vm.value : f32>
-  return %18, %19
+  %21 = value.select %condition, %a, %b : reg<vm.value : f32>
+  %22 = value.select %condition, %b, %a : reg<vm.value : f32>
+  return %21, %22
 }
 
 // ====
@@ -38,7 +38,7 @@ func.def target(@vm) @whole_vector_if(%condition: i1, %a: i64, %b: i64) -> (i64,
 
 // ----
 low.func.def target<vm.core>(@vm) abi(vm_function) @whole_vector_if(%condition: reg<vm.value : i1>, %a: reg<vm.value : i64>, %b: reg<vm.value : i64>) -> (reg<vm.value : i64>, reg<vm.value : i64>) asm {
-  %19 = value.select %condition, %a, %b
-  %20 = value.select %condition, %b, %a
-  return %19, %20
+  %22 = value.select %condition, %a, %b
+  %23 = value.select %condition, %b, %a
+  return %22, %23
 }

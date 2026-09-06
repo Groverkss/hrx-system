@@ -177,9 +177,9 @@ func.def target(@target) @i32_bitfield_insert_full_width_alias(%field_buffer: bu
 
 // ----
 low.func.def target<vm.core>(@target) abi(vm_function) @i32_bitfield_insert_full_width_alias(%field_view: reg<vm.ref : buffer>, %base_buffer: reg<vm.ref : buffer>, %output_view: reg<vm.ref : buffer>) asm {
-  %24 = constant.i64 0
-  %25 = buffer.load %field_view, %24, %24, 0, 8 : reg<vm.value : i32>
-  buffer.store %output_view, %24, %24, %25, 0, 8
+  %16 = constant.i64 0
+  %17 = buffer.load %field_view, %16, %16, 0, 8 : reg<vm.value : i32>
+  buffer.store %output_view, %16, %16, %17, 0, 8
   return
 }
 
@@ -203,50 +203,50 @@ func.def target(@target) @i32_bitfield_b128_shape(%input: buffer, %output: buffe
 
 // ----
 low.func.def target<vm.core>(@target) abi(vm_function) @i32_bitfield_b128_shape(%input_view: reg<vm.ref : buffer>, %output_view: reg<vm.ref : buffer>) asm {
-  %110 = constant.i64 0
-  %111 = buffer.load %input_view, %110, %110, 0, 8 : reg<vm.value : i32>
-  %112 = constant.i32 4
-  %113 = integer.shift.right.u32 %111, %112
-  %114 = constant.i32 3
-  %115 = integer.and.i32 %113, %114
-  %116 = constant.i32 15
-  %117 = integer.and.i32 %111, %116
-  %118 = integer.shift.left.i32 %115, %112
-  %119 = constant.i32 4294967247
-  %120 = integer.and.i32 %117, %119
-  %121 = integer.or.i32 %120, %118
-  %122 = constant.i64 4
-  %123 = buffer.load %input_view, %122, %122, 0, 8 : reg<vm.value : i32>
-  %124 = integer.shift.right.u32 %123, %112
-  %125 = integer.and.i32 %124, %114
-  %126 = integer.and.i32 %123, %116
-  %127 = integer.shift.left.i32 %125, %112
-  %128 = integer.and.i32 %126, %119
-  %129 = integer.or.i32 %128, %127
-  %130 = constant.i64 8
-  %131 = buffer.load %input_view, %130, %130, 0, 8 : reg<vm.value : i32>
-  %132 = integer.shift.right.u32 %131, %112
-  %133 = integer.and.i32 %132, %114
-  %134 = integer.and.i32 %131, %116
-  %135 = integer.shift.left.i32 %133, %112
-  %136 = integer.and.i32 %134, %119
-  %137 = integer.or.i32 %136, %135
-  %138 = constant.i64 12
-  %139 = buffer.load %input_view, %138, %138, 0, 8 : reg<vm.value : i32>
-  %140 = integer.shift.right.u32 %139, %112
-  %141 = integer.and.i32 %140, %114
-  %142 = integer.and.i32 %139, %116
-  %143 = integer.shift.left.i32 %141, %112
-  %144 = integer.and.i32 %142, %119
-  %145 = integer.or.i32 %144, %143
-  %146 = constant.i32 4294967264
-  %147 = integer.add.i32 %121, %146
-  %148 = integer.add.i32 %129, %146
-  %149 = integer.add.i32 %137, %146
-  %150 = integer.add.i32 %145, %146
-  buffer.store %output_view, %110, %110, %147, 0, 8
-  buffer.store %output_view, %122, %122, %148, 0, 8
-  buffer.store %output_view, %130, %130, %149, 0, 8
-  buffer.store %output_view, %138, %138, %150, 0, 8
+  %114 = constant.i64 0
+  %115 = buffer.load %input_view, %114, %114, 0, 8 : reg<vm.value : i32>
+  %116 = constant.i32 4
+  %117 = integer.shift.right.u32 %115, %116
+  %118 = constant.i32 3
+  %119 = integer.and.i32 %117, %118
+  %120 = constant.i32 15
+  %121 = integer.and.i32 %115, %120
+  %122 = integer.shift.left.i32 %119, %116
+  %123 = constant.i32 4294967247
+  %124 = integer.and.i32 %121, %123
+  %125 = integer.or.i32 %124, %122
+  %126 = constant.i64 4
+  %127 = buffer.load %input_view, %126, %126, 0, 8 : reg<vm.value : i32>
+  %128 = integer.shift.right.u32 %127, %116
+  %129 = integer.and.i32 %128, %118
+  %130 = integer.and.i32 %127, %120
+  %131 = integer.shift.left.i32 %129, %116
+  %132 = integer.and.i32 %130, %123
+  %133 = integer.or.i32 %132, %131
+  %134 = constant.i64 8
+  %135 = buffer.load %input_view, %134, %134, 0, 8 : reg<vm.value : i32>
+  %136 = integer.shift.right.u32 %135, %116
+  %137 = integer.and.i32 %136, %118
+  %138 = integer.and.i32 %135, %120
+  %139 = integer.shift.left.i32 %137, %116
+  %140 = integer.and.i32 %138, %123
+  %141 = integer.or.i32 %140, %139
+  %142 = constant.i64 12
+  %143 = buffer.load %input_view, %142, %142, 0, 8 : reg<vm.value : i32>
+  %144 = integer.shift.right.u32 %143, %116
+  %145 = integer.and.i32 %144, %118
+  %146 = integer.and.i32 %143, %120
+  %147 = integer.shift.left.i32 %145, %116
+  %148 = integer.and.i32 %146, %123
+  %149 = integer.or.i32 %148, %147
+  %150 = constant.i32 4294967264
+  %151 = integer.add.i32 %125, %150
+  %152 = integer.add.i32 %133, %150
+  %153 = integer.add.i32 %141, %150
+  %154 = integer.add.i32 %149, %150
+  buffer.store %output_view, %114, %114, %151, 0, 8
+  buffer.store %output_view, %126, %126, %152, 0, 8
+  buffer.store %output_view, %134, %134, %153, 0, 8
+  buffer.store %output_view, %142, %142, %154, 0, 8
   return
 }
