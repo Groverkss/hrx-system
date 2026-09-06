@@ -39,6 +39,30 @@ low.func.def target<llvmir.generic.core>(@target) abi(object_function) @vector_f
 
 // ====
 
+// XFAIL: LLVM IR oracle has no IEEE minimum/maximum descriptor family
+llvmir.target<object> @target {data_layout = "e-p:64:64-i64:64-n8:16:32:64-S128", triple = "loom-direct64-unknown-none"}
+
+func.def target(@target) @scalar_f32_minimum_maximum(%lhs: f32, %rhs: f32) -> (f32) {
+  %min = scalar.minimumf %lhs, %rhs : f32
+  %max = scalar.maximumf %lhs, %rhs : f32
+  %sum = scalar.addf %min, %max : f32
+  func.return %sum : f32
+}
+
+// ====
+
+// XFAIL: LLVM IR oracle has no IEEE minimum/maximum descriptor family
+llvmir.target<object> @target {data_layout = "e-p:64:64-i64:64-n8:16:32:64-S128", triple = "loom-direct64-unknown-none"}
+
+func.def target(@target) @vector_f32_minimum_maximum(%lhs: vector<2xf32>, %rhs: vector<2xf32>) -> (vector<2xf32>) {
+  %min = vector.minimumf %lhs, %rhs : vector<2xf32>
+  %max = vector.maximumf %lhs, %rhs : vector<2xf32>
+  %sum = vector.addf %min, %max : vector<2xf32>
+  func.return %sum : vector<2xf32>
+}
+
+// ====
+
 llvmir.target<object> @target {data_layout = "e-p:64:64-i64:64-n8:16:32:64-S128", triple = "loom-direct64-unknown-none"}
 
 func.def target(@target) @scalar_f32_clampf_number(%input: f32) -> (f32) {
@@ -111,6 +135,26 @@ low.func.def target<llvmir.generic.core>(@target) abi(object_function) @vector_f
   %11 = cmp.ogt.v2f32 %10, %upper
   %result = select.v2f32 %11, %upper, %10
   return %result
+}
+
+// ====
+
+// XFAIL: LLVM IR oracle has no IEEE minimum/maximum descriptor family
+llvmir.target<object> @target {data_layout = "e-p:64:64-i64:64-n8:16:32:64-S128", triple = "loom-direct64-unknown-none"}
+
+func.def target(@target) @scalar_f32_clampf_ieee(%input: f32, %lower: f32, %upper: f32) -> (f32) {
+  %result = scalar.clampf<ieee> %input, %lower, %upper : f32
+  func.return %result : f32
+}
+
+// ====
+
+// XFAIL: LLVM IR oracle has no IEEE minimum/maximum descriptor family
+llvmir.target<object> @target {data_layout = "e-p:64:64-i64:64-n8:16:32:64-S128", triple = "loom-direct64-unknown-none"}
+
+func.def target(@target) @vector_f32_clampf_ieee(%input: vector<2xf32>, %lower: vector<2xf32>, %upper: vector<2xf32>) -> (vector<2xf32>) {
+  %result = vector.clampf<ieee> %input, %lower, %upper : vector<2xf32>
+  func.return %result : vector<2xf32>
 }
 
 // ====

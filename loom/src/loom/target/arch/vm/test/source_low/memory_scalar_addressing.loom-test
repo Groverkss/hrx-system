@@ -194,3 +194,28 @@ low.func.def target<vm.core>(@target) abi(vm_function) @scalar_subview_dynamic_i
   buffer.store %output_refined, %25, %25, %loaded, 0, 8
   return %loaded
 }
+
+// ====
+
+vm.target<core> @target
+
+func.def target(@target) @scalar_static_rank3_i16(%input: buffer, %output: buffer) -> (i16) {
+  %input_base = index.constant 8 : offset
+  %output_base = index.constant 12 : offset
+  %input_aligned = buffer.assume.alignment %input {minimum_alignment = 2} : buffer
+  %output_aligned = buffer.assume.alignment %output {minimum_alignment = 2} : buffer
+  %input_view = buffer.view %input_aligned[%input_base] : buffer -> view<2x3x4xi16>
+  %output_view = buffer.view %output_aligned[%output_base] : buffer -> view<2x3x4xi16>
+  %loaded = view.load %input_view[1, 2, 3] : view<2x3x4xi16> -> i16
+  view.store %loaded, %output_view[0, 1, 2] : i16, view<2x3x4xi16>
+  func.return %loaded : i16
+}
+
+// ----
+low.func.def target<vm.core>(@target) abi(vm_function) @scalar_static_rank3_i16(%input_view: reg<vm.ref : buffer>, %output_view: reg<vm.ref : buffer>) -> (reg<vm.value : i16>) asm {
+  %16 = constant.i64 54
+  %loaded = buffer.load %input_view, %16, %16, 0, 4 : reg<vm.value : i16>
+  %18 = constant.i64 24
+  buffer.store %output_view, %18, %18, %loaded, 0, 4
+  return %loaded
+}

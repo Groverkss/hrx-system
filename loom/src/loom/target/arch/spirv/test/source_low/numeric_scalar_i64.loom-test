@@ -230,3 +230,15 @@ low.func.def target<spirv.logical.core>(@target) abi(shader_entry_point) @scalar
   %result = OpShiftLeftLogical.i64 %lhs, %rhs
   return %result
 }
+
+// ====
+
+// XFAIL: SPIR-V Vulkan 1.3 baseline profile does not enable Float64
+spirv.target<vulkan1_3> @target
+
+func.def target(@target) @scalar_f64_constant_select_bitcast(%condition: i1, %fallback: f64) -> (i64) {
+  %constant = scalar.constant -1.1000000000000001 : f64
+  %selected = scf.select %condition, %constant, %fallback : f64
+  %bits = scalar.bitcast %selected : f64 to i64
+  func.return %bits : i64
+}
