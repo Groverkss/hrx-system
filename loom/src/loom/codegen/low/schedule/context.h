@@ -128,8 +128,8 @@ typedef struct loom_low_schedule_effect_frontier_entry_t {
   uint32_t node_index;
   // Descriptor-local effect row, or LOOM_LOW_ID_NONE for structural effects.
   uint16_t effect_ordinal;
-  // Timing event observed by the effect, or LOOM_LOW_TIMING_EVENT_NONE.
-  uint16_t timing_event_id;
+  // Producer event published to later effects, or NONE.
+  uint16_t producer_event_id;
   // Borrowed alias summary from the function memory-access table or immutable
   // memory-space summary storage, retained for every outstanding effect.
   const loom_low_memory_access_summary_t* summary;
