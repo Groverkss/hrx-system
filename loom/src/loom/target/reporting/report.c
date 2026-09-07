@@ -25,8 +25,8 @@ void loom_target_compile_report_deinitialize(
     return;
   }
   const iree_allocator_t allocator = report->allocator;
-  loom_target_compile_report_pipeline_plan_deinitialize(&report->pipeline_plan,
-                                                        allocator);
+  loom_target_compile_report_pipeline_plan_list_deinitialize(
+      &report->pipeline_plans, allocator);
   loom_target_compile_report_row_list_deinitialize(allocator,
                                                    &report->entry_rows);
   loom_target_compile_report_row_list_deinitialize(
@@ -94,8 +94,7 @@ void loom_target_compile_report_deinitialize(
 
 static bool loom_target_compile_report_has_rows(
     const loom_target_compile_report_t* report) {
-  return report->pipeline_plan.worker_row_count != 0 ||
-         report->pipeline_plan.channel_row_count != 0 ||
+  return report->pipeline_plans.count != 0 ||
          report->pressure_rows.count != 0 || report->spill_rows.count != 0 ||
          report->residency_constraint_rows.count != 0 ||
          report->pressure_summaries.count != 0 ||
@@ -146,9 +145,7 @@ iree_status_t loom_target_compile_report_clone(
     loom_target_compile_report_t* out_target) {
   loom_target_compile_report_t target = *source;
   target.allocator = allocator;
-  target.pipeline_plan = (loom_target_compile_report_pipeline_plan_t){
-      .summary = source->pipeline_plan.summary,
-  };
+  target.pipeline_plans = (loom_target_compile_report_pipeline_plan_list_t){0};
   target.entry_rows = (loom_target_compile_report_row_list_t){0};
   target.residency_constraint_rows = (loom_target_compile_report_row_list_t){0};
   target.pressure_summaries = (loom_target_compile_report_row_list_t){0};
@@ -197,8 +194,8 @@ iree_status_t loom_target_compile_report_clone(
     *out_target = target;
     return iree_ok_status();
   }
-  iree_status_t status = loom_target_compile_report_pipeline_plan_clone(
-      &source->pipeline_plan, &target.pipeline_plan, allocator);
+  iree_status_t status = loom_target_compile_report_pipeline_plan_list_clone(
+      &source->pipeline_plans, &target.pipeline_plans, allocator);
   if (iree_status_is_ok(status)) {
     status = loom_target_compile_report_row_list_clone(
         &source->entry_rows, sizeof(loom_target_compile_report_entry_t),
