@@ -10,6 +10,7 @@
 #include <stdint.h>
 
 #include "loom/target/reporting/format_loop_pipeline.h"
+#include "loom/target/reporting/format_pipeline.h"
 #include "loom/target/reporting/format_planning.h"
 #include "loom/target/reporting/schema.h"
 
@@ -912,6 +913,11 @@ iree_status_t loom_target_compile_report_format_text(
       loom_target_compile_report_format_summary(report, options, builder));
   IREE_RETURN_IF_ERROR(loom_target_compile_report_format_loop_pipelines_text(
       report, options->mode, builder));
+  if (iree_any_bit_set(report->detail_flags,
+                       LOOM_TARGET_COMPILE_REPORT_DETAIL_PIPELINE_PLAN)) {
+    IREE_RETURN_IF_ERROR(loom_target_compile_report_format_pipeline_plan_text(
+        &report->pipeline_plan, options->mode, builder));
+  }
   if (iree_any_bit_set(report->detail_flags,
                        LOOM_TARGET_COMPILE_REPORT_DETAIL_ENTRIES)) {
     IREE_RETURN_IF_ERROR(

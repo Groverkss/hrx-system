@@ -49,6 +49,7 @@ loom_cc_library(
     report
   HDRS
     "loop_pipeline.h"
+    "pipeline_plan.h"
     "report.h"
     "residency.h"
     "target_insertion.h"
@@ -56,6 +57,7 @@ loom_cc_library(
     "loop_pipeline.c"
     "memory_summary.c"
     "memory_summary.h"
+    "pipeline_plan.c"
     "report.c"
     "residency.c"
     "row_list.c"
@@ -87,6 +89,8 @@ loom_cc_library(
     "format_json_planning.c"
     "format_loop_pipeline.c"
     "format_loop_pipeline.h"
+    "format_pipeline.c"
+    "format_pipeline.h"
     "format_residency.c"
     "format_text.c"
     "format_text.h"
