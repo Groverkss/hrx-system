@@ -176,9 +176,8 @@ func.def @layout_assert_refines_view_facts(%buffer: buffer, %m: index) -> (i64) 
 // ----
 func.def @layout_assert_refines_view_facts(%buffer: buffer, %m: index) -> (i64) {
   %offset = index.constant 0 : offset
-  %layout = encoding.layout.dense : encoding<layout>
-  %view = buffer.view %buffer[%offset] : buffer -> view<[%m]xf32, %layout>
-  %checked = sanitizer.assert.layout %view : view<[%m]xf32, %layout> -> view<4xf32, %layout>
+  %view = buffer.view %buffer[%offset] : buffer -> view<[%m]xf32>
+  %checked = sanitizer.assert.layout %view : view<[%m]xf32> -> view<4xf32>
   %length_hi = scalar.constant 16 : i64
   func.return %length_hi : i64
 }

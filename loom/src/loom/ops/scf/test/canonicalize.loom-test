@@ -40,9 +40,8 @@ func.def @if_false_keeps_selected_store(%buffer: buffer, %offset: offset, %value
 
 // ----
 func.def @if_false_keeps_selected_store(%buffer: buffer, %offset: offset, %value: f32) {
-  %layout = encoding.layout.dense : encoding<layout>
-  %view = buffer.view %buffer[%offset] : buffer -> view<1xf32, %layout>
-  view.store %value, %view[0] : f32, view<1xf32, %layout>
+  %view = buffer.view %buffer[%offset] : buffer -> view<1xf32>
+  view.store %value, %view[0] : f32, view<1xf32>
   func.return
 }
 
@@ -282,12 +281,11 @@ func.def @if_edge_rewrites_view_type_reference(%buffer: buffer, %offset: offset,
 
 // ----
 func.def @if_edge_rewrites_view_type_reference(%buffer: buffer, %offset: offset, %n: index, %limit: index) -> (f32) {
-  %layout = encoding.layout.dense : encoding<layout>
   %cond = index.cmp slt, %n, %limit : index
   %result = scf.if %cond -> (f32) {
     %11 = index.assume %n [lt(%n, %limit)] : index
-    %view = buffer.view %buffer[%offset] : buffer -> view<[%11]xf32, %layout>
-    %loaded = view.load %view[0] : view<[%11]xf32, %layout> -> f32
+    %view = buffer.view %buffer[%offset] : buffer -> view<[%11]xf32>
+    %loaded = view.load %view[0] : view<[%11]xf32> -> f32
     scf.yield %loaded : f32
   } else {
     %c0 = scalar.constant 0.0 : f32
@@ -346,7 +344,6 @@ func.def @if_edge_rewrites_precast_index_reference(%buffer: buffer, %offset: off
 
 // ----
 func.def @if_edge_rewrites_precast_index_reference(%buffer: buffer, %offset: offset, %row: i32, %n: i32) {
-  %layout = encoding.layout.dense : encoding<layout>
   %row_idx = index.cast %row : i32 to index
   %n_idx = index.cast %n : i32 to index
   %c0 = scalar.constant 0 : i32
@@ -355,8 +352,8 @@ func.def @if_edge_rewrites_precast_index_reference(%buffer: buffer, %offset: off
   %guard = scalar.andi %nonnegative, %below : i1
   scf.if %guard {
     %13 = index.assume %row_idx [ge(%row_idx, 0), lt(%row_idx, %n)] : index
-    %view = buffer.view %buffer[%offset] : buffer -> view<[%n_idx]x4xf32, %layout>
-    %loaded = vector.load %view[%13, 0] : view<[%n_idx]x4xf32, %layout> -> vector<4xf32>
+    %view = buffer.view %buffer[%offset] : buffer -> view<[%n_idx]x4xf32>
+    %loaded = vector.load %view[%13, 0] : view<[%n_idx]x4xf32> -> vector<4xf32>
     test.use %loaded : vector<4xf32>
   } else {
   }
@@ -388,8 +385,7 @@ func.def @if_edge_rewrites_refinable_result_type_refs(%buffer: buffer, %offset: 
 
 // ----
 func.def @if_edge_rewrites_refinable_result_type_refs(%buffer: buffer, %offset: offset, %x: i32, %n: index, %limit: index) {
-  %layout = encoding.layout.dense : encoding<layout>
-  %source = buffer.view %buffer[%offset] : buffer -> view<[%n]xi32, %layout>
+  %source = buffer.view %buffer[%offset] : buffer -> view<[%n]xi32>
   %c0 = index.constant 0 : index
   %c1 = index.constant 1 : index
   %cond = index.cmp slt, %n, %limit : index
@@ -398,9 +394,9 @@ func.def @if_edge_rewrites_refinable_result_type_refs(%buffer: buffer, %offset: 
     %constant = vector.constant 7 : vector<[%16]xi32>
     %iota = vector.iota %c0 step %c1 : vector<[%16]xindex>
     %mask = vector.mask.range [%c0 to %16 step %c1] : index -> vector<[%16]xi1>
-    %sub = view.subview %source[0] : view<[%n]xi32, %layout> -> view<[%16]xi32, %layout>
-    %refined = view.refine %sub : view<[%16]xi32, %layout> -> view<[%16]xi32, %layout>
-    %loaded = vector.load %refined[0] : view<[%16]xi32, %layout> -> vector<[%16]xi32>
+    %sub = view.subview %source[0] : view<[%n]xi32> -> view<[%16]xi32>
+    %refined = view.refine %sub : view<[%16]xi32> -> view<[%16]xi32>
+    %loaded = vector.load %refined[0] : view<[%16]xi32> -> vector<[%16]xi32>
     test.use %constant, %iota, %mask, %loaded : vector<[%16]xi32>, vector<[%16]xindex>, vector<[%16]xi1>, vector<[%16]xi32>
   } else {
   }
@@ -769,6 +765,20 @@ func.def @if_preserves_distinct_storage_tail_roots(%cond: i1, %lhs_buffer: buffe
   func.return %result : f32
 }
 
+// ----
+func.def @if_preserves_distinct_storage_tail_roots(%cond: i1, %lhs_buffer: buffer, %rhs_buffer: buffer, %offset: offset) -> (f32) {
+  %lhs_view = buffer.view %lhs_buffer[%offset] : buffer -> view<4xf32>
+  %rhs_view = buffer.view %rhs_buffer[%offset] : buffer -> view<4xf32>
+  %result = scf.if %cond -> (f32) {
+    %lhs = view.load %lhs_view[0] : view<4xf32> -> f32
+    scf.yield %lhs : f32
+  } else {
+    %rhs = view.load %rhs_view[0] : view<4xf32> -> f32
+    scf.yield %rhs : f32
+  }
+  func.return %result : f32
+}
+
 // ====
 
 // Different tail op kinds do not factor: the conditional still chooses between
@@ -881,12 +891,11 @@ func.def @if_forwards_equal_result_keeps_effects(%buffer: buffer, %offset: offse
 
 // ----
 func.def @if_forwards_equal_result_keeps_effects(%buffer: buffer, %offset: offset, %cond: i1, %value: f32, %other: f32) -> (f32) {
-  %layout = encoding.layout.dense : encoding<layout>
-  %view = buffer.view %buffer[%offset] : buffer -> view<1xf32, %layout>
+  %view = buffer.view %buffer[%offset] : buffer -> view<1xf32>
   scf.if %cond {
-    view.store %value, %view[0] : f32, view<1xf32, %layout>
+    view.store %value, %view[0] : f32, view<1xf32>
   } else {
-    view.store %other, %view[0] : f32, view<1xf32, %layout>
+    view.store %other, %view[0] : f32, view<1xf32>
   }
   func.return %value : f32
 }
@@ -909,10 +918,9 @@ func.def @if_forwards_equal_result_keeps_hint(%buffer: buffer, %offset: offset, 
 
 // ----
 func.def @if_forwards_equal_result_keeps_hint(%buffer: buffer, %offset: offset, %cond: i1, %row: index, %value: f32) -> (f32) {
-  %layout = encoding.layout.dense : encoding<layout>
-  %view = buffer.view %buffer[%offset] : buffer -> view<4xf32, %layout>
+  %view = buffer.view %buffer[%offset] : buffer -> view<4xf32>
   scf.if %cond {
-    view.prefetch %view[%row] {intent = read, locality = l1} : view<4xf32, %layout>
+    view.prefetch %view[%row] {intent = read, locality = l1} : view<4xf32>
   } else {
   }
   func.return %value : f32
@@ -964,15 +972,14 @@ func.def @if_drops_unused_result_keeps_effects(%buffer: buffer, %offset: offset,
 
 // ----
 func.def @if_drops_unused_result_keeps_effects(%buffer: buffer, %offset: offset, %cond: i1, %a: f32, %b: f32) -> (f32) {
-  %layout = encoding.layout.dense : encoding<layout>
-  %view = buffer.view %buffer[%offset] : buffer -> view<1xf32, %layout>
+  %view = buffer.view %buffer[%offset] : buffer -> view<1xf32>
   %live = scf.if %cond -> (f32) {
     %then_live = scalar.addf %a, %b : f32
-    view.store %then_live, %view[0] : f32, view<1xf32, %layout>
+    view.store %then_live, %view[0] : f32, view<1xf32>
     scf.yield %then_live : f32
   } else {
     %else_live = scalar.addf %b, %a : f32
-    view.store %else_live, %view[0] : f32, view<1xf32, %layout>
+    view.store %else_live, %view[0] : f32, view<1xf32>
     scf.yield %else_live : f32
   }
   func.return %live : f32
@@ -1055,10 +1062,9 @@ func.def @for_single_trip_resultless_inlines_effect(%buffer: buffer, %offset: of
 
 // ----
 func.def @for_single_trip_resultless_inlines_effect(%buffer: buffer, %offset: offset, %value: f32) {
-  %layout = encoding.layout.dense : encoding<layout>
-  %view = buffer.view %buffer[%offset] : buffer -> view<16xf32, %layout>
+  %view = buffer.view %buffer[%offset] : buffer -> view<16xf32>
   %addr = index.constant 3 : index
-  view.store %value, %view[%addr] : f32, view<16xf32, %layout>
+  view.store %value, %view[%addr] : f32, view<16xf32>
   func.return
 }
 
@@ -1100,10 +1106,9 @@ func.def @for_single_trip_dynamic_range_inlines(%buffer: buffer, %offset: offset
 
 // ----
 func.def @for_single_trip_dynamic_range_inlines(%buffer: buffer, %offset: offset, %lo: index, %hi: index, %value: f32) {
-  %layout = encoding.layout.dense : encoding<layout>
-  %view = buffer.view %buffer[%offset] : buffer -> view<32xf32, %layout>
+  %view = buffer.view %buffer[%offset] : buffer -> view<32xf32>
   %lo1 = index.assume %lo [range(%lo, 8, 15)] : index
-  view.store %value, %view[%lo1] : f32, view<32xf32, %layout>
+  view.store %value, %view[%lo1] : f32, view<32xf32>
   func.return
 }
 
@@ -1229,11 +1234,10 @@ func.def @for_forwards_mixed_effectful_result(%buffer: buffer, %offset: offset, 
 
 // ----
 func.def @for_forwards_mixed_effectful_result(%buffer: buffer, %offset: offset, %lo: index, %hi: index, %init: f32, %acc: f32) -> (f32, f32) {
-  %layout = encoding.layout.dense : encoding<layout>
-  %view = buffer.view %buffer[%offset] : buffer -> view<1xf32, %layout>
+  %view = buffer.view %buffer[%offset] : buffer -> view<1xf32>
   %step = index.constant 1 : index
   %sum = scf.for %iv = [%lo to %hi step %step](%acc_arg = %acc : f32) -> (f32) {
-    view.store %init, %view[0] : f32, view<1xf32, %layout>
+    view.store %init, %view[0] : f32, view<1xf32>
     %next = scalar.addf %acc_arg, %acc_arg : f32
     scf.yield %next : f32
   }
@@ -1257,11 +1261,10 @@ func.def @for_single_forwarded_result_keeps_effect(%buffer: buffer, %offset: off
 
 // ----
 func.def @for_single_forwarded_result_keeps_effect(%buffer: buffer, %offset: offset, %lo: index, %hi: index, %init: f32) -> (f32) {
-  %layout = encoding.layout.dense : encoding<layout>
-  %view = buffer.view %buffer[%offset] : buffer -> view<1xf32, %layout>
+  %view = buffer.view %buffer[%offset] : buffer -> view<1xf32>
   %step = index.constant 1 : index
   scf.for %iv = [%lo to %hi step %step] {
-    view.store %init, %view[0] : f32, view<1xf32, %layout>
+    view.store %init, %view[0] : f32, view<1xf32>
   }
   func.return %init : f32
 }
