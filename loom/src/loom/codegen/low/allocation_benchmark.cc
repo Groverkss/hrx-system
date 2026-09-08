@@ -296,7 +296,8 @@ class AllocationBenchmark {
     } else if (phase_ == Phase::kPlacement) {
       loom_low_placement_table_t placement = {};
       IREE_CHECK_OK(loom_low_placement_analyze_region(
-          module_, model_.body, &model_.value_domain, &liveness_,
+          module_, model_.body, model_.target.descriptor_set,
+          &model_.value_domain, &liveness_,
           loom_low_placement_pair_use_list_empty(), &arena, &placement));
       result.value_count = placement.value_count;
       benchmark::DoNotOptimize(placement.relations);
