@@ -217,11 +217,12 @@ loom_cc_library(
     "array/topology.h"
   DEPS
     ::array_descriptors
-    ::leaf_object
     iree::base
     iree::base::internal::arena
     loom::analysis::scc
+    loom::codegen::low::function_requirements
     loom::codegen::low::packet
+    loom::codegen::low::storage_layout
     loom::codegen::low::target_binding
     loom::error::emitter
     loom::error::error_defs
@@ -410,6 +411,8 @@ loom_cc_library(
     ::provider
     iree::base
     loom::codegen::low::diagnostics
+    loom::codegen::low::function_requirements
+    loom::codegen::low::storage_layout
     loom::codegen::low::text_asm
     loom::format::text::printer
     loom::ir
@@ -438,9 +441,15 @@ loom_check_test_suite(
   NAME
     loom_check_file_test
   SRCS
+    "test/array_plan/dma_service.loom-test"
     "test/array_plan/endpoint_storage.loom-test"
+    "test/array_plan/multicast.loom-test"
+    "test/array_plan/packed_record.loom-test"
     "test/array_plan/record_contracts.loom-test"
+    "test/array_plan/ring_wrap.loom-test"
     "test/array_plan/split_k.loom-test"
+    "test/array_plan/strided_transfer.loom-test"
+    "test/array_plan/temporal_fold.loom-test"
     "test/descriptors/fifo.loom-test"
     "test/descriptors/fused_vector_memory.loom-test"
     "test/module_contracts.loom-test"
@@ -554,6 +563,7 @@ loom_cc_library(
     iree::base::internal::arena
     loom::codegen::low::diagnostics
     loom::codegen::low::packet
+    loom::codegen::low::storage_layout
     loom::ir
     loom::ops::low
     loom::ops::op_defs
@@ -642,6 +652,7 @@ loom_cc_library(
     iree::io::stream
     loom::codegen::low::descriptors
     loom::codegen::low::diagnostics
+    loom::codegen::low::frame
     loom::ir
     loom::ir::facts
     loom::ops::encoding
@@ -677,6 +688,7 @@ loom_cc_test(
     iree::base::internal::arena
     iree::testing::gtest
     iree::testing::gtest_main
+    loom::codegen::low::function_requirements
 )
 
 loom_cc_test(

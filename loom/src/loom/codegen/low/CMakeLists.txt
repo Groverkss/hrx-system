@@ -216,6 +216,22 @@ loom_cc_library(
 
 loom_cc_library(
   NAME
+    function_requirements
+  HDRS
+    "function_requirements.h"
+  SRCS
+    "function_requirements.c"
+  DEPS
+    ::storage_layout
+    iree::base
+    iree::base::internal::arena
+    loom::ir
+    loom::ops::low
+  PUBLIC
+)
+
+loom_cc_library(
+  NAME
     function_model
   HDRS
     "function_model.h"
@@ -224,6 +240,7 @@ loom_cc_library(
   DEPS
     ::descriptors
     ::function
+    ::function_requirements
     ::target_binding
     iree::base
     iree::base::internal::arena
@@ -232,6 +249,25 @@ loom_cc_library(
     loom::util::cfg_graph
     loom::util::cfg_loop
   PUBLIC
+)
+
+loom_cc_test(
+  NAME
+    function_requirements_test
+  SRCS
+    "function_requirements_test.cc"
+  DEPS
+    ::function_requirements
+    ::storage_layout
+    ::text_asm
+    iree::base::internal::arena
+    iree::testing::gtest
+    iree::testing::gtest_main
+    loom::format::text::parser
+    loom::ir
+    loom::ops::low
+    loom::target::test::low_registry
+    loom::testing::module_ptr
 )
 
 loom_cc_library(
