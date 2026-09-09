@@ -127,7 +127,6 @@ IREE_ATTRIBUTE_NOINLINE static iree_status_t loom_vm_function_return(
                                                          ordinals[i], NULL);
     const loom_low_move_location_t source = {
         .location_kind = LOOM_LOW_ALLOCATION_LOCATION_PHYSICAL_REGISTER,
-        .value_class = assignment->value_class,
         .descriptor_reg_class_id = assignment->descriptor_reg_class_id,
         .location = assignment->location_base,
     };
