@@ -71,7 +71,7 @@ pass.pipeline<module> @__loom_check_source_low pipeline {
     where target {
       low-decompose-cfg-tuples
       canonicalize
-      cse
+      low-cse
       low-dce
     }
   }

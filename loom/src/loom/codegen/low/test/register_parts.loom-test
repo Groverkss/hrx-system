@@ -1,6 +1,6 @@
 // CSE introduces a later-listed full-register definition. The Low checker
 // consumes its defined parts independently of block layout.
-// RUN: pass cse
+// RUN: pass low-cse
 test.target<low_core> @target
 
 low.func.def target<test.low.core>(@target) @reverse_full_mask(%row: reg<test.i32>) -> (reg<test.i32>) asm {
@@ -29,7 +29,7 @@ low.func.def target<test.low.core>(@target) @reverse_full_mask(%row: reg<test.i3
 
 // A loop header's definition is available to its later dynamic uses even
 // when the body is listed first.
-// RUN: pass cse
+// RUN: pass low-cse
 test.target<low_core> @target
 
 low.func.def target<test.low.core>(@target) @reverse_loop_mask(%condition: reg<test.i32>, %row: reg<test.i32>) -> (reg<test.i32>) asm {

@@ -1,6 +1,6 @@
 // Hidden state reads are reusable until their class is written. A write to
 // another class must preserve the single-class read and expire the pair.
-// RUN: pass cse
+// RUN: pass low-cse
 test.target<low_core> @test_target
 
 low.func.def target<test.low.core>(@test_target) @selective_state_classes(%value: reg<test.i32>, %schedule: reg<test.schedule_state>) -> (reg<test.i32>, reg<test.i32>, reg<test.i32>, reg<test.i32>) asm {
@@ -34,7 +34,7 @@ low.func.def target<test.low.core>(@test_target) @selective_state_classes(%value
 
 // Upfront CFG scopes inherit state memberships when their parent executes,
 // not when scopes are allocated. Empty intermediate scopes forward the map.
-// RUN: pass cse
+// RUN: pass low-cse
 test.target<low_core> @test_target
 
 low.func.def target<test.low.core>(@test_target) @state_through_empty_scopes(%value: reg<test.i32>, %schedule: reg<test.schedule_state>) -> (reg<test.i32>, reg<test.i32>) asm {
@@ -74,7 +74,7 @@ low.func.def target<test.low.core>(@test_target) @state_through_empty_scopes(%va
 // Writes expire shared ancestors, but not sibling-local definitions. The right
 // subtree's write must preserve reuse in the left finish block; a global state
 // epoch would lose that reuse.
-// RUN: pass cse
+// RUN: pass low-cse
 test.target<low_core> @test_target
 
 low.func.def target<test.low.core>(@test_target) @sibling_state_snapshots(%condition: reg<test.i32>, %value: reg<test.i32>) -> (reg<test.i32>) asm {
@@ -121,7 +121,7 @@ low.func.def target<test.low.core>(@test_target) @sibling_state_snapshots(%condi
 // The pair expires through one class, then its slot is reused by another
 // insertion. The second class must still reach the newly registered pair,
 // rather than treating a reused slot as an already-expired membership.
-// RUN: pass cse
+// RUN: pass low-cse
 test.target<low_core> @test_target
 
 low.func.def target<test.low.core>(@test_target) @state_membership_epochs(%value: reg<test.i32>, %schedule: reg<test.schedule_state>) -> (reg<test.i32>, reg<test.i32>) asm {
@@ -151,4 +151,86 @@ low.func.def target<test.low.core>(@test_target) @state_membership_epochs(%value
   %next_schedule_write = test.state.add.schedule_state %schedule, %schedule
   %last = test.state.read_pair.i32 %value
   return %special, %last
+}
+
+// ====
+// A join cuts off older mutable-state candidates without hiding pure ones.
+// Its straight-line descendant can reuse the new read below that boundary.
+// RUN: pass low-cse
+test.target<low_core> @test_target
+
+low.func.def target<test.low.core>(@test_target) @join_visibility_boundary(%condition: reg<test.i32>, %pointer: reg<test.ptr>) -> (reg<test.i32 x4>, reg<test.i32>) asm {
+  %entry_read = test.load.v4i32 %pointer
+  %bias = test.const.i32 7
+  low.cond_br %condition, ^left, ^right : reg<test.i32>
+^left:
+  low.br ^join
+^right:
+  low.br ^join
+^join:
+  %joined_read = test.load.v4i32 %pointer
+  %joined_bias = test.const.i32 7
+  low.br ^finish
+^finish:
+  %final_read = test.load.v4i32 %pointer
+  %final_bias = test.const.i32 7
+  return %final_read, %final_bias
+}
+
+// ----
+test.target<low_core> @test_target
+
+low.func.def target<test.low.core>(@test_target) @join_visibility_boundary(%condition: reg<test.i32>, %pointer: reg<test.ptr>) -> (reg<test.i32 x4>, reg<test.i32>) asm {
+  %entry_read = test.load.v4i32 %pointer
+  %bias = test.const.i32 7
+  low.cond_br %condition, ^left, ^right : reg<test.i32>
+^left:
+  low.br ^join
+^right:
+  low.br ^join
+^join:
+  %joined_read = test.load.v4i32 %pointer
+  low.br ^finish
+^finish:
+  return %joined_read, %bias
+}
+
+// ====
+
+// A loop's backedge also cuts off older reads. The loop-local candidate is
+// visible to its body and exit, while pure candidates remain visible above it.
+// RUN: pass low-cse
+test.target<low_core> @test_target
+
+low.func.def target<test.low.core>(@test_target) @backedge_visibility_boundary(%condition: reg<test.i32>, %pointer: reg<test.ptr>) -> (reg<test.i32 x4>, reg<test.i32>) asm {
+  %entry_read = test.load.v4i32 %pointer
+  %bias = test.const.i32 7
+  low.br ^header
+^header:
+  %loop_read = test.load.v4i32 %pointer
+  %loop_bias = test.const.i32 7
+  low.cond_br %condition, ^body, ^finish : reg<test.i32>
+^body:
+  %body_read = test.load.v4i32 %pointer
+  low.br ^header
+^finish:
+  %final_read = test.load.v4i32 %pointer
+  %final_bias = test.const.i32 7
+  return %final_read, %final_bias
+}
+
+// ----
+test.target<low_core> @test_target
+
+low.func.def target<test.low.core>(@test_target) @backedge_visibility_boundary(%condition: reg<test.i32>, %pointer: reg<test.ptr>) -> (reg<test.i32 x4>, reg<test.i32>) asm {
+  %entry_read = test.load.v4i32 %pointer
+  %bias = test.const.i32 7
+  low.br ^header
+^header:
+  %loop_read = test.load.v4i32 %pointer
+  low.cond_br %condition, ^body, ^finish : reg<test.i32>
+^body:
+  low.br ^header
+^finish:
+  return %loop_read, %bias
 }

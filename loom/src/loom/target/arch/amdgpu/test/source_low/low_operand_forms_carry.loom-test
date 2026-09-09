@@ -1,4 +1,4 @@
-// RUN: pass low-select-operand-forms,cse,low-dce
+// RUN: pass low-select-operand-forms,low-cse,low-dce
 
 // The low input dies at the add, permitting a destructive form, but the upper
 // word must still consume unsigned carry rather than signed overflow.

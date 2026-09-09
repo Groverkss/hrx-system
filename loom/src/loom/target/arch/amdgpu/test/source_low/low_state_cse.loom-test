@@ -1,4 +1,4 @@
-// RUN: pass cse
+// RUN: pass low-cse
 
 amdgpu.target<gfx942> @target
 
@@ -22,7 +22,7 @@ low.func.def target<amdgpu.cdna3.core>(@target) @m0_state_writes_do_not_cse(%val
 }
 
 // ====
-// RUN: pass cse
+// RUN: pass low-cse
 
 amdgpu.target<gfx1100> @target
 
@@ -55,7 +55,7 @@ low.func.def target<amdgpu.rdna3.core>(@target) @exec_read_survives_disjoint_wri
 }
 
 // ====
-// RUN: pass cse
+// RUN: pass low-cse
 
 amdgpu.target<gfx1100> @target
 
@@ -93,7 +93,7 @@ low.func.def target<amdgpu.rdna3.core>(@target) @exec_read_epochs(%mask: reg<amd
 }
 
 // ====
-// RUN: pass cse
+// RUN: pass low-cse
 
 amdgpu.target<gfx1100> @target
 
