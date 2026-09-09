@@ -362,6 +362,7 @@ def _register_class_row_lines(
     reg_classes: Sequence[RegClass | None],
 ) -> list[list[str]]:
     pool = compiled.string_pool
+    physical_register_widths = {register.name: len(register.atomic_units) for register in compiled.physical_registers}
     return [
         [
             f".name_string_offset = {pool.ref(f'reg_{reg_class.name}')},",
@@ -376,6 +377,7 @@ def _register_class_row_lines(
             ".spill_class_id = " + ("LOOM_LOW_REG_CLASS_NONE" if reg_class.spill_class is None else str(compiled.reg_class_ids[reg_class.spill_class])) + ",",
             f".full_register_part_mask = {c_spelling.hex_u32_literal(reg_class.full_register_part_mask)},",
             f".spill_slot_space = {reg_class.spill_slot_space.c_name},",
+            f".physical_atomic_unit_count = {physical_register_widths[reg_class.physical_registers[0]] if reg_class.physical_registers else 0},",
         ]
         if reg_class is not None
         else [
