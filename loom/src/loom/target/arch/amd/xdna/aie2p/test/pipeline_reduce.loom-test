@@ -1,0 +1,181 @@
+// RUN: pass aie2p-lower-pipeline
+
+// Expanded source lanes feed distinct reducer arguments. Bias preparation and
+// reduction share one worker with private storage between their stages.
+aie2p.target<array> @array_target
+
+aie2p.target<core> @core_target
+
+func.def target(@core_target) @produce(%input: buffer, %output: buffer) {
+  %base = index.constant 0 : offset
+  %input_view = buffer.view %input[%base] : buffer -> view<16xi8>
+  %output_view = buffer.view %output[%base] : buffer -> view<16xi8>
+  %value = vector.load %input_view[0] : view<16xi8> -> vector<16xi8>
+  vector.store %value, %output_view[0] : vector<16xi8>, view<16xi8>
+  func.return
+}
+
+func.def target(@core_target) @prepare(%input: buffer, %output: buffer) {
+  %base = index.constant 0 : offset
+  %input_view = buffer.view %input[%base] : buffer -> view<16xi8>
+  %output_view = buffer.view %output[%base] : buffer -> view<16xi8>
+  %value = vector.load %input_view[0] : view<16xi8> -> vector<16xi8>
+  vector.store %value, %output_view[0] : vector<16xi8>, view<16xi8>
+  func.return
+}
+
+func.def target(@core_target) @reduce(%partial0: buffer, %partial1: buffer, %bias: buffer, %output: buffer) {
+  %base = index.constant 0 : offset
+  %partial0_view = buffer.view %partial0[%base] : buffer -> view<16xi8>
+  %partial1_view = buffer.view %partial1[%base] : buffer -> view<16xi8>
+  %bias_view = buffer.view %bias[%base] : buffer -> view<16xi8>
+  %output_view = buffer.view %output[%base] : buffer -> view<16xi8>
+  %value0 = vector.load %partial0_view[0] : view<16xi8> -> vector<16xi8>
+  %value1 = vector.load %partial1_view[0] : view<16xi8> -> vector<16xi8>
+  %bias_value = vector.load %bias_view[0] : view<16xi8> -> vector<16xi8>
+  %sum = vector.addi %value0, %value1 : vector<16xi8>
+  %result = vector.addi %sum, %bias_value : vector<16xi8>
+  vector.store %result, %output_view[0] : vector<16xi8>, view<16xi8>
+  func.return
+}
+
+pipeline.def<kernel> public retain target(@array_target) @composite_reduce() launch(%input: buffer, %bias: buffer, %output: buffer) {
+  %producer_lanes = index.constant 2 : index
+  %reducer_lanes = index.constant 1 : index
+  %base = index.constant 0 : offset
+  %producers = group.create %producer_lanes : index -> group
+  %reducers = group.create %reducer_lanes : index -> group
+  %input_view = buffer.view %input[%base] : buffer -> view<2x16xi8>
+  %bias_view = buffer.view %bias[%base] : buffer -> view<16xi8>
+  %output_view = buffer.view %output[%base] : buffer -> view<16xi8>
+  %input_flow = pipeline.scatter %input_view across %producers : view<2x16xi8>, group -> pipeline.flow<tile<16xi8>>
+  %partial_flow = pipeline.stage @produce on %producers(%input_flow) : (group, pipeline.flow<tile<16xi8>>) -> (pipeline.flow<tile<16xi8>>)
+  %bias_flow = pipeline.read %bias_view on %reducers : view<16xi8>, group -> pipeline.flow<tile<16xi8>>
+  %prepared_bias = pipeline.stage @prepare on %reducers(%bias_flow) : (group, pipeline.flow<tile<16xi8>>) -> (pipeline.flow<tile<16xi8>>)
+  %result = pipeline.reduce @reduce from %producers(%partial_flow) to %reducers(%prepared_bias) : (group, pipeline.flow<tile<16xi8>>) to (group, pipeline.flow<tile<16xi8>>) -> (pipeline.flow<tile<16xi8>>)
+  pipeline.write %result to %output_view : pipeline.flow<tile<16xi8>>, view<16xi8>
+  pipeline.return
+}
+
+// ----
+aie2p.target<array> @array_target
+
+aie2p.target<core> @core_target
+
+func.def target(@core_target) @produce(%input: buffer, %output: buffer) {
+  %base = index.constant 0 : offset
+  %input_view = buffer.view %input[%base] : buffer -> view<16xi8>
+  %output_view = buffer.view %output[%base] : buffer -> view<16xi8>
+  %value = vector.load %input_view[0] : view<16xi8> -> vector<16xi8>
+  vector.store %value, %output_view[0] : vector<16xi8>, view<16xi8>
+  func.return
+}
+
+func.def target(@core_target) @prepare(%input: buffer, %output: buffer) {
+  %base = index.constant 0 : offset
+  %input_view = buffer.view %input[%base] : buffer -> view<16xi8>
+  %output_view = buffer.view %output[%base] : buffer -> view<16xi8>
+  %value = vector.load %input_view[0] : view<16xi8> -> vector<16xi8>
+  vector.store %value, %output_view[0] : vector<16xi8>, view<16xi8>
+  func.return
+}
+
+func.def target(@core_target) @reduce(%partial0: buffer, %partial1: buffer, %bias: buffer, %output: buffer) {
+  %base = index.constant 0 : offset
+  %partial0_view = buffer.view %partial0[%base] : buffer -> view<16xi8>
+  %partial1_view = buffer.view %partial1[%base] : buffer -> view<16xi8>
+  %bias_view = buffer.view %bias[%base] : buffer -> view<16xi8>
+  %output_view = buffer.view %output[%base] : buffer -> view<16xi8>
+  %value0 = vector.load %partial0_view[0] : view<16xi8> -> vector<16xi8>
+  %value1 = vector.load %partial1_view[0] : view<16xi8> -> vector<16xi8>
+  %bias_value = vector.load %bias_view[0] : view<16xi8> -> vector<16xi8>
+  %sum = vector.addi %value0, %value1 : vector<16xi8>
+  %result = vector.addi %sum, %bias_value : vector<16xi8>
+  vector.store %result, %output_view[0] : vector<16xi8>, view<16xi8>
+  func.return
+}
+
+func.def target(@core_target) @composite_reduce$group$1(%42: buffer, %43: buffer, %44: buffer, %45: buffer) {
+  %46 = index.constant 16 : offset
+  %47 = buffer.alloca<private> align(64) %46 : buffer
+  %base$48 = index.constant 0 : offset
+  %input_view = buffer.view %42[%base$48] : buffer -> view<16xi8>
+  %output_view$50 = buffer.view %47[%base$48] : buffer -> view<16xi8>
+  %value = vector.load %input_view[0] : view<16xi8> -> vector<16xi8>
+  vector.store %value, %output_view$50[0] : vector<16xi8>, view<16xi8>
+  %base$52 = index.constant 0 : offset
+  %partial0_view = buffer.view %43[%base$52] : buffer -> view<16xi8>
+  %partial1_view = buffer.view %44[%base$52] : buffer -> view<16xi8>
+  %bias_view = buffer.view %47[%base$52] : buffer -> view<16xi8>
+  %output_view$56 = buffer.view %45[%base$52] : buffer -> view<16xi8>
+  %value0 = vector.load %partial0_view[0] : view<16xi8> -> vector<16xi8>
+  %value1 = vector.load %partial1_view[0] : view<16xi8> -> vector<16xi8>
+  %bias_value = vector.load %bias_view[0] : view<16xi8> -> vector<16xi8>
+  %sum = vector.addi %value0, %value1 : vector<16xi8>
+  %result = vector.addi %sum, %bias_value : vector<16xi8>
+  vector.store %result, %output_view$56[0] : vector<16xi8>, view<16xi8>
+  func.return
+}
+
+low.func.def public retain target<amd.xdna.aie2p.array>(@array_target) abi(array_program) @composite_reduce() asm {
+  %62 = constant.u32 2 : reg<aie2p.array.scalar : index>
+  %63 = group %62
+  %64 = constant.u32 1 : reg<aie2p.array.scalar : index>
+  %65 = group %64
+  %66 = constant.u32 0 : reg<aie2p.array.scalar : index>
+  %67 = worker %63, %66, @produce
+  %68 = constant.u32 1 : reg<aie2p.array.scalar : index>
+  %69 = worker %63, %68, @produce
+  %70 = constant.u32 0 : reg<aie2p.array.scalar : index>
+  %71 = worker %65, %70, @composite_reduce$group$1
+  %72 = binding 0, 1
+  %73 = binding 1, 1
+  %74 = binding 2, 2
+  %75 = sender %72, 0 : reg<aie2p.array.sender : tile<2x16xi8>>
+  %76 = constant.u64 0 : reg<aie2p.array.offset : offset>
+  %77 = constant.u32 0 : reg<aie2p.array.scalar : index>
+  %78 = constant.u32 2 : reg<aie2p.array.scalar : index>
+  %79 = partition.sender %75, %76, %77, %78 : reg<aie2p.array.sender : tile<16xi8>>
+  %80 = receiver %67, 0 : reg<aie2p.array.receiver : tile<16xi8>>
+  %81 = constant.u32 2 : reg<aie2p.array.scalar : index>
+  %82 = constant.u32 1 : reg<aie2p.array.scalar : index>
+  %83 = channel %79, %80, %81, %82 : reg<aie2p.array.channel : tile<16xi8>>
+  %84 = constant.u64 0 : reg<aie2p.array.offset : offset>
+  %85 = constant.u32 1 : reg<aie2p.array.scalar : index>
+  %86 = constant.u32 2 : reg<aie2p.array.scalar : index>
+  %87 = partition.sender %75, %84, %85, %86 : reg<aie2p.array.sender : tile<16xi8>>
+  %88 = receiver %69, 0 : reg<aie2p.array.receiver : tile<16xi8>>
+  %89 = constant.u32 2 : reg<aie2p.array.scalar : index>
+  %90 = constant.u32 1 : reg<aie2p.array.scalar : index>
+  %91 = channel %87, %88, %89, %90 : reg<aie2p.array.channel : tile<16xi8>>
+  %92 = sender %73, 0 : reg<aie2p.array.sender : tile<16xi8>>
+  %93 = receiver %71, 0 : reg<aie2p.array.receiver : tile<16xi8>>
+  %94 = constant.u32 2 : reg<aie2p.array.scalar : index>
+  %95 = constant.u32 1 : reg<aie2p.array.scalar : index>
+  %96 = channel %92, %93, %94, %95 : reg<aie2p.array.channel : tile<16xi8>>
+  %97 = sender %67, 1 : reg<aie2p.array.sender : tile<16xi8>>
+  %98 = receiver %71, 1 : reg<aie2p.array.receiver : tile<16xi8>>
+  %99 = constant.u32 2 : reg<aie2p.array.scalar : index>
+  %100 = constant.u32 1 : reg<aie2p.array.scalar : index>
+  %101 = channel %97, %98, %99, %100 : reg<aie2p.array.channel : tile<16xi8>>
+  %102 = sender %69, 1 : reg<aie2p.array.sender : tile<16xi8>>
+  %103 = receiver %71, 2 : reg<aie2p.array.receiver : tile<16xi8>>
+  %104 = constant.u32 2 : reg<aie2p.array.scalar : index>
+  %105 = constant.u32 1 : reg<aie2p.array.scalar : index>
+  %106 = channel %102, %103, %104, %105 : reg<aie2p.array.channel : tile<16xi8>>
+  %107 = sender %71, 3 : reg<aie2p.array.sender : tile<16xi8>>
+  %108 = receiver %74, 0 : reg<aie2p.array.receiver : tile<16xi8>>
+  %109 = constant.u32 2 : reg<aie2p.array.scalar : index>
+  %110 = constant.u32 1 : reg<aie2p.array.scalar : index>
+  %111 = channel %107, %108, %109, %110 : reg<aie2p.array.channel : tile<16xi8>>
+  %112 = constant.u32 0 : reg<aie2p.array.scalar : index>
+  %113 = constant.u32 2 : reg<aie2p.array.scalar : index>
+  constrain.location %67, %112, %113
+  %114 = constant.u32 0 : reg<aie2p.array.scalar : index>
+  %115 = constant.u32 4 : reg<aie2p.array.scalar : index>
+  constrain.location %69, %114, %115
+  %116 = constant.u32 0 : reg<aie2p.array.scalar : index>
+  %117 = constant.u32 3 : reg<aie2p.array.scalar : index>
+  constrain.location %71, %116, %117
+  return
+}
