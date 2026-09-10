@@ -1790,6 +1790,8 @@ def _zero_compare_rule(
 
 
 def _bitfield_rule(source_op: Op, descriptor_key: str) -> DescriptorRule:
+    # Shared legalization keeps low-aligned fields as masks or full-width
+    # identities. The native two-shift sequence serves offset fields.
     constant = _descriptor("amd.xdna.aie2p.constant.i32.short")
     logical_shift = _descriptor("amd.xdna.aie2p.lshl.i32")
     final_shift = _descriptor(descriptor_key)
@@ -1800,7 +1802,7 @@ def _bitfield_rule(source_op: Op, descriptor_key: str) -> DescriptorRule:
             *_typed_guards(("source", "result"), _I32),
             Guard.attr_kind("offset", "i64"),
             Guard.attr_kind("width", "i64"),
-            Guard.i64_range("offset", 0, 31),
+            Guard.i64_range("offset", 1, 31),
             Guard.i64_range("width", 1, 32),
         ),
         emit=(

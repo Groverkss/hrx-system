@@ -57,7 +57,9 @@ iree_status_t loom_vector_to_scalar_build_table_lookup_lane(
       .dynamic_indices = &table_index,
       .rank = 1,
   };
-  return loom_vector_to_scalar_materialize_lane(
+  // Preserve the table as a value so target legalization can select a native
+  // indexed extract. Full scalar lowering can expand that extract afterward.
+  return loom_vector_to_scalar_build_terminal_extract(
       state, loom_vector_table_lookup_table(state->op), table_indices,
       out_lane);
 }
