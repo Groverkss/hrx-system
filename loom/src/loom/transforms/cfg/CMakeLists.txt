@@ -123,6 +123,7 @@ loom_cc_library(
     loom::pass::value_facts
     loom::rewrite::materialize
     loom::rewrite::rewriter
+    loom::target::function_version
     loom::util::cfg_graph
     loom::util::dominance
     loom::util::fact_table
