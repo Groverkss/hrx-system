@@ -449,28 +449,47 @@ iree_status_t iree_hal_streaming_device_release_primary_context(
                               "primary context not retained");
   } else {
     iree_hal_streaming_context_t* retained_context = device->primary_context;
-    --device->primary_context_ref_count;
-
-    if (device->primary_context_ref_count == 0) {
+    if (device->primary_context_ref_count == 1) {
       status = iree_hal_streaming_context_wait_idle(retained_context,
                                                     iree_infinite_timeout());
-
-      if (iree_hal_streaming_context_current() == retained_context) {
-        iree_hal_streaming_context_set_current(NULL);
+      iree_hal_streaming_device_registry_t* device_registry =
+          iree_hal_streaming_device_registry();
+      if (iree_status_is_ok(status) && !device_registry) {
+        status = iree_make_status(IREE_STATUS_FAILED_PRECONDITION,
+                                  "device registry not initialized");
+      }
+      if (iree_status_is_ok(status)) {
+        status = iree_hal_streaming_ipc_memory_release_context(
+            &device_registry->ipc_memory_registry, retained_context);
       }
 
-      // Release the device's primary-context ownership.
+      // The IPC drain rolls back all registry changes and reopens admission on
+      // failure. Preserve both primary-context references and the usage count
+      // with it so the caller can retry the same final release.
+      if (iree_status_is_ok(status)) {
+        --device->primary_context_ref_count;
+
+        if (iree_hal_streaming_context_current() == retained_context) {
+          iree_hal_streaming_context_set_current(NULL);
+        }
+
+        // Release the device's primary-context ownership.
+        iree_hal_streaming_context_release(retained_context);
+        device->primary_context = NULL;
+
+        hrx_mem_pool_release(device->current_mem_pool);
+        device->current_mem_pool = NULL;
+        hrx_mem_pool_release(device->default_mem_pool);
+        device->default_mem_pool = NULL;
+
+        // Release the owning reference returned by the matching retain call.
+        iree_hal_streaming_context_release(retained_context);
+      }
+    } else {
+      --device->primary_context_ref_count;
+      // Release the owning reference returned by the matching retain call.
       iree_hal_streaming_context_release(retained_context);
-      device->primary_context = NULL;
-
-      hrx_mem_pool_release(device->current_mem_pool);
-      device->current_mem_pool = NULL;
-      hrx_mem_pool_release(device->default_mem_pool);
-      device->default_mem_pool = NULL;
     }
-
-    // Release the owning reference returned by the matching retain call.
-    iree_hal_streaming_context_release(retained_context);
   }
 
   iree_slim_mutex_unlock(&device->primary_context_mutex);
