@@ -1223,6 +1223,7 @@ vector_encode = Op(
     ],
     constraints=[OperandDictionary("auxiliary", "auxiliary_names")],
     verify="loom_vector_encode_verify",
+    facts="loom_vector_encode_facts",
     traits=[PURE, REFINABLE_RESULT_TYPE_REFS],
     format=[
         Ref("source"),
