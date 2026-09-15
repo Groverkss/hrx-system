@@ -1372,6 +1372,31 @@ def _derive_vector_storage_adapters(
     )
 
 
+def _derive_fifo_storage_adapters(
+    source_adapters: tuple[RegisterAdapter, ...],
+    register_classes: tuple[RegisterClass, ...],
+    physical_registers: tuple[PhysicalRegister, ...],
+) -> tuple[RegisterAdapter, ...]:
+    """Encodes each half of a complete FIFO allocation with its native role."""
+
+    classes = {row.name: row for row in register_classes}
+    registers = {row.name: row for row in physical_registers}
+    adapter = next(row for row in source_adapters if row.name == "OP_mFifoHLReg")
+    encodings = dict(adapter.effective_register_encodings)
+    return tuple(
+        RegisterAdapter(
+            name=f"LOOM_{register_class}_{half}512",
+            register_class=register_class,
+            register_encodings=tuple(
+                (name, encodings[registers[name].subregisters[ordinal]])
+                for name in classes[register_class].candidates
+            ),
+        )
+        for register_class in ("eLdFifoReg", "mStFifo")
+        for ordinal, half in enumerate(("low", "high"))
+    )
+
+
 def _parse_immediates() -> tuple[ImmediateEncoding, ...]:
     result = []
     for record in _IMMEDIATE_ENCODING_RECORDS.splitlines():
@@ -1406,6 +1431,11 @@ _REGISTER_ADAPTERS = (
         _PHYSICAL_REGISTERS,
     ),
     *_derive_vector_storage_adapters(
+        _SOURCE_REGISTER_ADAPTERS,
+        _REGISTER_CLASSES,
+        _PHYSICAL_REGISTERS,
+    ),
+    *_derive_fifo_storage_adapters(
         _SOURCE_REGISTER_ADAPTERS,
         _REGISTER_CLASSES,
         _PHYSICAL_REGISTERS,

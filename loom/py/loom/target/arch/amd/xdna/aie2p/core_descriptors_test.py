@@ -439,11 +439,13 @@ def test_lock_memory_timing_matches_aie2p_stall_and_resume_oracle() -> None:
     assert separations[_LOCK_EFFECT.producer_event, _LOCK_EFFECT.consumer_event] == 4
 
     # The pinned AIE2P model uses memory cycles 5 for normal accesses, 6 for
-    # FIFO stores, and 5/11 for partword read-modify-write stores. Core resume
-    # at 8 and stall at 2 require these forward/backward issue separations.
+    # FIFO stores, 8 for converting FIFO stores, and 5/11 for partword
+    # read-modify-write stores. Core resume at 8 and stall at 2 require these
+    # forward/backward issue separations.
     expected_separations_by_cycles = {
         (5,): (4, 4),
         (6,): (3, 5),
+        (8,): (1, 7),
         (5, 11): (4, 10),
     }
 
@@ -631,6 +633,10 @@ def test_low_register_classes_retain_machine_candidate_order() -> None:
         ("aie2p.vec256.low128", "aie2p.vec256", 0x1),
         ("aie2p.vec256.high128", "aie2p.vec256", 0x2),
         ("aie2p.ewl.low128", "aie2p.ewl", 0x1),
+        ("aie2p.eldfiforeg.low512", "aie2p.eldfiforeg", 0x1),
+        ("aie2p.eldfiforeg.high512", "aie2p.eldfiforeg", 0x2),
+        ("aie2p.mstfifo.low512", "aie2p.mstfifo", 0x1),
+        ("aie2p.mstfifo.high512", "aie2p.mstfifo", 0x2),
     }
 
 

@@ -8,10 +8,17 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import replace
 
 from loom.target.arch.amd.xdna.aie.machine import (
     has_property,
+)
+from loom.target.arch.amd.xdna.aie2p.core_descriptor_spec import _DescriptorSpec
+from loom.target.arch.amd.xdna.aie2p.core_fifo_descriptors import (
+    FIFO_REGISTER_PARTS,
+    _fifo_load_descriptor_specs,
+    _fifo_storage_descriptor_specs,
+    _fifo_store_descriptor_specs,
 )
 from loom.target.arch.amd.xdna.aie2p.core_machine_data import CORE_MACHINE_TABLE
 from loom.target.low_descriptors import (
@@ -46,31 +53,9 @@ _REGISTER_PARTS = (
     RegisterPart(_VEC256_LOW128_PART, "aie2p.vec256", 0x1),
     RegisterPart(_VEC256_HIGH128_PART, "aie2p.vec256", 0x2),
     RegisterPart(_EWL_LOW128_PART, "aie2p.ewl", 0x1),
+    *FIFO_REGISTER_PARTS,
 )
 _REGISTER_PARTS_BY_NAME = {part.name: part for part in _REGISTER_PARTS}
-
-
-@dataclass(frozen=True, slots=True)
-class _DescriptorSpec:
-    """Semantic selection of one physical form and its exact itinerary."""
-
-    form_name: str
-    key: str
-    semantic_tag: str
-    itinerary: str
-    storage_overrides: tuple[tuple[str, str], ...] = ()
-    op_kind: DescriptorOpKind = DescriptorOpKind.OP
-    implicit_outputs: tuple[str, ...] = ()
-    implicit_inputs: tuple[str, ...] = ()
-    asm_mnemonic: str | None = None
-    operand_register_parts: tuple[tuple[str, str], ...] = ()
-    encoding_adapter_overrides: tuple[tuple[str, str], ...] = ()
-    storage_continuation_part: str | None = None
-    schedule_alternatives: tuple[str, ...] = ()
-    memory_width_bits: int | None = None
-    ordered_memory: bool = False
-    effects: tuple[Effect, ...] = ()
-    allocation_move: bool = False
 
 
 _VECTOR_MEMORY_FORM_FAMILIES = (
@@ -245,72 +230,6 @@ def _vector_memory_descriptor_specs() -> tuple[_DescriptorSpec, ...]:
                     ),
                 )
             )
-    return tuple(result)
-
-
-def _fifo_load_descriptor_specs() -> tuple[_DescriptorSpec, ...]:
-    """Selects the 512-bit streaming load FIFO fill and pop forms."""
-
-    fill_keys = {
-        lane: f"{_TARGET_KEY}.load.{lane}.fifo.fill.512" for lane in ("a", "b")
-    }
-    result = [
-        _DescriptorSpec(
-            f"VLD{lane.upper()}_FILL_512",
-            fill_keys[lane],
-            "memory.load.fifo.fill.512",
-            f"II_VLD{lane.upper()}_FILL_512",
-            asm_mnemonic=f"vld{lane}.fill.512",
-            schedule_alternatives=(fill_keys["b"],) if lane == "a" else (),
-            memory_width_bits=512,
-        )
-        for lane in ("a", "b")
-    ]
-    for element_type, element_bits in AIE2P_VECTOR_MEMORY_ELEMENT_TYPES:
-        shape = f"{element_type}x{512 // element_bits}"
-        pop_keys = {
-            lane: f"{_TARGET_KEY}.load.{lane}.{shape}.fifo.pop" for lane in ("a", "b")
-        }
-        result.extend(
-            _DescriptorSpec(
-                f"VLD{lane.upper()}_POP_512_normal_pop",
-                pop_keys[lane],
-                f"memory.load.fifo.pop.{shape}",
-                f"II_VLD{lane.upper()}_POP_512_normal_pop",
-                asm_mnemonic=f"vld{lane}.pop.512.{shape}",
-                schedule_alternatives=(pop_keys["b"],) if lane == "a" else (),
-                memory_width_bits=512,
-            )
-            for lane in ("a", "b")
-        )
-    return tuple(result)
-
-
-def _fifo_store_descriptor_specs() -> tuple[_DescriptorSpec, ...]:
-    """Selects state-preserving streaming stores and their final partial flush."""
-
-    result = [
-        _DescriptorSpec(
-            "VST_FLUSH_512_normal_flush",
-            f"{_TARGET_KEY}.store.fifo.flush.512",
-            "memory.store.fifo.flush.512",
-            "II_VST_FLUSH_512_normal_flush",
-            asm_mnemonic="vst.flush.512",
-            memory_width_bits=512,
-        ),
-    ]
-    for element_type, element_bits in AIE2P_VECTOR_MEMORY_ELEMENT_TYPES:
-        shape = f"{element_type}x{512 // element_bits}"
-        result.append(
-            _DescriptorSpec(
-                "VST_PUSH_512",
-                f"{_TARGET_KEY}.store.{shape}.fifo.push",
-                f"memory.store.fifo.push.{shape}",
-                "II_VST_PUSH_512",
-                asm_mnemonic=f"vst.push.512.{shape}",
-                memory_width_bits=512,
-            )
-        )
     return tuple(result)
 
 
@@ -1152,6 +1071,22 @@ _BASE_DESCRIPTOR_SPECS = (
         asm_mnemonic="vconv.bfp16ebs8.fp32",
     ),
     _DescriptorSpec(
+        "VCONV_bfp16ebs16_fp32",
+        f"{_TARGET_KEY}.convert.f32x64.bfp16ebs16",
+        "convert.floating.f32x64.bfp16ebs16",
+        "II_VCONV_bfp16ebs16_fp32",
+        storage_overrides=(("src", "mBMs"),),
+        asm_mnemonic="vconv.bfp16ebs16.fp32",
+    ),
+    _DescriptorSpec(
+        "VCONV_bfp16ebs16_ebs8",
+        f"{_TARGET_KEY}.convert.bfp16ebs8.bfp16ebs16",
+        "convert.floating.bfp16ebs8.bfp16ebs16",
+        "II_VCONV_bfp16ebs16_ebs8",
+        storage_overrides=(("src", "mEXa"),),
+        asm_mnemonic="vconv.bfp16ebs16.ebs8",
+    ),
+    _DescriptorSpec(
         "VMUL_f_vmul_bfp_vmul_bfp_core_EX_EX",
         f"{_TARGET_KEY}.matrix.multiply.bfp16ebs8.m8n8k8",
         "matrix.multiply.bfp16ebs8.m8n8k8",
@@ -1508,8 +1443,9 @@ _BASE_DESCRIPTOR_SPECS = (
         asm_mnemonic="vinsert.64.reg",
     ),
     *_vector_memory_descriptor_specs(),
-    *_fifo_load_descriptor_specs(),
-    *_fifo_store_descriptor_specs(),
+    *_fifo_load_descriptor_specs(AIE2P_VECTOR_MEMORY_ELEMENT_TYPES),
+    *_fifo_store_descriptor_specs(AIE2P_VECTOR_MEMORY_ELEMENT_TYPES),
+    *_fifo_storage_descriptor_specs(),
     _DescriptorSpec(
         "MOVA",
         f"{_TARGET_KEY}.constant.i32.mova",

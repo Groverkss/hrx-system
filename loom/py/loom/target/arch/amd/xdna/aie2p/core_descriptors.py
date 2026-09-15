@@ -562,7 +562,10 @@ def _reg_classes() -> tuple[RegClass, ...]:
                 ),
                 target_bank_id=target_bank_id,
                 full_register_part_mask=(
-                    0x3 if machine_name in ("eLPredicate", "eWL", "VEC256") else 0x1
+                    0x3
+                    if machine_name
+                    in ("eLPredicate", "eWL", "VEC256", "eLdFifoReg", "mStFifo")
+                    else 0x1
                 ),
                 physical_registers=machine_class.candidates,
             )

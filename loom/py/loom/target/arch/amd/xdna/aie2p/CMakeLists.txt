@@ -66,8 +66,10 @@ iree_py_library(
     descriptors
   SRCS
     "array_descriptors.py"
+    "core_descriptor_spec.py"
     "core_descriptor_specs.py"
     "core_descriptors.py"
+    "core_fifo_descriptors.py"
   DEPS
     loom::py::loom::target::arch::amd::xdna::aie2p::encoding_data
     loom::py::loom::target::arch::amd::xdna::aie2p::machine_data

@@ -158,12 +158,18 @@ def test_fifo_stores_preserve_the_fixed_tuple_and_overflow_state() -> None:
         descriptor.key: descriptor
         for descriptor in AIE2P_CORE_DESCRIPTOR_SET.descriptors
     }
-    flush = descriptors["amd.xdna.aie2p.store.fifo.flush.512"]
+    flushes = (
+        descriptors["amd.xdna.aie2p.store.fifo.flush.512"],
+        descriptors["amd.xdna.aie2p.store.fifo.flush.convert.512"],
+    )
     pushes = [
-        descriptors[f"amd.xdna.aie2p.store.{element}x{512 // bits}.fifo.push"]
-        for element, bits in AIE2P_VECTOR_MEMORY_ELEMENT_TYPES
+        descriptor
+        for descriptor in descriptors.values()
+        if descriptor.key.startswith("amd.xdna.aie2p.store.")
+        and ".fifo.push" in descriptor.key
+        and not descriptor.key.endswith(".volatile")
     ]
-    for descriptor in (flush, *pushes):
+    for descriptor in (*flushes, *pushes):
         assert descriptor.asm_forms[0].results == (
             "fifo_reg_out",
             "ptr_out",
@@ -171,11 +177,17 @@ def test_fifo_stores_preserve_the_fixed_tuple_and_overflow_state() -> None:
         )
         assert descriptor.asm_forms[0].operands == (
             ("fifo_reg", "ptr", "avail")
-            if descriptor is flush
+            if descriptor in flushes
             else ("fifo_reg", "src", "ptr", "avail")
         )
         assert descriptor.effects[0].kind is EffectKind.WRITE
-        assert descriptor.effects[0].width_bits == 512
+        assert descriptor.effects[0].width_bits == (
+            544
+            if ".bfp16ebs16." in descriptor.key
+            else 576
+            if ".bfp16ebs8." in descriptor.key
+            else 512
+        )
         assert {
             (
                 descriptor.operands[constraint.lhs_operand_index].field_name,
@@ -188,8 +200,11 @@ def test_fifo_stores_preserve_the_fixed_tuple_and_overflow_state() -> None:
             ("ptr_out", "ptr"),
             ("avail_out", "avail"),
         }
-        overflow = descriptor.operands[-1]
-        assert overflow.field_name == "implicit_def_srfifo_of"
+        overflow = next(
+            operand
+            for operand in descriptor.operands
+            if operand.field_name == "implicit_def_srfifo_of"
+        )
         assert OperandFlag.STATE_WRITE in overflow.flags
 
 

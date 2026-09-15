@@ -45,3 +45,76 @@ low.func.def retain target<amd.xdna.aie2p.core>(@target) @fifo_store(%first: reg
   %fifo3, %pointer3, %position3 = vst.flush.512 %fifo2, %pointer2, %position2
   return
 }
+
+// ====
+
+// Conversion observes the rounding state, and packed writes remain observable
+// even when their updated FIFO values are not otherwise consumed.
+// RUN: with-low-asm pass low-cse,low-dce
+
+aie2p.target<core> @target
+
+low.func.def target<amd.xdna.aie2p.core>(@target) @packed_store(%value: reg<aie2p.mbms x4>, %fifo: reg<aie2p.mstfifo>, %pointer: reg<aie2p.mpfs>, %position: reg<aie2p.mr26_fifo_st>) asm {
+  set.rounding 12
+  %packed8 = vconv.bfp16ebs8.fp32 %value
+  %packed16 = vconv.bfp16ebs16.fp32 %value
+  %converted16 = vconv.bfp16ebs16.ebs8 %packed8
+  %fifo0, %pointer0, %position0 = vst.push.bfp16ebs8 %fifo, %packed8, %pointer, %position
+  %fifo1, %pointer1, %position1 = vst.push.bfp16ebs16 %fifo0, %packed16, %pointer0, %position0
+  %fifo2, %pointer2, %position2 = vst.push.bfp16ebs16 %fifo1, %converted16, %pointer1, %position1
+  set.rounding 0
+  %fifo3, %pointer3, %position3 = vst.push.bfp16ebs16.from.fp32 %fifo2, %value, %pointer2, %position2
+  %fifo4, %pointer4, %position4 = vst.push.bfp16ebs8.from.fp32 %fifo3, %value, %pointer3, %position3
+  %fifo5, %pointer5, %position5 = vst.push.bfp16ebs16.from.ebs8 %fifo4, %packed8, %pointer4, %position4
+  %fifo6, %pointer6, %position6 = vst.flush.convert.512 %fifo5, %pointer5, %position5
+  return
+}
+
+// ====
+
+// FIFO halves compose into one value; completing the high half preserves the
+// low half. Each half remains separately readable from both FIFO banks.
+// RUN: verify
+
+aie2p.target<core> @target
+
+low.func.def target<amd.xdna.aie2p.core>(@target) @fifo_halves(%input: reg<aie2p.ep>, %output: reg<aie2p.ep>, %index: reg<aie2p.edj>) asm {
+  %low = vlda.load-fifo.low512 %input, 0
+  vst.load-fifo.low512 %low, %output, 0
+  %fifo = vlda.load-fifo.high512.index %input, %index, %low
+  vst.load-fifo.high512.index %fifo, %output, %index
+  %store_low = vlda.store-fifo.low512.index %input, %index
+  %store_fifo = vlda.store-fifo.high512 %input, %store_low, 64
+  vst.store-fifo.low512.index %store_fifo, %output, %index
+  vst.store-fifo.high512 %store_fifo, %output, 64
+  return
+}
+
+// ====
+
+// A half-defined FIFO cannot supply a complete pop state.
+// RUN: verify
+
+aie2p.target<core> @target
+
+low.func.def target<amd.xdna.aie2p.core>(@target) @incomplete_load_fifo(%input: reg<aie2p.ep>, %pointer: reg<aie2p.eps>, %position: reg<aie2p.erf2>) asm {
+  %low = vlda.load-fifo.low512 %input, 0
+  // ERROR@+1: DOMINANCE/011 {op_name="amd.xdna.aie2p.load.a.i8x64.fifo.pop", field_name="fifo_reg"}
+  %value, %pointer0, %fifo0, %position0 = vlda.pop.512.i8x64 %pointer, %low, %position
+  return
+}
+
+// ====
+
+// A store of the uninitialized high half is also invalid, even when the low
+// half is readable. Undefined bytes stay undefined until explicitly produced.
+// RUN: verify
+
+aie2p.target<core> @target
+
+low.func.def target<amd.xdna.aie2p.core>(@target) @incomplete_store_fifo(%input: reg<aie2p.ep>, %output: reg<aie2p.ep>) asm {
+  %low = vlda.store-fifo.low512 %input, 0
+  // ERROR@+1: DOMINANCE/011 {op_name="amd.xdna.aie2p.store.store-fifo.high512", field_name="src"}
+  vst.store-fifo.high512 %low, %output, 0
+  return
+}

@@ -1,0 +1,174 @@
+# Copyright 2026 The IREE Authors
+#
+# Licensed under the Apache License v2.0 with LLVM Exceptions.
+# See https://llvm.org/LICENSE.txt for license information.
+# SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
+
+"""AIE2P FIFO storage, transfer widths, and architectural state updates."""
+
+from __future__ import annotations
+
+from loom.target.arch.amd.xdna.aie2p.core_descriptor_spec import _DescriptorSpec
+from loom.target.low_descriptors import RegisterPart
+
+_TARGET_KEY = "amd.xdna.aie2p"
+_FIFO_STORAGE_CLASSES = (
+    ("eLdFifoReg", "load", ("eLdFifoLReg", "eLdFifoHReg")),
+    ("mStFifo", "store", ("mStFifol", "mStFifoh")),
+)
+FIFO_REGISTER_PARTS = tuple(
+    RegisterPart(
+        f"aie2p.{register_class.lower()}.{half}512",
+        f"aie2p.{register_class.lower()}",
+        1 << ordinal,
+    )
+    for register_class, _, _ in _FIFO_STORAGE_CLASSES
+    for ordinal, half in enumerate(("low", "high"))
+)
+
+
+def _fifo_load_descriptor_specs(
+    element_types: tuple[tuple[str, int], ...],
+) -> tuple[_DescriptorSpec, ...]:
+    """Selects vector streaming loads with complete FIFO state."""
+
+    fill_keys = {
+        lane: f"{_TARGET_KEY}.load.{lane}.fifo.fill.512" for lane in ("a", "b")
+    }
+    result = [
+        _DescriptorSpec(
+            f"VLD{lane.upper()}_FILL_512",
+            fill_keys[lane],
+            "memory.load.fifo.fill.512",
+            f"II_VLD{lane.upper()}_FILL_512",
+            asm_mnemonic=f"vld{lane}.fill.512",
+            schedule_alternatives=(fill_keys["b"],) if lane == "a" else (),
+            memory_width_bits=512,
+        )
+        for lane in ("a", "b")
+    ]
+    for element_type, element_bits in element_types:
+        shape = f"{element_type}x{512 // element_bits}"
+        pop_keys = {
+            lane: f"{_TARGET_KEY}.load.{lane}.{shape}.fifo.pop" for lane in ("a", "b")
+        }
+        result.extend(
+            _DescriptorSpec(
+                f"VLD{lane.upper()}_POP_512_normal_pop",
+                pop_keys[lane],
+                f"memory.load.fifo.pop.{shape}",
+                f"II_VLD{lane.upper()}_POP_512_normal_pop",
+                asm_mnemonic=f"vld{lane}.pop.512.{shape}",
+                schedule_alternatives=(pop_keys["b"],) if lane == "a" else (),
+                memory_width_bits=512,
+            )
+            for lane in ("a", "b")
+        )
+    return tuple(result)
+
+
+def _fifo_store_descriptor_specs(
+    element_types: tuple[tuple[str, int], ...],
+) -> tuple[_DescriptorSpec, ...]:
+    """Selects state-preserving streaming stores and their final partial flush."""
+
+    result = [
+        _DescriptorSpec(
+            "VST_FLUSH_512_normal_flush",
+            f"{_TARGET_KEY}.store.fifo.flush.512",
+            "memory.store.fifo.flush.512",
+            "II_VST_FLUSH_512_normal_flush",
+            asm_mnemonic="vst.flush.512",
+            memory_width_bits=512,
+        ),
+        _DescriptorSpec(
+            "VST_FLUSH_512_CONV_normal_flush",
+            f"{_TARGET_KEY}.store.fifo.flush.convert.512",
+            "memory.store.fifo.flush.convert.512",
+            "II_VST_FLUSH_512_CONV_normal_flush",
+            asm_mnemonic="vst.flush.convert.512",
+            memory_width_bits=512,
+        ),
+    ]
+    for element_type, element_bits in element_types:
+        shape = f"{element_type}x{512 // element_bits}"
+        result.append(
+            _DescriptorSpec(
+                "VST_PUSH_512",
+                f"{_TARGET_KEY}.store.{shape}.fifo.push",
+                f"memory.store.fifo.push.{shape}",
+                "II_VST_PUSH_512",
+                asm_mnemonic=f"vst.push.512.{shape}",
+                memory_width_bits=512,
+            )
+        )
+    for width_bits, shape, conversion, source_class in (
+        (544, "bfp16ebs16", "", "mEXa"),
+        (576, "bfp16ebs8", "", "mEXa"),
+        (544, "bfp16ebs16", "ebs8", "mEXa"),
+        (544, "bfp16ebs16", "fp32", "mBMs"),
+        (576, "bfp16ebs8", "fp32", "mBMs"),
+    ):
+        form_suffix = f"_CONV_{shape}_{conversion}" if conversion else ""
+        conversion_suffix = f".from.{conversion}" if conversion else ""
+        form = f"VST_PUSH_{width_bits}{form_suffix}"
+        result.append(
+            _DescriptorSpec(
+                form,
+                f"{_TARGET_KEY}.store.{shape}.fifo.push{conversion_suffix}",
+                f"memory.store.fifo.push.{shape}{conversion_suffix}",
+                f"II_{form}",
+                storage_overrides=(("src", source_class),),
+                asm_mnemonic=f"vst.push.{shape}{conversion_suffix}",
+                memory_width_bits=width_bits,
+            )
+        )
+    return tuple(result)
+
+
+def _fifo_storage_descriptor_specs() -> tuple[_DescriptorSpec, ...]:
+    """Exposes partial FIFO storage and moves into its constrained state banks."""
+
+    result = []
+    for register_class, fifo_kind, half_classes in _FIFO_STORAGE_CLASSES:
+        for half, half_class in zip(("low", "high"), half_classes, strict=True):
+            part = f"aie2p.{register_class.lower()}.{half}512"
+            for operation, prefix, mnemonic, operand in (
+                ("load", "VLDA_dmx_lda", "vlda", "dst"),
+                ("store", "VST_dmx_sts", "vst", "src"),
+            ):
+                for form_suffix, suffix in (("_imm", ""), ("", ".index")):
+                    form = f"{prefix}_fifohl_idx{form_suffix}"
+                    result.append(
+                        _DescriptorSpec(
+                            form,
+                            f"{_TARGET_KEY}.{operation}.{fifo_kind}-fifo.{half}512{suffix}",
+                            f"memory.{operation}.{fifo_kind}-fifo.{half}512",
+                            f"II_{form}_{half_class}",
+                            storage_overrides=((operand, register_class),),
+                            asm_mnemonic=(
+                                f"{mnemonic}.{fifo_kind}-fifo.{half}512{suffix}"
+                            ),
+                            operand_register_parts=((operand, part),),
+                            encoding_adapter_overrides=(
+                                (operand, f"LOOM_{register_class}_{half}512"),
+                            ),
+                            storage_continuation_part=(
+                                f"aie2p.{register_class.lower()}.low512"
+                                if operation == "load" and half == "high"
+                                else None
+                            ),
+                            memory_width_bits=512,
+                        )
+                    )
+    result.append(
+        _DescriptorSpec(
+            "MOVS",
+            f"{_TARGET_KEY}.move.store-fifo.pointer",
+            "register.move.store-fifo.pointer",
+            "II_MOVS_eP_eP",
+            storage_overrides=(("dst", "mPfs"), ("src", "eP")),
+            asm_mnemonic="mov.store-fifo.pointer",
+        )
+    )
+    return tuple(result)

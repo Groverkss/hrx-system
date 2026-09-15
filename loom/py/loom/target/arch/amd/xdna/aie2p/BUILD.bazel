@@ -67,8 +67,10 @@ iree_py_library(
     name = "descriptors",
     srcs = [
         "array_descriptors.py",
+        "core_descriptor_spec.py",
         "core_descriptor_specs.py",
         "core_descriptors.py",
+        "core_fifo_descriptors.py",
     ],
     visibility = ["//visibility:public"],
     deps = [
