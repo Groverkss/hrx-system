@@ -13,6 +13,9 @@ from dataclasses import replace
 from loom.target.arch.amd.xdna.aie.machine import (
     has_property,
 )
+from loom.target.arch.amd.xdna.aie2p.core_address_descriptors import (
+    _address_descriptor_specs,
+)
 from loom.target.arch.amd.xdna.aie2p.core_descriptor_spec import _DescriptorSpec
 from loom.target.arch.amd.xdna.aie2p.core_fifo_descriptors import (
     FIFO_REGISTER_PARTS,
@@ -631,6 +634,7 @@ def _scalar_memory_descriptor_specs() -> tuple[_DescriptorSpec, ...]:
 
 
 _BASE_DESCRIPTOR_SPECS = (
+    *_address_descriptor_specs(),
     _DescriptorSpec(
         "ADD_add_r_ri",
         f"{_TARGET_KEY}.add.i32.immediate",
