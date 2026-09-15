@@ -24,6 +24,7 @@ from loom.target.low_descriptors import (
     OperandAddressMapKind,
     OperandFlag,
     OperandRole,
+    PhysicalRegister,
     RegClass,
     RegClassAlt,
     RegClassFlag,
@@ -761,6 +762,40 @@ def test_physical_descriptor_set_rejects_phase_order_work_overflow() -> None:
         match=r"phase-order pair count 14400 exceeds generation bound 1440",
     ):
         compiler.compile_descriptor_set(_descriptor_set(descriptor))
+
+
+@pytest.mark.parametrize("overlap", [False, True])
+def test_explicit_state_placement_uses_atomic_storage(overlap: bool) -> None:
+    # Five independently fixed read/write states need no spatial-order search.
+    # Distinct register names can still alias the same physical storage.
+    register_classes = tuple(
+        RegClass(
+            f"state{index}",
+            32,
+            SpillSlotSpace.PRIVATE,
+            flags=(RegClassFlag.PHYSICAL, RegClassFlag.EXPLICIT_PHYSICAL_REGISTERS),
+            physical_registers=(f"fixed{index}",),
+        )
+        for index in range(5)
+    )
+    operands = tuple(
+        _physical_operand(
+            f"state{index}",
+            OperandRole.IMPLICIT,
+            register_class.name,
+            flags=(OperandFlag.IMPLICIT, OperandFlag.STATE_READ, OperandFlag.STATE_WRITE),
+        )
+        for index, register_class in enumerate(register_classes)
+    )
+    descriptor_set = replace(
+        _descriptor_set(_descriptor("test.fixed.states", operands), register_classes=register_classes),
+        physical_registers=tuple(PhysicalRegister(f"fixed{index}", (0 if overlap and index == 4 else index,)) for index in range(5)),
+    )
+    if overlap:
+        with pytest.raises(ValueError, match="explicit physical register components do not admit a legal pre/post placement"):
+            validation.validate_physical_descriptor_set(descriptor_set)
+    else:
+        validation.validate_physical_descriptor_set(descriptor_set)
 
 
 def test_physical_descriptor_set_accepts_phase_order_work_envelope() -> None:

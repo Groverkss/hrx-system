@@ -612,6 +612,10 @@ def validate_physical_descriptor_set(
                 limits.maximum_resource_component_count,
                 descriptor_key=descriptor.key,
             )
+            # Exact physical domains were proved against their atomic storage
+            # above. They are not interchangeable positions in a linear bank.
+            if resource_key == "explicit-physical-registers":
+                continue
             pre_component_count = sum(component.pre_width != 0 for component in resource_components)
             post_component_count = sum(component.post_width != 0 for component in resource_components)
             phase_order_pair_count = math.factorial(pre_component_count) * math.factorial(post_component_count)
