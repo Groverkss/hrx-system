@@ -13,11 +13,13 @@
 #include "diagnostic.h"
 #include "iree/base/api.h"
 #include "iree/base/internal/atomics.h"
+#include "loom/codegen/low/verify.h"
 #include "loom/ir/function_version.h"
 #include "loom/target/function_version_projection.h"
 #include "loomc/iree.h"
 #include "result.h"
 #include "source.h"
+#include "target.h"
 #include "workspace.h"
 
 enum {
@@ -45,6 +47,11 @@ struct loomc_module_t {
 
   // Concrete function versions published by the last successful compilation.
   loom_function_version_owner_t function_versions;
+
+  // Input invariants established with the context's immutable target tables.
+  // Successful compiler transforms preserve them; failed mutation invalidates
+  // them. New deserialized, linked, and cloned handles start unverified.
+  bool verified;
 };
 
 typedef struct loomc_module_ir_projection_t {
@@ -517,6 +524,56 @@ loom_module_t* loomc_module_loom_module(loomc_module_t* module) {
 const loom_module_t* loomc_module_const_loom_module(
     const loomc_module_t* module) {
   return module ? module->module : NULL;
+}
+
+static iree_status_t loomc_module_capture_verify_emission(
+    void* user_data, const loom_diagnostic_emission_t* emission) {
+  return iree_status_from_loomc(loomc_result_add_loom_diagnostic_emission(
+      (loomc_result_t*)user_data, /*source=*/NULL, LOOM_EMITTER_VERIFIER,
+      emission));
+}
+
+loomc_status_t loomc_module_verify(
+    loomc_module_t* module,
+    const loomc_target_environment_t* target_environment,
+    loomc_result_t* result) {
+  const bool context_environment =
+      target_environment == loomc_context_target_environment(module->context);
+  if (module->verified && context_environment) return loomc_ok_status();
+
+  LOOMC_RETURN_IF_ERROR(
+      loomc_result_verify_loom_module(module->module, /*source=*/NULL, result));
+  if (!loomc_result_succeeded(result)) return loomc_ok_status();
+
+  const loomc_target_pass_environment_t* pass_environment =
+      loomc_target_environment_pass_environment(target_environment);
+  const loom_low_verify_options_t options = {
+      .descriptor_registry =
+          pass_environment ? &pass_environment->low_descriptor_registry.registry
+                           : NULL,
+      .function_versions = loomc_module_function_versions(module),
+      .emitter = {.fn = loomc_module_capture_verify_emission,
+                  .user_data = result},
+      .provider_list = pass_environment
+                           ? loom_target_environment_low_verify_provider_list(
+                                 pass_environment->target_environment)
+                           : loom_low_verify_provider_list_empty(),
+      .max_errors = 20,
+  };
+  loom_low_verify_scratch_t scratch =
+      loom_low_verify_scratch_for_module(module->module);
+  loom_low_verify_result_t verify_result = {0};
+  LOOMC_RETURN_IF_ERROR(loomc_status_from_iree(loom_low_verify_module(
+      module->module, &options, &scratch, &verify_result)));
+  if (verify_result.error_count != 0) {
+    return loomc_result_set_state(result, LOOMC_RESULT_STATE_FAILED);
+  }
+  if (context_environment) module->verified = true;
+  return loomc_ok_status();
+}
+
+void loomc_module_invalidate_verification(loomc_module_t* module) {
+  module->verified = false;
 }
 
 iree_arena_allocator_t* loomc_module_prepare_function_versions(

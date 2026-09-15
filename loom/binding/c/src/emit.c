@@ -751,6 +751,9 @@ loomc_status_t loomc_emit_module(loomc_target_environment_t* target_environment,
                                        resolved_options.artifact_format, result,
                                        allocator, &emitter);
   }
+  if (loomc_status_is_ok(status) && loomc_result_succeeded(result)) {
+    status = loomc_module_verify(module, target_environment, result);
+  }
 
   loom_target_emit_artifact_t target_artifact = {0};
   loomc_string_view_t manifest_identifier = loomc_string_view_empty();
@@ -865,6 +868,9 @@ loomc_status_t loomc_emit_module(loomc_target_environment_t* target_environment,
   loom_target_compile_report_deinitialize(&compile_report);
   if (scratch_arena_initialized) {
     iree_arena_deinitialize(&scratch_arena);
+  }
+  if (!loomc_status_is_ok(status) || !loomc_result_succeeded(result)) {
+    loomc_module_invalidate_verification(module);
   }
   if (loomc_status_is_ok(status)) {
     *out_result = result;

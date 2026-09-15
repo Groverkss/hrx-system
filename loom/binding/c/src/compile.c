@@ -573,8 +573,7 @@ static loomc_status_t loomc_compile_module_into_result(
 
   const loomc_target_environment_t* context_target_environment =
       loomc_context_target_environment(compiler->context);
-  iree_arena_allocator_t* function_version_arena =
-      loomc_module_prepare_function_versions(module);
+  iree_arena_allocator_t* function_version_arena = NULL;
   loom_function_version_owner_t function_versions = {0};
   loom_kernel_launch_config_program_t launch_config_program = {0};
   bool launch_config_program_initialized = false;
@@ -586,8 +585,9 @@ static loomc_status_t loomc_compile_module_into_result(
   loomc_config_application_result_t config_application = {0};
 
   loomc_status_t status =
-      loomc_result_verify_loom_module(internal_module, /*source=*/NULL, result);
+      loomc_module_verify(module, context_target_environment, result);
   if (loomc_status_is_ok(status) && loomc_result_succeeded(result)) {
+    function_version_arena = loomc_module_prepare_function_versions(module);
     const loomc_module_t* config_module =
         options ? options->config_module : NULL;
     loomc_config_apply_module_options_t config_apply_options = {
@@ -640,6 +640,7 @@ static loomc_status_t loomc_compile_module_into_result(
         launch_config_module);
   }
   if (!loomc_status_is_ok(status) || !loomc_result_succeeded(result)) {
+    loomc_module_invalidate_verification(module);
     loomc_module_prepare_function_versions(module);
   }
   if (launch_config_program_initialized) {

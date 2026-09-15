@@ -137,6 +137,89 @@ TEST_F(XdnaTest, RejectsMissingEnvironment) {
   EXPECT_EQ(profile, nullptr);
 }
 
+TEST_F(XdnaTest, RejectsInvalidLowImmediateBeforePassesAndDirectEmission) {
+  loomc_context_target_options_t target_options = {};
+  target_options.type = LOOMC_STRUCTURE_TYPE_CONTEXT_TARGET_OPTIONS;
+  target_options.target_environment = environment_.get();
+  loomc_context_options_t context_options = {};
+  context_options.type = LOOMC_STRUCTURE_TYPE_CONTEXT_OPTIONS;
+  context_options.next = &target_options;
+  loomc_context_t* raw_context = nullptr;
+  LOOMC_ASSERT_OK(loomc_context_create(&context_options,
+                                       loomc_allocator_system(), &raw_context));
+  HandlePtr<loomc_context_t, loomc_context_release> context(raw_context);
+  loomc_workspace_t* raw_workspace = nullptr;
+  LOOMC_ASSERT_OK(loomc_workspace_create(nullptr, loomc_allocator_system(),
+                                         &raw_workspace));
+  HandlePtr<loomc_workspace_t, loomc_workspace_release> workspace(
+      raw_workspace);
+  loomc_compiler_t* raw_compiler = nullptr;
+  LOOMC_ASSERT_OK(loomc_compiler_create(
+      context.get(), nullptr, loomc_allocator_system(), &raw_compiler));
+  HandlePtr<loomc_compiler_t, loomc_compiler_release> compiler(raw_compiler);
+  loomc_pass_program_t* raw_program = nullptr;
+  loomc_result_t* raw_result = nullptr;
+  LOOMC_ASSERT_OK(loomc_pass_program_create_from_pipeline_text(
+      context.get(), loomc_make_cstring_view("low-dce"), nullptr,
+      loomc_allocator_system(), &raw_program, &raw_result));
+  HandlePtr<loomc_pass_program_t, loomc_pass_program_release> program(
+      raw_program);
+  ResultPtr result(raw_result);
+  ASSERT_TRUE(Succeeded(result.get()));
+
+  // This unused load would disappear if DCE ran before descriptor verification.
+  constexpr char source_text[] = R"(
+low.func.def retain target<amd.xdna.aie2p.core> @invalid(%pointer: reg<aie2p.ep>) asm {
+  %unused = vlda.acc %pointer, 512
+  return
+}
+)";
+  loomc_source_options_t source_options = {};
+  source_options.type = LOOMC_STRUCTURE_TYPE_SOURCE_OPTIONS;
+  source_options.format = LOOMC_SOURCE_FORMAT_TEXT;
+  source_options.contents =
+      loomc_make_byte_span(source_text, sizeof(source_text) - 1);
+  source_options.storage = LOOMC_SOURCE_STORAGE_COPY;
+  loomc_source_t* raw_source = nullptr;
+  LOOMC_ASSERT_OK(loomc_source_create(&source_options, loomc_allocator_system(),
+                                      &raw_source));
+  HandlePtr<loomc_source_t, loomc_source_release> source(raw_source);
+  loomc_module_t* raw_module = nullptr;
+  LOOMC_ASSERT_OK(loomc_module_deserialize_from_source(
+      context.get(), workspace.get(), source.get(), nullptr,
+      loomc_allocator_system(), &raw_module, &raw_result));
+  ModulePtr module(raw_module);
+  result.reset(raw_result);
+  ASSERT_TRUE(Succeeded(result.get()));
+
+  LOOMC_ASSERT_OK(loomc_compile_module(compiler.get(), workspace.get(),
+                                       program.get(), module.get(), nullptr,
+                                       loomc_allocator_system(), &raw_result));
+  result.reset(raw_result);
+  EXPECT_FALSE(loomc_result_succeeded(result.get()));
+  ASSERT_EQ(loomc_result_diagnostic_count(result.get()), 1u);
+  EXPECT_TRUE(
+      loomc_string_view_equal(loomc_result_diagnostic_at(result.get(), 0)->code,
+                              loomc_make_cstring_view("STRUCTURE/014")));
+
+  // Reuse the rejected module: failure must not erase the offending operand or
+  // mark it verified for a later direct emission request.
+  loomc_emit_options_t emit_options = {};
+  emit_options.type = LOOMC_STRUCTURE_TYPE_EMIT_OPTIONS;
+  emit_options.artifact_format =
+      loomc_make_cstring_view(LOOMC_ARTIFACT_FORMAT_XDNA);
+  LOOMC_ASSERT_OK(loomc_emit_module(environment_.get(), workspace.get(),
+                                    module.get(), &emit_options,
+                                    loomc_allocator_system(), &raw_result));
+  result.reset(raw_result);
+  EXPECT_FALSE(loomc_result_succeeded(result.get()));
+  EXPECT_EQ(loomc_result_artifact_count(result.get()), 0u);
+  ASSERT_EQ(loomc_result_diagnostic_count(result.get()), 1u);
+  EXPECT_TRUE(
+      loomc_string_view_equal(loomc_result_diagnostic_at(result.get(), 0)->code,
+                              loomc_make_cstring_view("STRUCTURE/014")));
+}
+
 TEST_F(XdnaTest, AcceptsNonTerminatedDeviceKeyAndRetainsEnvironment) {
   const std::string expected_key = "amd.xdna.strix_halo.17f0_11";
   std::string key_storage = expected_key + "not-part-of-the-key";

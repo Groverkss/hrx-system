@@ -105,6 +105,7 @@ loom_cc_library(
     loom::codegen::low::repr
     loom::codegen::low::target_binding
     loom::codegen::low::text_asm
+    loom::codegen::low::verify
     loom::error::diagnostic
     loom::error::error_defs
     loom::error::renderer

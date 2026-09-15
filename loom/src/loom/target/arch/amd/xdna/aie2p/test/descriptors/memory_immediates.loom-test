@@ -1,0 +1,46 @@
+// Accumulator loads use signed 10-bit byte offsets aligned to 64 bytes.
+// RUN: verify
+
+low.func.def target<amd.xdna.aie2p.core> @bounds(%pointer: reg<aie2p.ep>) -> (reg<aie2p.mbms>, reg<aie2p.mbms>) asm {
+  %minimum = vlda.acc %pointer, -512
+  %maximum = vlda.acc %pointer, 448
+  return %minimum, %maximum
+}
+
+// ====
+
+// The compiler pipeline must reject authored operands before cleanup can erase
+// their unused results.
+// RUN: emit source-low
+
+low.func.def retain target<amd.xdna.aie2p.core> @unused_overflow(%pointer: reg<aie2p.ep>) asm {
+  // ERROR@+1: STRUCTURE/014 "imm" "512"
+  %unused = vlda.acc %pointer, 512
+  return
+}
+
+// ====
+
+// RUN: verify
+
+low.func.def target<amd.xdna.aie2p.core> @overflow(%pointer: reg<aie2p.ep>) asm {
+  // ERROR@+1: STRUCTURE/014 "imm" "512"
+  %unused = vlda.acc %pointer, 512
+  return
+}
+
+// ====
+
+low.func.def target<amd.xdna.aie2p.core> @underflow(%pointer: reg<aie2p.ep>) asm {
+  // ERROR@+1: STRUCTURE/014 "imm" "-576"
+  %unused = vlda.acc %pointer, -576
+  return
+}
+
+// ====
+
+low.func.def target<amd.xdna.aie2p.core> @misaligned(%pointer: reg<aie2p.ep>) asm {
+  // ERROR@+1: STRUCTURE/014 "imm" "1"
+  %unused = vlda.acc %pointer, 1
+  return
+}

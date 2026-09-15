@@ -2158,6 +2158,20 @@ iree_status_t loom_low_verify_module(const loom_module_t* module,
   IREE_ASSERT_ARGUMENT(scratch);
   IREE_ASSERT_ARGUMENT(out_result);
   *out_result = (loom_low_verify_result_t){0};
+  // Begin the module walk without allocating or clearing value-sized scratch
+  // for source-only modules. Continue from the first Low function once found.
+  const loom_op_t* first_low_function =
+      module->body && module->body->block_count > 0
+          ? loom_region_entry_block(module->body)->first_op
+          : NULL;
+  while (first_low_function != NULL &&
+         !loom_low_func_def_isa(first_low_function) &&
+         !loom_low_kernel_def_isa(first_low_function) &&
+         !loom_low_func_decl_isa(first_low_function)) {
+    first_low_function = first_low_function->next_op;
+  }
+  if (first_low_function == NULL) return iree_ok_status();
+
   IREE_ASSERT(scratch->value_scratch != NULL);
   IREE_ASSERT_EQ(scratch->value_scratch->value_table, &module->values);
   loom_low_verify_state_t state = {
@@ -2181,11 +2195,9 @@ iree_status_t loom_low_verify_module(const loom_module_t* module,
   if (iree_status_is_ok(status)) {
     status = loom_low_verify_begin_module_providers(&state);
   }
-  if (iree_status_is_ok(status) && module->body &&
-      module->body->block_count > 0) {
-    loom_block_t* entry_block = loom_region_entry_block(module->body);
-    const loom_op_t* op = NULL;
-    loom_block_for_each_op(entry_block, op) {
+  if (iree_status_is_ok(status)) {
+    for (const loom_op_t* op = first_low_function; op != NULL;
+         op = op->next_op) {
       if (!loom_low_func_def_isa(op) && !loom_low_kernel_def_isa(op) &&
           !loom_low_func_decl_isa(op)) {
         continue;

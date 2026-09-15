@@ -212,6 +212,32 @@ iree_status_t loom_compile_run_pipeline(
       .source_resolver = options->source_resolver,
       .max_errors = options->max_errors,
   };
+  loom_verify_result_t verify_result = {0};
+  IREE_RETURN_IF_ERROR(loom_target_entry_verify_module(
+      module, &entry_options, LOOM_COMPILE_DEFAULT_MAX_PIPELINE_ERRORS,
+      &verify_result));
+  out_result->pass.error_count = verify_result.error_count;
+  out_result->pass.warning_count = verify_result.warning_count;
+  if (verify_result.error_count != 0) return iree_ok_status();
+
+  loom_target_entry_diagnostic_emitter_t verifier_emitter = {0};
+  loom_target_entry_diagnostic_emitter_initialize(
+      module, &entry_options, LOOM_EMITTER_VERIFIER, &verifier_emitter);
+  loom_low_verify_scratch_t low_verify_scratch =
+      loom_low_verify_scratch_for_module(module);
+  loom_low_verify_result_t low_verify_result = {0};
+  IREE_RETURN_IF_ERROR(loom_target_entry_verify_low_module(
+      module, options->low_descriptor_registry, &entry_options,
+      &verifier_emitter, LOOM_COMPILE_DEFAULT_MAX_PIPELINE_ERRORS,
+      options->target_environment
+          ? loom_target_environment_low_verify_provider_list(
+                options->target_environment)
+          : loom_low_verify_provider_list_empty(),
+      &low_verify_scratch, &low_verify_result));
+  out_result->pass.error_count += low_verify_result.error_count;
+  out_result->pass.warning_count += low_verify_result.warning_count;
+  if (low_verify_result.error_count != 0) return iree_ok_status();
+
   loom_target_entry_diagnostic_emitter_t pass_emitter = {0};
   loom_target_entry_diagnostic_emitter_initialize(
       module, &entry_options, LOOM_EMITTER_PASS, &pass_emitter);
@@ -306,6 +332,8 @@ iree_status_t loom_compile_run_pipeline(
       .trace = trace_ptr,
   };
 
+  const uint32_t input_warning_count = out_result->pass.warning_count;
+  out_result->pass.warning_count = 0;
   if (iree_status_is_ok(status) && loom_compile_pipeline_is_default(pipeline)) {
     status = loom_compile_run_default_pipeline(module, options, &run_options,
                                                &out_result->pass);
@@ -321,6 +349,7 @@ iree_status_t loom_compile_run_pipeline(
     status = loom_target_compile_report_record_loop_pipelines(
         options->report, module, &out_result->function_versions.list);
   }
+  out_result->pass.warning_count += input_warning_count;
   loom_target_legalizer_registry_storage_deinitialize(
       &legalizer_registry_storage);
   return status;

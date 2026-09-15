@@ -109,7 +109,9 @@ bool loom_compile_pipeline_is_disabled(iree_string_view_t pipeline);
 // Returns true when |pipeline| requests the configured default pipeline.
 bool loom_compile_pipeline_is_default(iree_string_view_t pipeline);
 
-// Runs the selected compile pipeline on |module|.
+// Verifies authored input, then runs the selected compile pipeline on |module|.
+// Structural and target-Low verification precede specialization and all passes,
+// including a disabled pipeline. Generated IR is trusted by artifact consumers.
 //
 // Status is reserved for infrastructure failures. Pass-emitted diagnostics are
 // counted in |out_result| and left to the caller's product policy: a compiler

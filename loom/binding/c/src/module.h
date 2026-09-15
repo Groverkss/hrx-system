@@ -13,6 +13,7 @@
 #include "loom/ir/module.h"
 #include "loomc/context.h"
 #include "loomc/module.h"
+#include "loomc/target.h"
 #include "loomc/workspace.h"
 #include "visibility.h"
 
@@ -82,6 +83,20 @@ LOOMC_API_PRIVATE loom_module_t* loomc_module_loom_module(
 // Returns the internal module owned by a public module handle.
 LOOMC_API_PRIVATE const loom_module_t* loomc_module_const_loom_module(
     const loomc_module_t* module);
+
+// Establishes structural and target-Low input invariants before compilation or
+// direct emission. Successful verification against the module context is
+// retained across trusted compiler transforms. Other target environments are
+// checked without retaining their lifetime. Diagnostics mark |result| failed;
+// status is reserved for infrastructure failures.
+LOOMC_API_PRIVATE loomc_status_t
+loomc_module_verify(loomc_module_t* module,
+                    const loomc_target_environment_t* target_environment,
+                    loomc_result_t* result);
+
+// Invalidates input verification after an unsuccessful mutating operation.
+LOOMC_API_PRIVATE void loomc_module_invalidate_verification(
+    loomc_module_t* module);
 
 // Validates source deserialization options without selecting a format.
 LOOMC_API_PRIVATE loomc_status_t loomc_module_validate_deserialize_options(

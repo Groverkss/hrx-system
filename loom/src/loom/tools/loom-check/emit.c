@@ -1511,13 +1511,6 @@ iree_status_t loom_check_prepare_source_low_module(
       .source_resolver = source_resolver,
       .max_errors = 20,
   };
-  loom_verify_result_t verify_result = {0};
-  IREE_RETURN_IF_ERROR(loom_target_entry_verify_module(module, &entry_options,
-                                                       20, &verify_result));
-  if (verify_result.error_count != 0) {
-    return iree_ok_status();
-  }
-
   if (environment->target_environment == NULL) {
     return iree_make_status(IREE_STATUS_FAILED_PRECONDITION,
                             "source-low emit requires a target environment");
@@ -1547,6 +1540,7 @@ iree_status_t loom_check_prepare_source_low_module(
       module, &compile_options, block_pool, &pipeline_result);
   if (iree_status_is_ok(status) && pipeline_result.pass.error_count == 0 &&
       !loom_check_diagnostic_collector_has_error(diagnostic_collector)) {
+    loom_verify_result_t verify_result = {0};
     status = loom_target_entry_verify_module(module, &entry_options, 20,
                                              &verify_result);
     if (iree_status_is_ok(status) && verify_result.error_count == 0) {

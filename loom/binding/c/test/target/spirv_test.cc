@@ -346,6 +346,33 @@ TEST(TargetSpirvTest, EmitsSpirvWithDefaultOptions) {
   ExpectSpirvArtifact(result_ptr.get(), "module.spv");
 }
 
+TEST(TargetSpirvTest, DirectEmissionRunsTargetLowVerificationProviders) {
+  TargetEnvironmentPtr target_environment = CreateSpirvTargetEnvironment();
+  ContextPtr context = CreateSpirvContext(target_environment.get());
+  loomc_workspace_t* raw_workspace = nullptr;
+  LOOMC_ASSERT_OK(loomc_workspace_create(nullptr, loomc_allocator_system(),
+                                         &raw_workspace));
+  WorkspacePtr workspace(raw_workspace);
+  SourcePtr source = CreateTextSource("untyped.loom", R"(
+spirv.target<vulkan1_3> @target
+low.func.def target<spirv.logical.core>(@target) @untyped(%value: reg<spirv.id>) asm {
+  return
+}
+)");
+  ModulePtr module =
+      DeserializeModule(context.get(), workspace.get(), source.get());
+  loomc_result_t* raw_result = nullptr;
+  LOOMC_ASSERT_OK(loomc_emit_module(target_environment.get(), workspace.get(),
+                                    module.get(), nullptr,
+                                    loomc_allocator_system(), &raw_result));
+  ResultPtr result(raw_result);
+  EXPECT_FALSE(loomc_result_succeeded(result.get()));
+  EXPECT_EQ(loomc_result_artifact_count(result.get()), 0u);
+  ASSERT_EQ(loomc_result_diagnostic_count(result.get()), 1u);
+  EXPECT_EQ(ToString(loomc_result_diagnostic_at(result.get(), 0)->code),
+            "SPIRV/005");
+}
+
 TEST(TargetSpirvTest, RejectsUnknownEmitDictOptionThroughResult) {
   TargetEnvironmentPtr target_environment = CreateSpirvTargetEnvironment();
   ContextPtr context = CreateSpirvContext(target_environment.get());

@@ -466,6 +466,7 @@ loom_check_test_suite(
     "test/descriptors/fifo.loom-test"
     "test/descriptors/fused_vector_memory.loom-test"
     "test/descriptors/lookup_memory.loom-test"
+    "test/descriptors/memory_immediates.loom-test"
     "test/descriptors/scalar_stream.loom-test"
     "test/module_contracts.loom-test"
     "test/pipeline_composition.loom-test"
