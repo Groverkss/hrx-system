@@ -549,23 +549,13 @@ static iree_status_t loom_aie2p_xdna_inventory_product(
         return iree_make_status(IREE_STATUS_OUT_OF_RANGE,
                                 "AIE2P product section count overflows");
       }
-      for (iree_host_size_t k = 0;
-           k < tile->linked_tile->assembly.section_count; ++k) {
-        const loom_native_elf_section_t* section =
-            &tile->linked_tile->assembly.sections[k];
-        if (!iree_any_bit_set(section->flags,
-                              LOOM_NATIVE_ELF_SECTION_FLAG_ALLOC)) {
-          continue;
-        }
-        if (!iree_host_size_checked_add(entry_tile_segment_count, 1,
-                                        &entry_tile_segment_count)) {
-          return iree_make_status(IREE_STATUS_OUT_OF_RANGE,
-                                  "AIE2P product segment count overflows");
-        }
-        if (section->type == LOOM_NATIVE_ELF_SECTION_TYPE_NOBITS) {
-          layout->required_capabilities |=
-              LOOM_XDNA_ELF_CAPABILITY_TILE_ZERO_FILL;
-        }
+      // The tile linker admits one executable section and placed function
+      // storage. Uninitialized storage keeps its address and symbols but has
+      // no load or zero-fill operation in the ARRAY realization.
+      if (!iree_host_size_checked_add(entry_tile_segment_count, 1,
+                                      &entry_tile_segment_count)) {
+        return iree_make_status(IREE_STATUS_OUT_OF_RANGE,
+                                "AIE2P product segment count overflows");
       }
     }
     layout->tile_segment_count = entry_tile_segment_count;
@@ -977,22 +967,6 @@ iree_status_t loom_aie2p_xdna_product_write(
           code, inventory.tiles[i]->coordinate,
           LOOM_XDNA_ELF_TILE_MEMORY_SPACE_PROGRAM, code_section_indices[i],
           &segments[segment_index++]));
-    }
-    for (iree_host_size_t i = layout->first_tile_index; i < tile_end; ++i) {
-      const loom_aie2p_linked_tile_t* tile = inventory.tiles[i]->linked_tile;
-      for (iree_host_size_t j = 0; j < tile->assembly.section_count; ++j) {
-        if (j == tile->entry_section_index ||
-            !iree_any_bit_set(tile->assembly.sections[j].flags,
-                              LOOM_NATIVE_ELF_SECTION_FLAG_ALLOC)) {
-          continue;
-        }
-        IREE_RETURN_IF_ERROR(loom_aie2p_xdna_tile_segment(
-            &tile->assembly.sections[j], inventory.tiles[i]->coordinate,
-            LOOM_XDNA_ELF_TILE_MEMORY_SPACE_DATA,
-            linked_section_base +
-                linked_section_indices[tile_section_starts[i] + j],
-            &segments[segment_index++]));
-      }
     }
     IREE_ASSERT_EQ(segment_index, layout->first_tile_program_header_ordinal +
                                       layout->tile_segment_count);
