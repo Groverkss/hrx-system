@@ -14,6 +14,7 @@ from loom.target.arch.amd.xdna.aie.machine import (
     has_property,
 )
 from loom.target.arch.amd.xdna.aie2p.core_address_descriptors import (
+    DIMENSION_REGISTER_PARTS,
     _address_descriptor_specs,
 )
 from loom.target.arch.amd.xdna.aie2p.core_descriptor_spec import _DescriptorSpec
@@ -57,6 +58,7 @@ _REGISTER_PARTS = (
     RegisterPart(_VEC256_HIGH128_PART, "aie2p.vec256", 0x2),
     RegisterPart(_EWL_LOW128_PART, "aie2p.ewl", 0x1),
     *FIFO_REGISTER_PARTS,
+    *DIMENSION_REGISTER_PARTS,
 )
 _REGISTER_PARTS_BY_NAME = {part.name: part for part in _REGISTER_PARTS}
 

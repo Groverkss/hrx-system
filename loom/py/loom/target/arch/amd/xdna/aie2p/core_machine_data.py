@@ -1397,6 +1397,83 @@ def _derive_fifo_storage_adapters(
     )
 
 
+_DIMENSION_COMPONENTS = (
+    ("count", "sub_dim_count", "eDC"),
+    ("size", "sub_dim_size", "eDN"),
+    ("stride", "sub_dim_stride", "eDJ"),
+    ("wrap", "sub_mod", "eM"),
+)
+# Native 3D addressing uses seven fields. The upper eM register is physically
+# owned by eDS but does not participate in its recurrence or definedness.
+DIMENSION_FIELDS = {
+    "eD": tuple((name, (index,), kind) for name, index, kind in _DIMENSION_COMPONENTS),
+    "eDS": tuple(
+        (f"{dimension}.{name}", (dimension_index, index), kind)
+        for dimension, dimension_index in (
+            ("inner", "sub_lo_dim"),
+            ("outer", "sub_hi_dim"),
+        )
+        for name, index, kind in _DIMENSION_COMPONENTS
+        if dimension == "inner" or name != "wrap"
+    ),
+}
+
+
+def _derive_dimension_adapters(
+    source_adapters: tuple[RegisterAdapter, ...],
+    register_classes: tuple[RegisterClass, ...],
+    physical_registers: tuple[PhysicalRegister, ...],
+) -> tuple[RegisterAdapter, ...]:
+    """Projects native scalar fields from one dimension-register allocation."""
+
+    classes = {row.name: row for row in register_classes}
+    registers = {row.name: row for row in physical_registers}
+    adapters = {row.name: row for row in source_adapters}
+    result = []
+    for register_class, fields in DIMENSION_FIELDS.items():
+        result.append(
+            RegisterAdapter(
+                name=f"LOOM_{register_class}",
+                register_class=register_class,
+                register_encodings=tuple(
+                    (name, registers[name].hardware_encoding)
+                    for name in classes[register_class].candidates
+                ),
+            )
+        )
+        for component, path, _ in fields:
+            selected = {}
+            for name in classes[register_class].candidates:
+                field = name
+                for subregister_index in path:
+                    register = registers[field]
+                    field = dict(
+                        zip(
+                            register.subregister_indices,
+                            register.subregisters,
+                            strict=True,
+                        )
+                    )[subregister_index]
+                selected[name] = field
+            for adapter_name in (
+                "OP_mLdaCg",
+                "OP_mMvSclSrc",
+                "OP_mMvSclDst",
+                "OP_mMvSclDstCg",
+            ):
+                encodings = dict(adapters[adapter_name].effective_register_encodings)
+                result.append(
+                    RegisterAdapter(
+                        name=f"LOOM_{register_class}_{component}_{adapter_name}",
+                        register_class=register_class,
+                        register_encodings=tuple(
+                            (name, encodings[field]) for name, field in selected.items()
+                        ),
+                    )
+                )
+    return tuple(result)
+
+
 def _parse_immediates() -> tuple[ImmediateEncoding, ...]:
     result = []
     for record in _IMMEDIATE_ENCODING_RECORDS.splitlines():
@@ -1436,6 +1513,11 @@ _REGISTER_ADAPTERS = (
         _PHYSICAL_REGISTERS,
     ),
     *_derive_fifo_storage_adapters(
+        _SOURCE_REGISTER_ADAPTERS,
+        _REGISTER_CLASSES,
+        _PHYSICAL_REGISTERS,
+    ),
+    *_derive_dimension_adapters(
         _SOURCE_REGISTER_ADAPTERS,
         _REGISTER_CLASSES,
         _PHYSICAL_REGISTERS,

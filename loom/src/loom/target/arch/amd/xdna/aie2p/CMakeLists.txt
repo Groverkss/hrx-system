@@ -463,6 +463,7 @@ loom_check_test_suite(
     "test/array_plan/temporal_fold.loom-test"
     "test/array_plan/worker_cycles.loom-test"
     "test/descriptors/core_observation.loom-test"
+    "test/descriptors/dimensions.loom-test"
     "test/descriptors/fifo.loom-test"
     "test/descriptors/fused_vector_memory.loom-test"
     "test/descriptors/lookup_memory.loom-test"

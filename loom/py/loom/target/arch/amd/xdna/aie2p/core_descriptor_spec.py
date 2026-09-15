@@ -41,6 +41,9 @@ class _DescriptorSpec:
     encoding_adapter_overrides: tuple[tuple[str, str], ...] = ()
     # Disjoint part preserved through the first result's tied storage input.
     storage_continuation_part: str | None = None
+    # Input aggregates updated by co-indexed native outputs. The first output
+    # names the aggregate SSA result tied to the input's storage.
+    aggregate_updates: tuple[tuple[str, tuple[str, ...]], ...] = ()
     # Semantically equivalent descriptors available to instruction scheduling.
     schedule_alternatives: tuple[str, ...] = ()
     # Memory transfer width in bits, independent of register storage width.

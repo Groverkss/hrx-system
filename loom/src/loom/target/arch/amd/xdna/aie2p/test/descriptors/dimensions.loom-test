@@ -1,0 +1,99 @@
+// A 2D recurrence owns its count, size, stride and wrap in one aggregate.
+// Observing the returned count retains the load even when its data is unused.
+// RUN: with-low-asm pass low-cse,low-dce
+
+low.func.def target<amd.xdna.aie2p.core> @count_recurrence(%pointer: reg<aie2p.ep>) -> (reg<aie2p.er>, reg<aie2p.er>) asm {
+  %count = mova.2d.count 0
+  %size = mova.2d.size %count, 3
+  %stride = mova.2d.stride %size, 4
+  %dimension = mova.2d.wrap %stride, 20
+  %unused0, %pointer1, %dimension1 = lda.i32.2d %pointer, %dimension
+  %count1 = mov.2d.count-to-scalar %dimension1
+  %unused1, %pointer2, %dimension2 = lda.i32.2d %pointer1, %dimension1
+  %count2 = mov.2d.count-to-scalar %dimension2
+  return %count1, %count2
+}
+
+// ====
+
+// Runtime field writes retain already-defined components. Resetting the count
+// and replacing the stride leaves the size and large row wrap intact.
+// RUN: with-low-asm pass low-cse,low-dce
+
+low.func.def target<amd.xdna.aie2p.core> @runtime_updates(%step: reg<aie2p.er>, %initial: reg<aie2p.er>) -> (reg<aie2p.ed>) asm {
+  %count = mova.2d.count 0
+  %size = mova.2d.size %count, 3
+  %stride = mova.2d.stride %size, 4
+  %dimension = mov.2d.wrap.immediate %stride, 32768
+  %reset = mov.2d.count.update %initial, %dimension
+  %updated = mov.2d.stride %step, %reset
+  return %updated
+}
+
+// ====
+
+// A 3D loop carries both counters with the five immutable recurrence fields.
+// The physically reserved upper modifier is unused and needs no definition.
+// RUN: with-low-asm pass low-cse,low-dce
+
+low.func.def target<amd.xdna.aie2p.core> @volume(%pointer: reg<aie2p.ep>, %remaining: reg<aie2p.er>) -> (reg<aie2p.ep>, reg<aie2p.er>, reg<aie2p.er>) asm {
+  %count = mova.3d.inner.count 0
+  %size = mova.3d.inner.size %count, 3
+  %stride = mova.3d.inner.stride %size, 4
+  %wrap = mova.3d.inner.wrap %stride, 52
+  %outer_count = mova.3d.outer.count %wrap, 0
+  %outer_size = mova.3d.outer.size %outer_count, 1
+  %dimension = mova.3d.outer.stride %outer_size, 20
+  %one = mov.i32 1
+  low.br ^loop(%pointer: reg<aie2p.ep>, %dimension: reg<aie2p.eds>, %remaining: reg<aie2p.er>)
+^loop(%address: reg<aie2p.ep>, %state: reg<aie2p.eds>, %iterations: reg<aie2p.er>):
+  %more = nez %iterations
+  low.cond_br %more, ^body, ^done : reg<aie2p.er>
+^body:
+  %unused, %next_address, %next_state = lda.i32.3d %address, %state
+  %next_iterations = sub %iterations, %one
+  low.br ^loop(%next_address: reg<aie2p.ep>, %next_state: reg<aie2p.eds>, %next_iterations: reg<aie2p.er>)
+^done:
+  %inner = mov.3d.inner.count-to-scalar %state
+  %outer = mov.3d.outer.count-to-scalar %state
+  return %address, %inner, %outer
+}
+
+// ====
+
+// A pointer update consumes the owning state even if only the data is used.
+// RUN: verify
+
+low.func.def target<amd.xdna.aie2p.core> @consumed_state(%pointer: reg<aie2p.ep>, %dimension: reg<aie2p.eds>) asm {
+  %value, %next_pointer, %next_dimension = lda.i32.3d %pointer, %dimension
+  // ERROR@+1: DOMINANCE/002
+  %stale = mov.3d.outer.count-to-scalar %dimension
+  return
+}
+
+// ====
+
+// Constructing only the count cannot initialize a 2D address generator.
+// RUN: verify
+
+low.func.def target<amd.xdna.aie2p.core> @incomplete_2d(%pointer: reg<aie2p.ep>) asm {
+  %count = mova.2d.count 0
+  // ERROR@+1: DOMINANCE/011 {op_name="amd.xdna.aie2p.load.scalar.i32.2d", field_name="mod"}
+  %value, %next_pointer, %next_dimension = lda.i32.2d %pointer, %count
+  return
+}
+
+// ====
+
+// The outer count remains undefined after constructing the inner dimension.
+// RUN: verify
+
+low.func.def target<amd.xdna.aie2p.core> @incomplete_3d() asm {
+  %count = mova.3d.inner.count 0
+  %size = mova.3d.inner.size %count, 3
+  %stride = mova.3d.inner.stride %size, 4
+  %wrap = mova.3d.inner.wrap %stride, 52
+  // ERROR@+1: DOMINANCE/011 {op_name="amd.xdna.aie2p.dimension.3d.read.outer.count", field_name="src"}
+  %outer = mov.3d.outer.count-to-scalar %wrap
+  return
+}

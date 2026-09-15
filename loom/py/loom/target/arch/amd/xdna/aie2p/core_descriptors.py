@@ -31,6 +31,10 @@ from loom.target.arch.amd.xdna.aie.schedule import (
     pipeline_uses,
 )
 from loom.target.arch.amd.xdna.aie2p import core_descriptor_specs as descriptor_specs
+from loom.target.arch.amd.xdna.aie2p.core_descriptor_constraints import (
+    descriptor_constraints,
+    descriptor_register_outputs,
+)
 from loom.target.arch.amd.xdna.aie2p.core_encoding_data import CORE_ENCODING_TABLE
 from loom.target.arch.amd.xdna.aie2p.core_machine_data import CORE_MACHINE_TABLE
 from loom.target.arch.amd.xdna.aie2p.core_schedule_data import CORE_SCHEDULE_TABLE
@@ -332,7 +336,10 @@ def _operand_storage_machine_class(
     adapter_overrides = _operand_override_map(
         spec, spec.encoding_adapter_overrides, "encoding-adapter overrides"
     )
-    if not set(register_parts) <= set(adapter_overrides):
+    encoded_fields = {
+        field.name for field in _INSTRUCTION_ENCODINGS[spec.form_name].fields
+    }
+    if not (set(register_parts) & encoded_fields) <= set(adapter_overrides):
         raise ValueError(
             f"{spec.form_name}: register-part and encoding-adapter overrides "
             "must encode every projected operand"
@@ -383,6 +390,8 @@ def _operand_storage_machine_class(
                 f"{spec.form_name}.{operand.name}: register part {part_name} does "
                 f"not belong to Low class {low_class}"
             )
+        if operand.name not in encoded_fields:
+            return low_class
         adapter_name = adapter_overrides[operand.name]
         adapter = _MACHINE_ADAPTERS.get(adapter_name)
         if adapter is None:
@@ -562,7 +571,12 @@ def _reg_classes() -> tuple[RegClass, ...]:
                 ),
                 target_bank_id=target_bank_id,
                 full_register_part_mask=(
-                    0x3
+                    # The upper modifier is not an input of 3D addressing.
+                    0x7F
+                    if machine_name == "eDS"
+                    else 0xF
+                    if machine_name == "eD"
+                    else 0x3
                     if machine_name
                     in ("eLPredicate", "eWL", "VEC256", "eLdFifoReg", "mStFifo")
                     else 0x1
@@ -1237,51 +1251,6 @@ def _instruction_classes(
     return tuple(result)
 
 
-def _constraints(
-    form: MachineForm,
-    explicit_operands: tuple[MachineOperand, ...],
-) -> tuple[Constraint, ...]:
-    """Returns direct update ties and heterogeneous tuple constraints."""
-
-    operand_indices = {
-        operand.name: operand_index
-        for operand_index, operand in enumerate(explicit_operands)
-    }
-    result = [
-        Constraint(
-            ConstraintKind.TIED,
-            operand_indices[tie.definition],
-            operand_indices[tie.use],
-        )
-        for tie in form.ties
-    ]
-
-    # AIE2P load FIFO forms update one heterogeneous physical-register tuple.
-    # LLVM models these through a target hook instead of TableGen Constraints,
-    # so they are absent from the imported machine-form ties. Recover the
-    # direct state updates from the stable operand family and constrain every
-    # tuple member pair: the allocator may visit the three classes in any
-    # order, and each partial assignment must select the same aggregate row.
-    update_group = ("ptr", "fifo_reg", "pos")
-    output_names = tuple(f"{name}_out" for name in update_group)
-    if all(name in operand_indices for name in output_names):
-        existing_ties = {
-            (constraint.lhs_operand_index, constraint.rhs_operand_index)
-            for constraint in result
-        }
-        for input_name, output_name in zip(update_group, output_names, strict=True):
-            pair = (operand_indices[output_name], operand_indices[input_name])
-            if pair not in existing_ties:
-                result.append(Constraint(ConstraintKind.TIED, *pair))
-        result.extend(
-            Constraint(ConstraintKind.SAME_REGISTER_ORDINAL, lhs, rhs)
-            for lhs, rhs in combinations(
-                (operand_indices[name] for name in update_group), 2
-            )
-        )
-    return tuple(result)
-
-
 def _descriptor(spec: descriptor_specs._DescriptorSpec) -> Descriptor:
     form = descriptor_specs._MACHINE_FORMS[spec.form_name]
     if spec.form_name != form.name:
@@ -1316,12 +1285,7 @@ def _descriptor(spec: descriptor_specs._DescriptorSpec) -> Descriptor:
     implicit_inputs = tuple(
         operand for operand in form.inputs if operand.name in spec.implicit_inputs
     )
-    register_outputs = tuple(
-        operand
-        for operand in form.outputs
-        if operand.kind is not MachineOperandKind.IMMEDIATE
-        and operand.name not in spec.implicit_outputs
-    )
+    register_outputs = descriptor_register_outputs(spec, form)
     register_inputs = tuple(
         operand
         for operand in form.inputs
@@ -1403,7 +1367,7 @@ def _descriptor(spec: descriptor_specs._DescriptorSpec) -> Descriptor:
         ),
         effects=_effects(spec, form),
         constraints=(
-            *_constraints(form, explicit_register_operands),
+            *descriptor_constraints(spec, form, explicit_register_operands),
             *(
                 (Constraint(ConstraintKind.REMATERIALIZABLE, 0),)
                 if spec.op_kind is DescriptorOpKind.CONST

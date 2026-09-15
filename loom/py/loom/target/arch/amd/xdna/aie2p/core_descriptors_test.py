@@ -16,6 +16,10 @@ from loom.target.arch.amd.xdna.aie.schedule import (
     PipelineStageKind,
     pipeline_uses,
 )
+from loom.target.arch.amd.xdna.aie2p.core_descriptor_constraints import (
+    descriptor_constraints,
+    descriptor_register_outputs,
+)
 from loom.target.arch.amd.xdna.aie2p.core_descriptor_specs import (
     _DESCRIPTOR_SPECS,
     _LOCK_EFFECT,
@@ -28,7 +32,6 @@ from loom.target.arch.amd.xdna.aie2p.core_descriptors import (
     _SLOT_RESOURCE_KINDS,
     AIE2P_CORE_DESCRIPTOR_SET,
     _bundle_exclusion_resource_name,
-    _constraints,
     _itinerary,
     _low_register_class_name,
     _memory_event_name,
@@ -624,10 +627,11 @@ def test_low_register_classes_retain_machine_candidate_order() -> None:
     )
     assert ewl_class.alloc_unit_bits == 256
     assert ewl_class.full_register_part_mask == 0x3
-    assert {
+    parts = {
         (part.name, part.reg_class, part.mask)
         for part in AIE2P_CORE_DESCRIPTOR_SET.register_parts
-    } == {
+    }
+    assert {
         ("aie2p.elpredicate.low32", "aie2p.elpredicate", 0x1),
         ("aie2p.elpredicate.high32", "aie2p.elpredicate", 0x2),
         ("aie2p.vec256.low128", "aie2p.vec256", 0x1),
@@ -637,7 +641,25 @@ def test_low_register_classes_retain_machine_candidate_order() -> None:
         ("aie2p.eldfiforeg.high512", "aie2p.eldfiforeg", 0x2),
         ("aie2p.mstfifo.low512", "aie2p.mstfifo", 0x1),
         ("aie2p.mstfifo.high512", "aie2p.mstfifo", 0x2),
-    }
+    } <= parts
+
+
+def test_aggregate_updates_require_coindexed_unencoded_components() -> None:
+    spec = next(
+        spec
+        for spec in _DESCRIPTOR_SPECS
+        if spec.key == "amd.xdna.aie2p.load.scalar.i32.3d"
+    )
+    form = _MACHINE_FORMS[spec.form_name]
+    for outputs, message in (
+        (("dcl", "dcl"), "must be unique and unencoded"),
+        (("dcl", "dst"), "must be unique and unencoded"),
+        (("dcl", "ptr_out"), "must own each co-indexed native output"),
+    ):
+        with pytest.raises(ValueError, match=message):
+            descriptor_register_outputs(
+                replace(spec, aggregate_updates=(("mod", outputs),)), form
+            )
 
 
 def test_vector_encoding_roles_share_one_low_storage_class() -> None:
@@ -1640,7 +1662,8 @@ def test_implicit_registers_and_machine_ties_reach_low() -> None:
     assert insert_index_class.physical_registers == ("r29",)
 
     divs = next(form for form in CORE_MACHINE_TABLE.forms if form.name == "DIVS")
-    constraints = _constraints(divs, (*divs.outputs, *divs.inputs))
+    spec = next(spec for spec in _DESCRIPTOR_SPECS if spec.form_name == "DIVS")
+    constraints = descriptor_constraints(spec, divs, (*divs.outputs, *divs.inputs))
     assert len(constraints) == 1
     assert constraints[0].kind is ConstraintKind.TIED
     assert constraints[0].lhs_operand_index == 1

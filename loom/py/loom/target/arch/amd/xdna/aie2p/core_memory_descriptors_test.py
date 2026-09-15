@@ -611,3 +611,19 @@ def test_ordered_memory_descriptors_are_semantic_physical_aliases() -> None:
                 EffectFlag.ORDERED,
                 *ordinary_effect.flags,
             )
+
+
+def test_dimension_updates_retain_real_read_dependencies() -> None:
+    descriptors = {row.key: row for row in AIE2P_CORE_DESCRIPTOR_SET.descriptors}
+    for dimension, register_class in ((2, "ed"), (3, "eds")):
+        descriptor = descriptors[f"amd.xdna.aie2p.load.scalar.i32.{dimension}d"]
+        # Both 3D native counters belong to the one returned aggregate; neither
+        # can acquire an independent physical index or lose its read dependency.
+        assert len(descriptor.asm_forms[0].results) == 3
+        result, source = descriptor.operands[2], descriptor.operands[4]
+        assert result.reg_alts == source.reg_alts
+        assert result.reg_alts[0].reg_class == f"aie2p.{register_class}"
+        assert result.encoding_field_id == 0
+        assert result.ready_stage == source.read_stage == 1
+        assert OperandFlag.STORAGE_CONTINUATION not in source.flags
+        assert Constraint(ConstraintKind.TIED, 2, 4) in descriptor.constraints
