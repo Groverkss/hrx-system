@@ -1,0 +1,29 @@
+// Tile identity is stable within a worker. Cycle observations remain distinct
+// across memory traffic, including observations whose values are unused.
+// RUN: with-low-asm pass low-cse,low-dce
+
+aie2p.target<core> @target
+
+low.func.def target<amd.xdna.aie2p.core>(@target) @observe(%output: reg<aie2p.ep>) -> (reg<aie2p.er>, reg<aie2p.er>, reg<aie2p.er x2>, reg<aie2p.er x2>) asm {
+  %first_id = mov.coreid
+  %first_cycles = mov.cycles
+  st %first_id, %output, 0
+  %discarded_cycles = mov.cycles
+  %second_id = mov.coreid
+  st %second_id, %output, 4
+  %second_cycles = mov.cycles
+  return %first_id, %second_id, %first_cycles, %second_cycles
+}
+
+// ----
+aie2p.target<core> @target
+
+low.func.def target<amd.xdna.aie2p.core>(@target) @observe(%output: reg<aie2p.ep>) -> (reg<aie2p.er>, reg<aie2p.er>, reg<aie2p.er x2>, reg<aie2p.er x2>) asm {
+  %first_id = mov.coreid
+  %first_cycles = mov.cycles
+  st %first_id, %output, 0
+  %discarded_cycles = mov.cycles
+  st %first_id, %output, 4
+  %second_cycles = mov.cycles
+  return %first_id, %first_id, %first_cycles, %second_cycles
+}

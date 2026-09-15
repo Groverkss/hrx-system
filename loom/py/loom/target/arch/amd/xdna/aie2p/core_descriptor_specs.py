@@ -1968,4 +1968,25 @@ def _with_ordered_memory_variants(
 _DESCRIPTOR_SPECS = (
     *_with_ordered_memory_variants(_BASE_DESCRIPTOR_SPECS),
     *_scalar_stream_descriptor_specs(),
+    _DescriptorSpec(
+        "MOV_alu_mv_mv_mv_scl",
+        f"{_TARGET_KEY}.read.core.id",
+        "read.core.id",
+        # The oracle has no CORE_ID-specific itinerary. Keep its scalar-move
+        # resource model instead of substituting a general-register read.
+        "II_MOV_alu_mv_mv_mv_scl",
+        storage_overrides=(("dst", "eR"), ("src", "mCoreID")),
+        implicit_inputs=("src",),
+        asm_mnemonic="mov.coreid",
+    ),
+    _DescriptorSpec(
+        "MOV_alu_mv_mv_mv_cntr2l",
+        f"{_TARGET_KEY}.read.tile.cycles",
+        "read.tile.cycles",
+        "II_MOV_alu_mv_mv_mv_cntr2l",
+        asm_mnemonic="mov.cycles",
+        # Each observation is distinct and ordered with memory/protocol
+        # effects. This does not impose a hardware completion fence.
+        effects=(Effect(EffectKind.BARRIER),),
+    ),
 )
