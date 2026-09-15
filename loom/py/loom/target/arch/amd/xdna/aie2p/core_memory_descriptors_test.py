@@ -22,8 +22,40 @@ from loom.target.low_descriptors import (
     ConstraintKind,
     EffectFlag,
     EffectKind,
+    MemorySpace,
     OperandFlag,
 )
+
+
+def test_lookup_loads_preserve_address_vectors_and_memory_effects() -> None:
+    descriptors = {
+        descriptor.key: descriptor
+        for descriptor in AIE2P_CORE_DESCRIPTOR_SET.descriptors
+    }
+    for width in (16, 32, 64):
+        for half in ("lo", "hi"):
+            descriptor = descriptors[f"amd.xdna.aie2p.load.b.lookup.4x{width}.{half}"]
+            assert descriptor.asm_forms[0].results == ("dst",)
+            assert descriptor.asm_forms[0].operands == ("src",)
+            assert [
+                operand.reg_alts[0].reg_class for operand in descriptor.operands
+            ] == [
+                "aie2p.vec256",
+                "aie2p.vec256",
+            ]
+            assert all(operand.unit_count == 1 for operand in descriptor.operands)
+            assert descriptor.operands[0].register_part is None
+            assert descriptor.operands[1].register_part == (
+                f"aie2p.vec256.{'low' if half == 'lo' else 'high'}128"
+            )
+            assert len(descriptor.effects) == 1
+            read = descriptor.effects[0]
+            assert read.kind is EffectKind.READ
+            assert read.memory_space is MemorySpace.WORKGROUP
+            assert read.width_bits == 256
+            assert read.flags == (EffectFlag.DEPENDENCY,)
+            assert read.producer_event == read.consumer_event
+            assert read.producer_event
 
 
 def test_fifo_load_descriptors_preserve_fifo_state_and_recurrence() -> None:

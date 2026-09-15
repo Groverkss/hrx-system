@@ -1,0 +1,40 @@
+// LUT pointers are carried in a vector, but gathers still read tile memory.
+// A possibly aliasing store prevents CSE across it for every selection mode.
+// RUN: with-low-asm pass low-cse,low-dce
+
+aie2p.target<core> @target
+
+low.func.def target<amd.xdna.aie2p.core>(@target) @lookup_memory(%addresses: reg<aie2p.vec256>, %pointer: reg<aie2p.ep>, %value: reg<aie2p.er>) -> (reg<aie2p.vec256>, reg<aie2p.vec256>, reg<aie2p.vec256>, reg<aie2p.vec256>, reg<aie2p.vec256>, reg<aie2p.vec256>, reg<aie2p.vec256>, reg<aie2p.vec256>, reg<aie2p.vec256>, reg<aie2p.vec256>, reg<aie2p.vec256>, reg<aie2p.vec256>) asm {
+  %before16lo = vldb.4x16.lo %addresses
+  %before16hi = vldb.4x16.hi %addresses
+  %before32lo = vldb.4x32.lo %addresses
+  %before32hi = vldb.4x32.hi %addresses
+  %before64lo = vldb.4x64.lo %addresses
+  %before64hi = vldb.4x64.hi %addresses
+  st %value, %pointer, 0
+  %after16lo = vldb.4x16.lo %addresses
+  %after16hi = vldb.4x16.hi %addresses
+  %after32lo = vldb.4x32.lo %addresses
+  %after32hi = vldb.4x32.hi %addresses
+  %after64lo = vldb.4x64.lo %addresses
+  %after64hi = vldb.4x64.hi %addresses
+  return %before16lo, %before16hi, %before32lo, %before32hi, %before64lo, %before64hi, %after16lo, %after16hi, %after32lo, %after32hi, %after64lo, %after64hi
+}
+
+// ====
+
+// Ordered gathers remain observable even when their results are unused.
+// RUN: with-low-asm pass low-cse,low-dce
+
+aie2p.target<core> @target
+
+low.func.def target<amd.xdna.aie2p.core>(@target) @ordered_lookup(%addresses: reg<aie2p.vec256>) asm {
+  %first = vldb.4x16.lo.volatile %addresses
+  %second = vldb.4x16.lo.volatile %addresses
+  %upper16 = vldb.4x16.hi.volatile %addresses
+  %lower32 = vldb.4x32.lo.volatile %addresses
+  %upper32 = vldb.4x32.hi.volatile %addresses
+  %lower64 = vldb.4x64.lo.volatile %addresses
+  %upper64 = vldb.4x64.hi.volatile %addresses
+  return
+}

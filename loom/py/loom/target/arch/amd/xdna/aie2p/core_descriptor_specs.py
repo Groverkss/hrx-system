@@ -1443,6 +1443,25 @@ _BASE_DESCRIPTOR_SPECS = (
         asm_mnemonic="vinsert.64.reg",
     ),
     *_vector_memory_descriptor_specs(),
+    # Each gather selects four pointers from one 256-bit vector and returns
+    # four 64-bit windows. The mode controls subword selection, not result
+    # width. The itinerary accounts for all load interfaces used by slot B.
+    *(
+        _DescriptorSpec(
+            f"VLDB_4x{width}_{half}",
+            f"{_TARGET_KEY}.load.b.lookup.4x{width}.{half}",
+            f"memory.load.lookup.4x{width}.{half}",
+            f"II_VLDB_4x{width}_{half}",
+            asm_mnemonic=f"vldb.4x{width}.{half}",
+            operand_register_parts=(
+                ("src", _VEC256_LOW128_PART if half == "lo" else _VEC256_HIGH128_PART),
+            ),
+            encoding_adapter_overrides=(("src", "OP_mWs"),),
+            memory_width_bits=256,
+        )
+        for width in (16, 32, 64)
+        for half in ("lo", "hi")
+    ),
     *_fifo_load_descriptor_specs(AIE2P_VECTOR_MEMORY_ELEMENT_TYPES),
     *_fifo_store_descriptor_specs(AIE2P_VECTOR_MEMORY_ELEMENT_TYPES),
     *_fifo_storage_descriptor_specs(),
