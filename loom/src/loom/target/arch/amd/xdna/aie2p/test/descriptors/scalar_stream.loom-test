@@ -1,0 +1,94 @@
+// Stream reads consume words even when their results are unused. Repeated
+// writes and the final packet marker are independently observable transfers.
+// RUN: with-low-asm pass low-cse,low-dce
+
+aie2p.target<core> @target
+
+low.func.def target<amd.xdna.aie2p.core>(@target) @request_and_reply(%request: reg<aie2p.er>) -> (reg<aie2p.er>) asm {
+  mov.ms %request
+  mov.ms %request
+  mov.ms.last %request
+  %discarded = mov.ss
+  %reply = mov.ss
+  return %reply
+}
+
+// ====
+
+// Status reads observe the architectural state written by each attempted
+// transfer. CSE may share an unchanged observation, but cannot cross a new
+// nonblocking transfer, including one with an unused payload result.
+// RUN: with-low-asm pass low-cse,low-dce
+
+aie2p.target<core> @target
+
+low.func.def target<amd.xdna.aie2p.core>(@target) @nonblocking_status(%request: reg<aie2p.er>) -> (reg<aie2p.er>, reg<aie2p.er>, reg<aie2p.er>, reg<aie2p.er>, reg<aie2p.er>) asm {
+  mov.ms.nb %request
+  %sent0 = mov.ms.status
+  %sent0_again = mov.ms.status
+  mov.ms.nb.last %request
+  %sent1 = mov.ms.status
+  %discarded0 = mov.ss.nb
+  %received0 = mov.ss.status
+  %discarded1 = mov.ss.nb
+  %received1 = mov.ss.status
+  return %sent0, %sent0_again, %sent1, %received0, %received1
+}
+
+// ----
+aie2p.target<core> @target
+
+low.func.def target<amd.xdna.aie2p.core>(@target) @nonblocking_status(%request: reg<aie2p.er>) -> (reg<aie2p.er>, reg<aie2p.er>, reg<aie2p.er>, reg<aie2p.er>, reg<aie2p.er>) asm {
+  mov.ms.nb %request
+  %sent0 = mov.ms.status
+  mov.ms.nb.last %request
+  %sent1 = mov.ms.status
+  %discarded0 = mov.ss.nb
+  %received0 = mov.ss.status
+  %discarded1 = mov.ss.nb
+  %received1 = mov.ss.status
+  return %sent0, %sent0, %sent1, %received0, %received1
+}
+
+// ====
+
+// Packet headers, control headers, and register-supplied packet termination
+// use distinct hardware encodings. Their order survives ordinary cleanup.
+// RUN: with-low-asm pass low-cse,low-dce
+
+aie2p.target<core> @target
+
+low.func.def target<amd.xdna.aie2p.core>(@target) @packet_headers(%id: reg<aie2p.er>, %address: reg<aie2p.em>, %last: reg<aie2p.mr28_tlast>) asm {
+  mov.ph %id, 3
+  mov.ph.last.reg %id, %last, 3
+  mov.ph.last %id, 3
+  mov.ph.nb %id, 3
+  mov.ph.nb.last.reg %id, %last, 3
+  mov.ph.nb.last %id, 3
+  mov.cph %address, %id, 2, 1
+  mov.cph.last.reg %address, %id, %last, 2, 1
+  mov.cph.last %address, %id, 2, 1
+  mov.cph.nb %address, %id, 2, 1
+  mov.cph.nb.last.reg %address, %id, %last, 2, 1
+  mov.cph.nb.last %address, %id, 2, 1
+  mov.ms.last.reg %id, %last
+  mov.ms.nb.last.reg %id, %last
+  return
+}
+
+// ====
+
+// Scalar stream writes accept every address-generation register bank in
+// addition to general scalar registers, with each bank's exact itinerary.
+// RUN: with-low-asm pass low-cse,low-dce
+
+aie2p.target<core> @target
+
+low.func.def target<amd.xdna.aie2p.core>(@target) @address_register_payloads(%pointer: reg<aie2p.ep>, %count: reg<aie2p.edc>, %index: reg<aie2p.edj>, %size: reg<aie2p.edn>, %modifier: reg<aie2p.em>) asm {
+  mov.ms.ep %pointer
+  mov.ms.edc %count
+  mov.ms.edj %index
+  mov.ms.edn %size
+  mov.ms.last.em %modifier
+  return
+}

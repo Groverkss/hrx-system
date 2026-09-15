@@ -11,7 +11,7 @@ from itertools import combinations
 
 import pytest
 
-from loom.target.arch.amd.xdna.aie.machine import has_property
+from loom.target.arch.amd.xdna.aie.machine import MachineOperandKind, has_property
 from loom.target.arch.amd.xdna.aie.schedule import (
     PipelineStageKind,
     pipeline_uses,
@@ -192,6 +192,7 @@ def test_core_descriptor_closure_is_complete() -> None:
                 ("aie2p.mr26_fifo_st", 1, 1),
                 ("aie2p.mr26_lock", 1, 1),
                 ("aie2p.mr27_select", 1, 1),
+                ("aie2p.mr28_tlast", 1, 1),
                 ("aie2p.mr29_insert", 1, 1),
                 ("aie2p.mr31_divs", 1, 1),
             ),
@@ -480,6 +481,81 @@ def test_lock_memory_timing_matches_aie2p_stall_and_resume_oracle() -> None:
 
     assert memory_spec_count != 0
     assert read_modify_write_spec_count != 0
+
+
+def test_scalar_stream_family_covers_native_forms_and_register_domains() -> None:
+    native_forms = {
+        form.name: form
+        for form in CORE_MACHINE_TABLE.forms
+        if {"srMS0", "srSS0"} & set(form.implicit_defs)
+    }
+    stream_specs = [
+        spec for spec in _DESCRIPTOR_SPECS if spec.form_name in native_forms
+    ]
+    assert {spec.form_name for spec in stream_specs} == native_forms.keys()
+    classes = {row.name: row for row in CORE_MACHINE_TABLE.register_classes}
+    adapters = {row.name: row for row in CORE_MACHINE_TABLE.register_adapters}
+    for form in native_forms.values():
+        for operand in (*form.outputs, *form.inputs):
+            if operand.kind is MachineOperandKind.IMMEDIATE:
+                continue
+            native_class = (
+                adapters[operand.type_name].register_class
+                if operand.kind is MachineOperandKind.REGISTER_ADAPTER
+                else operand.type_name
+            )
+            covered_registers = {
+                register
+                for spec in stream_specs
+                if spec.form_name == form.name
+                for register in classes[
+                    dict(spec.storage_overrides).get(operand.name, native_class)
+                ].candidates
+            }
+            assert covered_registers == set(classes[native_class].candidates), (
+                form.name,
+                operand.name,
+            )
+
+
+def test_scalar_stream_transfers_preserve_protocol_and_status_dependencies() -> None:
+    descriptors = {row.key: row for row in AIE2P_CORE_DESCRIPTOR_SET.descriptors}
+    classes = {row.name: row for row in AIE2P_CORE_DESCRIPTOR_SET.reg_classes}
+    separations = {
+        (row.producer_event, row.consumer_event): row.minimum_issue_separation_cycles
+        for row in AIE2P_CORE_DESCRIPTOR_SET.event_separations
+    }
+    source_adapter = next(
+        row
+        for row in CORE_MACHINE_TABLE.register_adapters
+        if row.name == "OP_mMvSclSrc"
+    )
+    source_encodings = dict(source_adapter.effective_register_encodings)
+    for spec in _DESCRIPTOR_SPECS:
+        form = _MACHINE_FORMS[spec.form_name]
+        status_registers = {"srMS0", "srSS0"} & set(form.implicit_defs)
+        if not status_registers:
+            continue
+        descriptor = descriptors[spec.key]
+        assert DescriptorFlag.SIDE_EFFECTING in descriptor.flags
+        assert DescriptorFlag.DEAD_REMOVABLE not in descriptor.flags
+        assert [effect.kind for effect in descriptor.effects] == [EffectKind.BARRIER]
+        assert _itinerary(spec).memory is None
+        register = next(iter(status_registers))
+        direction = "read" if register == "srSS0" else "write"
+        state_write = descriptor.operands[-1]
+        assert state_write.flags == (OperandFlag.IMPLICIT, OperandFlag.STATE_WRITE)
+        state_class = state_write.reg_alts[0].reg_class
+        assert classes[state_class].physical_registers == (register,)
+        status = descriptors[f"amd.xdna.aie2p.stream.{direction}.status"]
+        state_read = status.operands[-1]
+        assert state_read.flags == (OperandFlag.IMPLICIT, OperandFlag.STATE_READ)
+        assert state_read.reg_alts[0].reg_class == state_class
+        assert status.asm_forms[0].operands == ()
+        assert status.encoding_field_values[0].value == source_encodings[register]
+        assert separations[state_write.write_event, state_read.read_event] == (
+            8 if direction == "read" else 3
+        )
 
 
 def test_bundle_resources_exactly_model_every_extendable_physical_slot_set() -> None:

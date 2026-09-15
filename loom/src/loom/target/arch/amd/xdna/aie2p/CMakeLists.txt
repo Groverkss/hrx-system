@@ -464,6 +464,7 @@ loom_check_test_suite(
     "test/array_plan/worker_cycles.loom-test"
     "test/descriptors/fifo.loom-test"
     "test/descriptors/fused_vector_memory.loom-test"
+    "test/descriptors/scalar_stream.loom-test"
     "test/module_contracts.loom-test"
     "test/pipeline_composition.loom-test"
     "test/pipeline_ports.loom-test"

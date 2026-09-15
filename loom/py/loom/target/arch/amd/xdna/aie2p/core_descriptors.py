@@ -874,41 +874,41 @@ def _storage_continuation_operand(
     )
 
 
-def _implicit_output_storage(
+def _fixed_operand_storage(
     spec: descriptor_specs._DescriptorSpec,
     operand: MachineOperand,
 ) -> tuple[str, str]:
-    form = descriptor_specs._MACHINE_FORMS[spec.form_name]
-    if operand not in form.outputs:
-        raise ValueError(
-            f"{spec.form_name}.{operand.name}: implicit output is not a machine output"
-        )
     if operand.kind is MachineOperandKind.IMMEDIATE:
         raise ValueError(
-            f"{spec.form_name}.{operand.name}: implicit output must be a register"
+            f"{spec.form_name}.{operand.name}: fixed operand must be a register"
         )
     machine_class_name = _operand_storage_machine_class(spec, operand)
     machine_class = _MACHINE_CLASSES[machine_class_name]
     if len(machine_class.candidates) != 1:
         raise ValueError(
-            f"{spec.form_name}.{operand.name}: implicit output class "
+            f"{spec.form_name}.{operand.name}: fixed operand class "
             f"{machine_class_name} must name exactly one physical register"
         )
     return machine_class_name, machine_class.candidates[0]
 
 
-def _implicit_output_operand(
+def _fixed_operand(
     spec: descriptor_specs._DescriptorSpec,
     operand: MachineOperand,
 ) -> Operand:
-    """Models one fixed architectural output without producing Low SSA."""
+    """Models one fixed architectural register without a Low SSA value."""
 
-    machine_class_name, _ = _implicit_output_storage(spec, operand)
+    machine_class_name, _ = _fixed_operand_storage(spec, operand)
     form = descriptor_specs._MACHINE_FORMS[spec.form_name]
+    is_definition = operand in form.outputs
+    direction = "output" if is_definition else "input"
     operand_ordinal = _operand_ordinal(form, operand)
     read_stage, ready_stage = _operand_stages(spec, operand)
+    event = _register_timing_event(
+        spec, operand_ordinal, "write" if is_definition else "read"
+    )
     return Operand(
-        field_name=f"implicit_output_{operand.name}",
+        field_name=f"implicit_{direction}_{operand.name}",
         role=OperandRole.IMPLICIT,
         reg_alts=(
             RegClassAlt(
@@ -916,14 +916,18 @@ def _implicit_output_operand(
                 flags=(RegClassAltFlag.PHYSICAL_ONLY,),
             ),
         ),
-        flags=(OperandFlag.IMPLICIT, OperandFlag.STATE_WRITE),
+        flags=(
+            OperandFlag.IMPLICIT,
+            OperandFlag.STATE_WRITE if is_definition else OperandFlag.STATE_READ,
+        ),
         read_stage=read_stage,
         ready_stage=ready_stage,
-        write_event=_register_timing_event(spec, operand_ordinal, "write"),
+        read_event=None if is_definition else event,
+        write_event=event if is_definition else None,
     )
 
 
-def _implicit_output_encoding_field_values(
+def _fixed_operand_encoding_field_values(
     spec: descriptor_specs._DescriptorSpec,
     operands: tuple[MachineOperand, ...],
 ) -> tuple[EncodingFieldValue, ...]:
@@ -934,10 +938,10 @@ def _implicit_output_encoding_field_values(
         field = fields.get(operand.name)
         if field is None:
             continue
-        _, register_name = _implicit_output_storage(spec, operand)
+        _, register_name = _fixed_operand_storage(spec, operand)
         if operand.kind is not MachineOperandKind.REGISTER_ADAPTER:
             raise ValueError(
-                f"{spec.form_name}.{operand.name}: encoded implicit output must "
+                f"{spec.form_name}.{operand.name}: encoded fixed operand must "
                 "use a register adapter"
             )
         adapter = _MACHINE_ADAPTERS[operand.type_name]
@@ -1296,6 +1300,19 @@ def _descriptor(spec: descriptor_specs._DescriptorSpec) -> Descriptor:
     implicit_outputs = tuple(
         operand for operand in form.outputs if operand.name in spec.implicit_outputs
     )
+    if len(set(spec.implicit_inputs)) != len(spec.implicit_inputs):
+        raise ValueError(f"{form.name}: implicit input names must be unique")
+    unknown_implicit_inputs = set(spec.implicit_inputs) - {
+        operand.name for operand in form.inputs
+    }
+    if unknown_implicit_inputs:
+        raise ValueError(
+            f"{form.name}: implicit inputs name unknown machine inputs "
+            f"{sorted(unknown_implicit_inputs)}"
+        )
+    implicit_inputs = tuple(
+        operand for operand in form.inputs if operand.name in spec.implicit_inputs
+    )
     register_outputs = tuple(
         operand
         for operand in form.outputs
@@ -1306,6 +1323,7 @@ def _descriptor(spec: descriptor_specs._DescriptorSpec) -> Descriptor:
         operand
         for operand in form.inputs
         if operand.kind is not MachineOperandKind.IMMEDIATE
+        and operand.name not in spec.implicit_inputs
     )
     immediate_inputs = tuple(
         operand
@@ -1314,16 +1332,16 @@ def _descriptor(spec: descriptor_specs._DescriptorSpec) -> Descriptor:
     )
     explicit_register_operands = (*register_outputs, *register_inputs)
     storage_continuation = _storage_continuation_operand(spec, register_outputs)
-    tied_implicit_outputs = {
+    tied_fixed_operands = {
         name
         for tie in form.ties
         for name in (tie.definition, tie.use)
-        if name in spec.implicit_outputs
+        if name in (*spec.implicit_outputs, *spec.implicit_inputs)
     }
-    if tied_implicit_outputs:
+    if tied_fixed_operands:
         raise ValueError(
-            f"{form.name}: tied outputs cannot be implicit architectural outputs "
-            f"{sorted(tied_implicit_outputs)}"
+            f"{form.name}: tied operands cannot be implicit architectural operands "
+            f"{sorted(tied_fixed_operands)}"
         )
     physical_mnemonic = spec.asm_mnemonic or descriptor_specs._ASM_MNEMONIC_BY_FORM.get(
         spec.form_name, form.assembly.split("\t", 1)[0].strip()
@@ -1345,14 +1363,17 @@ def _descriptor(spec: descriptor_specs._DescriptorSpec) -> Descriptor:
                 for operand in register_inputs
             ),
             *((storage_continuation,) if storage_continuation is not None else ()),
-            *(_implicit_output_operand(spec, operand) for operand in implicit_outputs),
+            *(
+                _fixed_operand(spec, operand)
+                for operand in (*implicit_outputs, *implicit_inputs)
+            ),
             *_implicit_operands(spec),
         ),
         immediates=tuple(
             _immediate(spec.form_name, operand) for operand in immediate_inputs
         ),
-        encoding_field_values=_implicit_output_encoding_field_values(
-            spec, implicit_outputs
+        encoding_field_values=_fixed_operand_encoding_field_values(
+            spec, (*implicit_outputs, *implicit_inputs)
         ),
         schedule_class=_SCHEDULE_CLASS_NAMES[(spec.form_name, spec.itinerary)],
         schedule_alternatives=spec.schedule_alternatives,
