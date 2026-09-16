@@ -966,6 +966,15 @@ _BASE_DESCRIPTOR_SPECS = (
         allocation_move=True,
     ),
     _DescriptorSpec(
+        "VMOV_alu_mv_mv_ex",
+        f"{_TARGET_KEY}.move.bfp576",
+        "register.move.bfp576",
+        "II_VMOV_alu_mv_mv_ex",
+        storage_overrides=(("dst", "mEXa"), ("src", "mEXa")),
+        asm_mnemonic="vmov.bfp576",
+        allocation_move=True,
+    ),
+    _DescriptorSpec(
         "VMUL_f_vmul_bf_vmul_bf_core_Y_Y",
         f"{_TARGET_KEY}.matrix.multiply.bf16bf16.m8n8k1.configured",
         "matrix.multiply.bf16bf16.m8n8k1.configured",

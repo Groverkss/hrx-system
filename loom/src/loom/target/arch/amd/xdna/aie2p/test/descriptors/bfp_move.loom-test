@@ -1,0 +1,17 @@
+// Packed BFP moves preserve the whole mantissa and exponent value. Equal
+// copies merge; independent packed inputs stay distinct.
+// RUN: with-low-asm pass low-cse,low-dce
+
+low.func.def target<amd.xdna.aie2p.core> @copy_packed(%left: reg<aie2p.mexa>, %right: reg<aie2p.mexa>) -> (reg<aie2p.mexa>, reg<aie2p.mexa>, reg<aie2p.mexa>) asm {
+  %first = vmov.bfp576 %left
+  %repeated = vmov.bfp576 %left
+  %other = vmov.bfp576 %right
+  return %first, %repeated, %other
+}
+
+// ----
+low.func.def target<amd.xdna.aie2p.core> @copy_packed(%left: reg<aie2p.mexa>, %right: reg<aie2p.mexa>) -> (reg<aie2p.mexa>, reg<aie2p.mexa>, reg<aie2p.mexa>) asm {
+  %first = vmov.bfp576 %left
+  %other = vmov.bfp576 %right
+  return %first, %first, %other
+}
