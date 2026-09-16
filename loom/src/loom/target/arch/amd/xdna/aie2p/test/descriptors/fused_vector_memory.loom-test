@@ -28,3 +28,53 @@ low.func.def retain target<amd.xdna.aie2p.core>(@target) @fused_vector_memory(%p
   vst.pack.x.trunc.index %vector1024, %pointer, %index
   return %bf16x16, %bf16x32, %signed_i16, %unsigned_i8
 }
+
+// ====
+
+// Fused BF16 conversion preserves both independent pointer/count recurrences.
+// RUN: with-low-asm pass low-cse,low-dce
+
+low.func.def target<amd.xdna.aie2p.core> @conversion_dimensions(%input: reg<aie2p.ep>, %output: reg<aie2p.ep>, %volume: reg<aie2p.eds>, %rows: reg<aie2p.ed>) -> (reg<aie2p.eds>, reg<aie2p.ed>) asm {
+  set.rounding 12
+  %value, %input1, %volume1 = vlda.convert.bf16x32.to.f32x32.3d %input, %volume
+  %output1, %rows1 = vst.convert.f32x32.to.bf16x32.2d %value, %output, %rows
+  return %volume1, %rows1
+}
+
+// ====
+
+// Nibble conversion keeps packed memory widths and the full expanded Y value.
+// RUN: with-low-asm pass low-cse,low-dce
+
+low.func.def target<amd.xdna.aie2p.core> @unpack_dimensions(%input: reg<aie2p.ep>, %output: reg<aie2p.ep>, %volume: reg<aie2p.eds>, %rows: reg<aie2p.ed>) -> (reg<aie2p.eds>, reg<aie2p.ed>) asm {
+  set.unpack-size 0
+  set.pack-size 0
+  set.saturation 0
+  %value, %input1, %volume1 = vldb.unpack.u4.to.u8x128.3d %input, %volume
+  %output1, %rows1 = vst.pack.x.trunc.2d %value, %output, %rows
+  return %volume1, %rows1
+}
+
+// ====
+
+// UPS retains its configured shift and full four-unit accumulator result.
+// RUN: with-low-asm pass low-cse,low-dce
+
+low.func.def target<amd.xdna.aie2p.core> @widen_dimensions(%input: reg<aie2p.ep>, %volume: reg<aie2p.eds>, %shift: reg<aie2p.es>) -> (reg<aie2p.mbms x4>, reg<aie2p.eds>) asm {
+  set.ups-mode 1
+  set.saturation 0
+  %value, %input1, %volume1 = vlda.ups.4x.x-to-d.signed.3d %shift, %input, %volume
+  return %value, %volume1
+}
+
+// ====
+
+// Fused post-increment retains its data conversion and signed pointer updates.
+// RUN: with-low-asm pass low-cse,low-dce
+
+low.func.def target<amd.xdna.aie2p.core> @conversion_postincrement(%input: reg<aie2p.ep>, %output: reg<aie2p.ep>, %modifier: reg<aie2p.em>) -> (reg<aie2p.ep>, reg<aie2p.ep>) asm {
+  set.rounding 12
+  %value, %input1 = vlda.convert.bf16x16.to.f32x16.post.modifier %input, %modifier
+  %output1 = vst.convert.f32x16.to.bf16x16.post %value, %output, -32
+  return %input1, %output1
+}

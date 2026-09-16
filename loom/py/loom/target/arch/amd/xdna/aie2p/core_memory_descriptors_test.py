@@ -668,3 +668,45 @@ def test_accumulator_address_updates_retain_raw_storage() -> None:
             not operand.field_name.startswith("implicit_")
             for operand in descriptor.operands
         )
+
+
+def test_fused_address_updates_preserve_numeric_storage_and_state() -> None:
+    descriptors = {row.key: row for row in AIE2P_CORE_DESCRIPTOR_SET.descriptors}
+    for key, indexed in descriptors.items():
+        if not key.endswith(".indexed.register") or not key.startswith(
+            (
+                "amd.xdna.aie2p.load.convert.",
+                "amd.xdna.aie2p.load.unpack.",
+                "amd.xdna.aie2p.load.widen.",
+                "amd.xdna.aie2p.store.convert.",
+                "amd.xdna.aie2p.store.pack.",
+            )
+        ):
+            continue
+        numeric_operands = {
+            operand.field_name: operand
+            for operand in indexed.operands
+            if operand.field_name not in ("ptr", "dj")
+        }
+        for addressing in (
+            "postincrement.immediate",
+            "postincrement.register",
+            "2d",
+            "3d",
+        ):
+            updated = descriptors[
+                f"{key.removesuffix('.indexed.register')}.{addressing}"
+            ]
+            assert updated.semantic_tag == indexed.semantic_tag
+            assert updated.effects == indexed.effects
+            numeric_fields = set()
+            for operand in updated.operands:
+                if operand.field_name in ("ptr", "ptr_out", "mod", "dc", "dcl"):
+                    continue
+                original = numeric_operands[operand.field_name]
+                assert operand.reg_alts == original.reg_alts
+                assert operand.unit_count == original.unit_count
+                assert operand.register_part == original.register_part
+                assert operand.flags == original.flags
+                numeric_fields.add(operand.field_name)
+            assert numeric_fields == numeric_operands.keys()
