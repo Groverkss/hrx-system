@@ -242,6 +242,35 @@ def _packed_dot_descriptor_specs() -> tuple[_DescriptorSpec, ...]:
     )
 
 
+def _dense_integer_matrix_descriptor_specs() -> tuple[_DescriptorSpec, ...]:
+    """Exposes full integer matrix operands with native scalar mode controls."""
+
+    return tuple(
+        _DescriptorSpec(
+            f"{native}_vmul_cm_core_{left}_{right}",
+            f"{_TARGET_KEY}.matrix.{operation}.integer.{shape}.configured",
+            f"matrix.{operation}.integer.{shape}.configured",
+            f"II_{native}_vmul_cm_core_{left}_{right}",
+            storage_overrides=(
+                ("dst", "mBMs"),
+                *accumulator_storage,
+                ("s1", "VEC256"),
+                ("s2", "VEC256"),
+            ),
+            asm_mnemonic=f"{mnemonic}.integer.{shape}",
+        )
+        for operation, native, mnemonic, accumulator_storage in (
+            ("multiply", "VMUL", "mmul", ()),
+            ("negative-multiply", "VNEGMUL", "mnegmul", ()),
+            ("accumulate", "VMAC", "mma", (("acc1", "mBMs"),)),
+            ("subtract-product", "VMSC", "mms", (("acc1", "mBMs"),)),
+        )
+        for left in ("X", "Y")
+        for right in ("X", "Y")
+        for shape in (f"{left.lower()}-{right.lower()}",)
+    )
+
+
 def _packed_i4_unpack_descriptor_specs() -> tuple[_DescriptorSpec, ...]:
     """Selects native signed and unsigned 4-to-8-bit unpack forms."""
 
@@ -1053,6 +1082,7 @@ _BASE_DESCRIPTOR_SPECS = (
         asm_mnemonic="acc.clear.f32x64",
     ),
     *_integer_matrix_descriptor_specs(),
+    *_dense_integer_matrix_descriptor_specs(),
     _DescriptorSpec(
         "VCONV_bfp16ebs8_fp32",
         f"{_TARGET_KEY}.convert.f32x64.bfp16ebs8",

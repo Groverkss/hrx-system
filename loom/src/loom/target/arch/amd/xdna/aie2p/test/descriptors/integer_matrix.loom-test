@@ -1,0 +1,41 @@
+// Native controls select integer width, signedness and matrix layout. The same
+// vector sources with different controls produce independently observable values.
+// RUN: with-low-asm pass low-cse,low-dce
+
+low.func.def target<amd.xdna.aie2p.core> @matrix_modes(%left: reg<aie2p.vec256 x2>, %right: reg<aie2p.vec256 x4>, %mode0: reg<aie2p.er>, %mode1: reg<aie2p.er>) -> (reg<aie2p.mbms x4>, reg<aie2p.mbms x4>) asm {
+  %product0 = mmul.integer.x-y %left, %right, %mode0
+  %product1 = mmul.integer.x-y %left, %right, %mode1
+  return %product0, %product1
+}
+
+// ====
+
+// Accumulating and subtracting read complete 2048-bit values without
+// destroying the accumulator identity shared by independent matrix operations.
+// RUN: with-low-asm pass low-cse,low-dce
+
+low.func.def target<amd.xdna.aie2p.core> @accumulator_identity(%left: reg<aie2p.vec256 x4>, %right: reg<aie2p.vec256 x2>, %accumulator: reg<aie2p.mbms x4>, %mode: reg<aie2p.er>) -> (reg<aie2p.mbms x4>, reg<aie2p.mbms x4>, reg<aie2p.mbms x4>) asm {
+  %added = mma.integer.y-x %accumulator, %left, %right, %mode
+  %subtracted = mms.integer.y-x %accumulator, %left, %right, %mode
+  return %accumulator, %added, %subtracted
+}
+
+// ====
+
+// The untyped native forms preserve the entire vector and accumulator storage;
+// matching operands can share a product while its negation remains distinct.
+// RUN: with-low-asm pass low-cse,low-dce
+
+low.func.def target<amd.xdna.aie2p.core> @matrix_products(%left: reg<aie2p.vec256 x4>, %right: reg<aie2p.vec256 x4>, %mode: reg<aie2p.er>) -> (reg<aie2p.mbms x4>, reg<aie2p.mbms x4>, reg<aie2p.mbms x4>) asm {
+  %product = mmul.integer.y-y %left, %right, %mode
+  %repeated = mmul.integer.y-y %left, %right, %mode
+  %negative = mnegmul.integer.y-y %left, %right, %mode
+  return %product, %repeated, %negative
+}
+
+// ----
+low.func.def target<amd.xdna.aie2p.core> @matrix_products(%left: reg<aie2p.vec256 x4>, %right: reg<aie2p.vec256 x4>, %mode: reg<aie2p.er>) -> (reg<aie2p.mbms x4>, reg<aie2p.mbms x4>, reg<aie2p.mbms x4>) asm {
+  %product = mmul.integer.y-y %left, %right, %mode
+  %negative = mnegmul.integer.y-y %left, %right, %mode
+  return %product, %product, %negative
+}
