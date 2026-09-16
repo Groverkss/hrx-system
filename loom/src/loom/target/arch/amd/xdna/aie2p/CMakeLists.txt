@@ -468,6 +468,7 @@ loom_check_test_suite(
     "test/descriptors/fifo.loom-test"
     "test/descriptors/fused_vector_memory.loom-test"
     "test/descriptors/implicit_clobbers.loom-test"
+    "test/descriptors/integer_comparison.loom-test"
     "test/descriptors/integer_matrix.loom-test"
     "test/descriptors/integer_narrowing.loom-test"
     "test/descriptors/lookup_memory.loom-test"

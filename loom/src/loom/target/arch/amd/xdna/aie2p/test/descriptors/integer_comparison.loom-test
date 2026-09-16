@@ -1,0 +1,85 @@
+// Native byte masks keep both scalar units through CSE and selection. Signed
+// and unsigned comparisons remain distinct even though they share operands.
+// RUN: with-low-asm pass low-cse,low-dce
+
+low.func.def target<amd.xdna.aie2p.core> @byte_masks(%left: reg<aie2p.vec256 x2>, %right: reg<aie2p.vec256 x2>) -> (reg<aie2p.er x2>, reg<aie2p.er x2>, reg<aie2p.vec256 x2>) asm {
+  %signed_less = vlt.s8x64.native %left, %right
+  %unsigned_less = vlt.u8x64.native %left, %right
+  %repeated = vlt.s8x64.native %left, %right
+  %selected = vsel.8.native %left, %right, %repeated
+  return %signed_less, %unsigned_less, %selected
+}
+
+// ----
+low.func.def target<amd.xdna.aie2p.core> @byte_masks(%left: reg<aie2p.vec256 x2>, %right: reg<aie2p.vec256 x2>) -> (reg<aie2p.er x2>, reg<aie2p.er x2>, reg<aie2p.vec256 x2>) asm {
+  %signed_less = vlt.s8x64.native %left, %right
+  %unsigned_less = vlt.u8x64.native %left, %right
+  %selected = vsel.8.native %left, %right, %signed_less
+  return %signed_less, %unsigned_less, %selected
+}
+
+// ====
+
+// Narrow native comparisons expose eRS16 masks directly to vector selection.
+// Their complete register domain includes odd registers as well as even ones.
+// RUN: with-low-asm pass low-cse,low-dce
+
+low.func.def target<amd.xdna.aie2p.core> @halfword_masks(%left: reg<aie2p.vec256 x2>, %right: reg<aie2p.vec256 x2>) -> (reg<aie2p.ers16>, reg<aie2p.vec256 x2>) asm {
+  %zero = veqz.16.native %left
+  %repeated = veqz.16.native %left
+  %selected = vsel.16.native %left, %right, %repeated
+  return %zero, %selected
+}
+
+// ----
+low.func.def target<amd.xdna.aie2p.core> @halfword_masks(%left: reg<aie2p.vec256 x2>, %right: reg<aie2p.vec256 x2>) -> (reg<aie2p.ers16>, reg<aie2p.vec256 x2>) asm {
+  %zero = veqz.16.native %left
+  %selected = vsel.16.native %left, %right, %zero
+  return %zero, %selected
+}
+
+// ====
+
+// Fused integer CSE forwards both results. Independent copies retain mask
+// identities across a later operation writing the same fixed l8 register.
+// RUN: with-low-asm pass low-cse,low-dce
+
+low.func.def target<amd.xdna.aie2p.core> @fused_masks(%value: reg<aie2p.vec256 x2>) -> (reg<aie2p.vec256 x2>, reg<aie2p.elpredicate>, reg<aie2p.vec256 x2>, reg<aie2p.elpredicate>, reg<aie2p.vec256 x2>, reg<aie2p.elpredicate>) asm {
+  %negative, %gtz = vneg_gtz.8 %value
+  %positive = copy %gtz : reg<aie2p.ml8m> -> reg<aie2p.elpredicate>
+  %inverted, %ltz = vbneg_ltz.s8 %value
+  %negative_mask = copy %ltz : reg<aie2p.ml8m> -> reg<aie2p.elpredicate>
+  %repeated_negative, %repeated_gtz = vneg_gtz.8 %value
+  %repeated_positive = copy %repeated_gtz : reg<aie2p.ml8m> -> reg<aie2p.elpredicate>
+  return %negative, %positive, %inverted, %negative_mask, %repeated_negative, %repeated_positive
+}
+
+// ----
+low.func.def target<amd.xdna.aie2p.core> @fused_masks(%value: reg<aie2p.vec256 x2>) -> (reg<aie2p.vec256 x2>, reg<aie2p.elpredicate>, reg<aie2p.vec256 x2>, reg<aie2p.elpredicate>, reg<aie2p.vec256 x2>, reg<aie2p.elpredicate>) asm {
+  %negative, %gtz = vneg_gtz.8 %value
+  %positive = copy %gtz : reg<aie2p.ml8m> -> reg<aie2p.elpredicate>
+  %inverted, %ltz = vbneg_ltz.s8 %value
+  %negative_mask = copy %ltz : reg<aie2p.ml8m> -> reg<aie2p.elpredicate>
+  %repeated_positive = copy %gtz : reg<aie2p.ml8m> -> reg<aie2p.elpredicate>
+  return %negative, %positive, %inverted, %negative_mask, %negative, %repeated_positive
+}
+
+// ====
+
+// Subtraction produces both the modular result and the selected comparison.
+// CSE retains the comparison relation while forwarding duplicate result pairs.
+// RUN: with-low-asm pass low-cse,low-dce
+
+low.func.def target<amd.xdna.aie2p.core> @subtract_masks(%left: reg<aie2p.vec256 x2>, %right: reg<aie2p.vec256 x2>) -> (reg<aie2p.vec256 x2>, reg<aie2p.mr16_vcompare>, reg<aie2p.vec256 x2>, reg<aie2p.mr16_vcompare>, reg<aie2p.vec256 x2>, reg<aie2p.mr16_vcompare>) asm {
+  %less_difference, %less = vsub_lt.s32x16 %left, %right
+  %greater_difference, %greater = vsub_ge.s32x16 %left, %right
+  %repeated_difference, %repeated_less = vsub_lt.s32x16 %left, %right
+  return %less_difference, %less, %greater_difference, %greater, %repeated_difference, %repeated_less
+}
+
+// ----
+low.func.def target<amd.xdna.aie2p.core> @subtract_masks(%left: reg<aie2p.vec256 x2>, %right: reg<aie2p.vec256 x2>) -> (reg<aie2p.vec256 x2>, reg<aie2p.mr16_vcompare>, reg<aie2p.vec256 x2>, reg<aie2p.mr16_vcompare>, reg<aie2p.vec256 x2>, reg<aie2p.mr16_vcompare>) asm {
+  %less_difference, %less = vsub_lt.s32x16 %left, %right
+  %greater_difference, %greater = vsub_ge.s32x16 %left, %right
+  return %less_difference, %less, %greater_difference, %greater, %less_difference, %less
+}

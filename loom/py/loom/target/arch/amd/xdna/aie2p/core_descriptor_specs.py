@@ -20,6 +20,7 @@ from loom.target.arch.amd.xdna.aie2p.core_address_descriptors import (
 )
 from loom.target.arch.amd.xdna.aie2p.core_comparison_descriptors import (
     BF16_COMPARISON_DESCRIPTOR_SPECS,
+    INTEGER_COMPARISON_DESCRIPTOR_SPECS,
     INTEGER_EXTREMA_DESCRIPTOR_SPECS,
     PREDICATE_DESCRIPTOR_SPECS,
     PREDICATE_REGISTER_PARTS,
@@ -1167,6 +1168,7 @@ _BASE_DESCRIPTOR_SPECS = (
     ),
     *PREDICATE_DESCRIPTOR_SPECS,
     *BF16_COMPARISON_DESCRIPTOR_SPECS,
+    *INTEGER_COMPARISON_DESCRIPTOR_SPECS,
     _DescriptorSpec(
         "VEXTBCST_8_vec_extract_broadcast_imm",
         f"{_TARGET_KEY}.broadcast.i8x64.from-vector",

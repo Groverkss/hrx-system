@@ -194,3 +194,79 @@ BF16_COMPARISON_DESCRIPTOR_SPECS = tuple(
         ("VMIN_GE_bf16", "min.ge"),
     )
 )
+
+# Native standalone masks use every eL or eRS16 candidate. Fused arithmetic
+# exposes both its vector and fixed mask results; ordinary Low copies preserve
+# a mask when a subsequent fused operation needs the same physical register.
+INTEGER_COMPARISON_DESCRIPTOR_SPECS = (
+    *(
+        _DescriptorSpec(
+            f"VEQZ_{width}",
+            f"{_TARGET_KEY}.cmp.eqz.i{width}x{512 // width}.native",
+            f"integer.cmp.eqz.i{width}x{512 // width}.native",
+            f"II_VEQZ_{width}",
+            asm_mnemonic=f"veqz.{width}.native",
+        )
+        for width in (8, 16, 32)
+    ),
+    *(
+        _DescriptorSpec(
+            f"V{relation.upper()}_{width}_vaddSign{sign_bit}",
+            f"{_TARGET_KEY}.cmp.{relation}.{signedness}.i{width}x{512 // width}.native",
+            f"integer.cmp.{relation}.{signedness}.i{width}x{512 // width}.native",
+            f"II_V{relation.upper()}_{width}_vaddSign{sign_bit}",
+            asm_mnemonic=f"v{relation}.{sign}{width}x{512 // width}.native",
+        )
+        for width in (8, 16, 32)
+        for relation in ("lt", "ge")
+        for signedness, sign, sign_bit in (("signed", "s", 1), ("unsigned", "u", 0))
+    ),
+    *(
+        _DescriptorSpec(
+            f"VSEL_{width}",
+            f"{_TARGET_KEY}.select.i{width}x{512 // width}.native",
+            f"integer.select.i{width}x{512 // width}.native",
+            f"II_VSEL_{width}",
+            asm_mnemonic=f"vsel.{width}.native",
+        )
+        for width in (8, 16)
+    ),
+    *(
+        _DescriptorSpec(
+            f"V{operation.upper()}_{relation.upper()}_{width}_vaddSign{sign_bit}",
+            (
+                f"{_TARGET_KEY}.{operation}.{relation}.{signedness}."
+                f"i{width}x{512 // width}.native"
+            ),
+            (
+                f"integer.{operation}.{relation}.{signedness}."
+                f"i{width}x{512 // width}.native"
+            ),
+            f"II_V{operation.upper()}_{relation.upper()}_{width}_vaddSign{sign_bit}",
+            asm_mnemonic=f"v{operation}_{relation}.{sign}{width}x{512 // width}",
+        )
+        for width in (8, 16, 32)
+        for operation, relation in (
+            ("min", "ge"),
+            ("max", "lt"),
+            ("maxdiff", "lt"),
+            ("sub", "lt"),
+            ("sub", "ge"),
+            ("abs", "gtz"),
+        )
+        for signedness, sign, sign_bit in (("signed", "s", 1), ("unsigned", "u", 0))
+    ),
+    *(
+        _DescriptorSpec(
+            form.format(width=width),
+            f"{_TARGET_KEY}.{operation}.{relation}.i{width}x{512 // width}.native",
+            f"integer.{operation}.{relation}.i{width}x{512 // width}.native",
+            f"II_{form.format(width=width)}",
+        )
+        for width in (8, 16, 32)
+        for form, operation, relation in (
+            ("VNEG_GTZ_{width}", "neg", "gtz"),
+            ("VBNEG_LTZ_s{width}", "bitnot", "ltz"),
+        )
+    ),
+)
