@@ -180,9 +180,9 @@ static bool loom_test_signature_type_matches(
           call_data->result_count != callee_data->result_count) {
         return false;
       }
-      uint16_t nested_type_count =
-          (uint16_t)(callee_data->arg_count + callee_data->result_count);
-      for (uint16_t i = 0; i < nested_type_count; ++i) {
+      iree_host_size_t nested_type_count =
+          (iree_host_size_t)callee_data->arg_count + callee_data->result_count;
+      for (iree_host_size_t i = 0; i < nested_type_count; ++i) {
         if (!loom_test_signature_type_matches(signature, call_op,
                                               call_data->types[i],
                                               callee_data->types[i])) {

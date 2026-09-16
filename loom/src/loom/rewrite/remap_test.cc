@@ -7,6 +7,7 @@
 #include "loom/rewrite/remap.h"
 
 #include <cstring>
+#include <vector>
 
 #include "iree/base/internal/arena.h"
 #include "iree/testing/gtest.h"
@@ -93,6 +94,40 @@ TEST_F(RemapTest, RemapsDynamicDimsAndSsaEncodingRefs) {
   EXPECT_EQ(loom_type_dim_value_id_at(target_type, 0), target_dim);
   ASSERT_TRUE(loom_type_has_ssa_encoding(target_type));
   EXPECT_EQ(loom_type_encoding_value_id(target_type), target_layout);
+}
+
+TEST_F(RemapTest, RemapsFullFunctionTypeSequence) {
+  const auto index_type = loom_type_scalar(LOOM_SCALAR_TYPE_INDEX);
+  const auto source_dimension = DefineValue(source_, index_type);
+  DefineValue(target_, index_type);
+  const auto target_dimension = DefineValue(target_, index_type);
+  ASSERT_NE(source_dimension, target_dimension);
+  std::vector<loom_type_t> arguments(UINT16_MAX, index_type);
+  const loom_type_t results[] = {
+      index_type,
+      loom_type_shaped_1d(LOOM_TYPE_VECTOR, LOOM_SCALAR_TYPE_F32,
+                          loom_dim_pack_dynamic(source_dimension), 0),
+  };
+  loom_type_t source_type = {};
+  IREE_ASSERT_OK(loom_module_intern_function_type(
+      source_, arguments.data(), UINT16_MAX, results, IREE_ARRAYSIZE(results),
+      &source_type));
+  auto remap = InitializeRemap();
+  IREE_ASSERT_OK(
+      loom_ir_remap_map_value(&remap, source_dimension, target_dimension));
+  loom_type_t target_type = {};
+  IREE_ASSERT_OK(loom_ir_remap_type(&remap, source_type, &target_type));
+
+  ASSERT_EQ(loom_type_func_arg_count(target_type), UINT16_MAX);
+  ASSERT_EQ(loom_type_func_result_count(target_type), IREE_ARRAYSIZE(results));
+  EXPECT_NE(loom_type_func_data(source_type), loom_type_func_data(target_type));
+  const auto* target_arguments = loom_type_func_arg_types(target_type);
+  for (iree_host_size_t i = 0; i < arguments.size(); ++i) {
+    EXPECT_TRUE(loom_type_equal(target_arguments[i], index_type));
+  }
+  const auto* target_results = loom_type_func_result_types(target_type);
+  EXPECT_TRUE(loom_type_equal(target_results[0], index_type));
+  EXPECT_EQ(loom_type_dim_value_id_at(target_results[1], 0), target_dimension);
 }
 
 TEST_F(RemapTest, RemapsRegisterValueTypesAcrossModules) {

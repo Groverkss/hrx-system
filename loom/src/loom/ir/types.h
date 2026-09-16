@@ -405,12 +405,17 @@ static_assert(sizeof(loom_register_type_data_t) == 40,
 //   types[0 .. arg_count-1]                      = argument types
 //   types[arg_count .. arg_count+result_count-1]  = result types
 //
-// The embedded types are stored by value (not interned) because they
-// may carry SSA-specific dim bindings that differ per use site.
+// The embedded types are stored by value, not as module type indices, because
+// they may carry SSA-specific dim bindings that differ per use site. Argument
+// and result counts are independently bounded; their sum can exceed UINT16_MAX.
 typedef struct loom_func_type_data_t {
+  // Number of argument entries at the beginning of types.
   uint16_t arg_count;
+  // Number of result entries following the arguments.
   uint16_t result_count;
-  uint32_t reserved;  // Padding for loom_type_t alignment (8 bytes).
+  // Zero padding for loom_type_t alignment (8 bytes).
+  uint32_t reserved;
+  // Contiguous argument and result types, up to 2 * UINT16_MAX entries.
   loom_type_t types[];
 } loom_func_type_data_t;
 

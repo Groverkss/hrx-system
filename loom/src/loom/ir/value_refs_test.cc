@@ -128,6 +128,38 @@ class ValueRefsTest : public ::testing::Test {
   loom_builder_t builder_ = {};
 };
 
+TEST_F(ValueRefsTest, ReplacesReferenceAfterFullFunctionArgumentSequence) {
+  const auto index_type = loom_type_scalar(LOOM_SCALAR_TYPE_INDEX);
+  loom_value_id_t source_dimension = LOOM_VALUE_ID_INVALID;
+  loom_value_id_t target_dimension = LOOM_VALUE_ID_INVALID;
+  IREE_ASSERT_OK(
+      loom_module_define_value(module_, index_type, &source_dimension));
+  IREE_ASSERT_OK(
+      loom_module_define_value(module_, index_type, &target_dimension));
+  std::vector<loom_type_t> arguments(UINT16_MAX, index_type);
+  const auto result_type =
+      loom_type_shaped_1d(LOOM_TYPE_VECTOR, LOOM_SCALAR_TYPE_F32,
+                          loom_dim_pack_dynamic(source_dimension), 0);
+  loom_type_t original = {};
+  IREE_ASSERT_OK(loom_module_intern_function_type(
+      module_, arguments.data(), UINT16_MAX, &result_type, 1, &original));
+  loom_type_t replaced = {};
+  bool changed = false;
+  IREE_ASSERT_OK(loom_module_replace_type_value_references(
+      module_, original, source_dimension, target_dimension, &replaced,
+      &changed));
+
+  EXPECT_TRUE(changed);
+  ASSERT_EQ(loom_type_func_arg_count(replaced), UINT16_MAX);
+  ASSERT_EQ(loom_type_func_result_count(replaced), 1u);
+  EXPECT_EQ(
+      loom_type_dim_value_id_at(loom_type_func_result_types(replaced)[0], 0),
+      target_dimension);
+  EXPECT_EQ(
+      loom_type_dim_value_id_at(loom_type_func_result_types(original)[0], 0),
+      source_dimension);
+}
+
 TEST_F(ValueRefsTest, SubtreeWalkIncludesOperandTypeAndPredicateAttributes) {
   const loom_value_id_t input = Constant(1);
   const loom_value_id_t width = Constant(16);

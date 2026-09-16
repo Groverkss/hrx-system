@@ -6,6 +6,8 @@
 
 #include "loom/ir/types.h"
 
+#include <vector>
+
 #include "iree/testing/gtest.h"
 #include "iree/testing/status_matchers.h"
 #include "loom/ir/context.h"
@@ -64,6 +66,38 @@ TEST(TypesTest, FunctionTypeEqualAndHashAreStructural) {
   EXPECT_TRUE(loom_type_equal(first.get(), duplicate.get()));
   EXPECT_EQ(loom_type_hash(first.get()), loom_type_hash(duplicate.get()));
   EXPECT_FALSE(loom_type_equal(first.get(), different.get()));
+}
+
+TEST(TypesTest, FunctionTypeQueriesPreserveCombinedArity) {
+  const auto argument_type = loom_type_scalar(LOOM_SCALAR_TYPE_I32);
+  const auto result_type = loom_type_scalar(LOOM_SCALAR_TYPE_F32);
+  std::vector<loom_type_t> arguments(UINT16_MAX, argument_type);
+  std::vector<loom_type_t> results(UINT16_MAX, result_type);
+  const uint16_t counts[][2] = {
+      {UINT16_MAX - 1, 1},
+      {UINT16_MAX, 1},
+      {UINT16_MAX, 2},
+      {UINT16_MAX, UINT16_MAX},
+  };
+  for (const auto& count : counts) {
+    SCOPED_TRACE(::testing::Message()
+                 << count[0] << " arguments, " << count[1] << " results");
+    auto first =
+        BuildFunctionType(arguments.data(), count[0], results.data(), count[1]);
+    auto duplicate =
+        BuildFunctionType(arguments.data(), count[0], results.data(), count[1]);
+    results[count[1] - 1] = loom_type_scalar(LOOM_SCALAR_TYPE_F64);
+    auto different =
+        BuildFunctionType(arguments.data(), count[0], results.data(), count[1]);
+    results[count[1] - 1] = result_type;
+
+    EXPECT_TRUE(loom_type_equal(first.get(), duplicate.get()));
+    EXPECT_EQ(loom_type_hash(first.get()), loom_type_hash(duplicate.get()));
+    EXPECT_FALSE(loom_type_equal(first.get(), different.get()));
+    EXPECT_NE(loom_type_hash(first.get()), loom_type_hash(different.get()));
+    EXPECT_EQ(loom_type_func_arg_count(first.get()), count[0]);
+    EXPECT_EQ(loom_type_func_result_count(first.get()), count[1]);
+  }
 }
 
 TEST(TypesTest, DialectTypeEqualAndHashAreStructural) {
@@ -189,6 +223,90 @@ class ModuleTypesTest : public ::testing::Test {
   loom_context_t context_;
   loom_module_t* module_ = nullptr;
 };
+
+TEST_F(ModuleTypesTest, FunctionTypeReferencesPreserveCombinedArity) {
+  const auto index_type = loom_type_scalar(LOOM_SCALAR_TYPE_INDEX);
+  loom_value_id_t source_dimension = LOOM_VALUE_ID_INVALID;
+  loom_value_id_t target_dimension = LOOM_VALUE_ID_INVALID;
+  IREE_ASSERT_OK(
+      loom_module_define_value(module_, index_type, &source_dimension));
+  IREE_ASSERT_OK(
+      loom_module_define_value(module_, index_type, &target_dimension));
+  const loom_type_value_remap_t remap = {&source_dimension, &target_dimension,
+                                         1, nullptr};
+  std::vector<loom_type_t> arguments(UINT16_MAX, index_type);
+  const auto source_result =
+      loom_type_shaped_1d(LOOM_TYPE_VECTOR, LOOM_SCALAR_TYPE_F32,
+                          loom_dim_pack_dynamic(source_dimension), 0);
+  const auto target_result =
+      loom_type_shaped_1d(LOOM_TYPE_VECTOR, LOOM_SCALAR_TYPE_F32,
+                          loom_dim_pack_dynamic(target_dimension), 0);
+  auto source =
+      BuildFunctionType(arguments.data(), UINT16_MAX, &source_result, 1);
+  auto target =
+      BuildFunctionType(arguments.data(), UINT16_MAX, &target_result, 1);
+
+  EXPECT_TRUE(
+      loom_type_references_value(module_, source.get(), source_dimension));
+  EXPECT_FALSE(
+      loom_type_references_value(module_, source.get(), target_dimension));
+  ValueRefCapture capture = {};
+  IREE_ASSERT_OK(loom_type_walk_value_refs(module_, source.get(),
+                                           CaptureValueRef, &capture));
+  ASSERT_EQ(capture.count, 1u);
+  EXPECT_EQ(capture.values[0], source_dimension);
+  EXPECT_FALSE(loom_type_equal_after_value_remap(module_, source.get(),
+                                                 target.get(), nullptr));
+  EXPECT_TRUE(loom_type_equal_after_value_remap(module_, source.get(),
+                                                target.get(), &remap));
+}
+
+TEST_F(ModuleTypesTest, FullFunctionTypeHashMatchesAllInterners) {
+  const auto argument_type = loom_type_scalar(LOOM_SCALAR_TYPE_INDEX);
+  const auto result_type = loom_type_scalar(LOOM_SCALAR_TYPE_F32);
+  loom_type_id_t argument_id = LOOM_TYPE_ID_INVALID;
+  loom_type_id_t result_id = LOOM_TYPE_ID_INVALID;
+  IREE_ASSERT_OK(
+      loom_module_intern_type_id(module_, argument_type, &argument_id));
+  IREE_ASSERT_OK(loom_module_intern_type_id(module_, result_type, &result_id));
+  std::vector<loom_type_t> arguments(UINT16_MAX, argument_type);
+  auto packed =
+      BuildFunctionType(arguments.data(), UINT16_MAX, &result_type, 1);
+  loom_type_t direct = {};
+  IREE_ASSERT_OK(loom_module_intern_function_type(
+      module_, arguments.data(), UINT16_MAX, &result_type, 1, &direct));
+  const auto type_count = module_->types.count;
+  const auto arena_size = module_->arena.total_allocation_size;
+
+  loom_type_t general = {};
+  IREE_ASSERT_OK(loom_module_intern_type(module_, packed.get(), &general));
+  EXPECT_EQ(loom_type_func_data(general), loom_type_func_data(direct));
+  EXPECT_EQ(module_->types.count, type_count);
+  EXPECT_EQ(module_->arena.total_allocation_size, arena_size);
+  std::vector<loom_type_id_t> dependencies(arguments.size() + 1, argument_id);
+  dependencies.back() = result_id;
+  loom_type_id_t topological_id = LOOM_TYPE_ID_INVALID;
+  IREE_ASSERT_OK(loom_module_intern_topological_type_id(
+      module_, packed.get(), dependencies.data(), dependencies.size(),
+      &topological_id));
+  const auto topological = module_->types.entries[topological_id];
+  EXPECT_EQ(loom_type_func_data(topological), loom_type_func_data(direct));
+  EXPECT_EQ(module_->types.hashes[topological_id],
+            loom_type_hash(packed.get()));
+  EXPECT_EQ(module_->types.count, type_count);
+  EXPECT_EQ(module_->arena.total_allocation_size, arena_size);
+
+  const auto different_result = loom_type_scalar(LOOM_SCALAR_TYPE_F64);
+  auto different =
+      BuildFunctionType(arguments.data(), UINT16_MAX, &different_result, 1);
+  loom_type_t different_interned = {};
+  IREE_ASSERT_OK(
+      loom_module_intern_type(module_, different.get(), &different_interned));
+  EXPECT_NE(loom_type_func_data(different_interned),
+            loom_type_func_data(direct));
+  EXPECT_TRUE(loom_type_equal(
+      loom_type_func_result_types(different_interned)[0], different_result));
+}
 
 TEST_F(ModuleTypesTest, RegisterValueTypeParticipatesInStructuralLifecycle) {
   loom_type_t source_value_type = loom_type_shaped_1d(

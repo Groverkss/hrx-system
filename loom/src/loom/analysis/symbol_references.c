@@ -432,10 +432,12 @@ static iree_status_t loom_symbol_reference_visit_static_encoding(
 static iree_status_t loom_symbol_reference_visit_type_sequence(
     loom_symbol_reference_builder_t* builder,
     loom_symbol_reference_source_scope_t source_scope, const loom_type_t* types,
-    uint16_t type_count, loom_symbol_reference_occurrence_kind_t kind,
+    iree_host_size_t type_count, loom_symbol_reference_occurrence_kind_t kind,
     uint8_t attr_index, const loom_op_t* user_op) {
-  if (!types) return iree_ok_status();
-  for (uint16_t i = 0; i < type_count; ++i) {
+  if (!types) {
+    return iree_ok_status();
+  }
+  for (iree_host_size_t i = 0; i < type_count; ++i) {
     IREE_RETURN_IF_ERROR(loom_symbol_reference_visit_type(
         builder, source_scope, types[i], kind, attr_index, user_op));
   }
@@ -461,8 +463,8 @@ static iree_status_t loom_symbol_reference_visit_type(
       if (!data) return iree_ok_status();
       return loom_symbol_reference_visit_type_sequence(
           builder, source_scope, data->types,
-          (uint16_t)(data->arg_count + data->result_count), kind, attr_index,
-          user_op);
+          (iree_host_size_t)data->arg_count + data->result_count, kind,
+          attr_index, user_op);
     }
     case LOOM_TYPE_DIALECT:
       return loom_symbol_reference_visit_type_sequence(

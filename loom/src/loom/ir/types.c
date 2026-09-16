@@ -51,11 +51,17 @@ iree_status_t loom_type_function_build(const loom_type_t* arg_types,
 
 static bool loom_type_sequence_equal(const loom_type_t* a_types,
                                      const loom_type_t* b_types,
-                                     uint16_t type_count) {
-  if (type_count == 0) return true;
-  if (!a_types || !b_types) return a_types == b_types;
-  for (uint16_t i = 0; i < type_count; ++i) {
-    if (!loom_type_equal(a_types[i], b_types[i])) return false;
+                                     iree_host_size_t type_count) {
+  if (type_count == 0) {
+    return true;
+  }
+  if (!a_types || !b_types) {
+    return a_types == b_types;
+  }
+  for (iree_host_size_t i = 0; i < type_count; ++i) {
+    if (!loom_type_equal(a_types[i], b_types[i])) {
+      return false;
+    }
   }
   return true;
 }
@@ -87,7 +93,7 @@ bool loom_type_equal(loom_type_t a, loom_type_t b) {
              a_data->result_count == b_data->result_count &&
              loom_type_sequence_equal(
                  a_data->types, b_data->types,
-                 (uint16_t)(a_data->arg_count + a_data->result_count));
+                 (iree_host_size_t)a_data->arg_count + a_data->result_count);
     }
     case LOOM_TYPE_DIALECT: {
       uint16_t param_count = loom_type_dialect_param_count(a);
@@ -185,11 +191,15 @@ static bool loom_type_encoding_equal_after_value_remap(
 
 static bool loom_type_sequence_equal_after_value_remap(
     const loom_module_t* module, const loom_type_t* source_types,
-    const loom_type_t* target_types, uint16_t type_count,
+    const loom_type_t* target_types, iree_host_size_t type_count,
     const loom_type_value_remap_t* remap) {
-  if (type_count == 0) return true;
-  if (!source_types || !target_types) return source_types == target_types;
-  for (uint16_t i = 0; i < type_count; ++i) {
+  if (type_count == 0) {
+    return true;
+  }
+  if (!source_types || !target_types) {
+    return source_types == target_types;
+  }
+  for (iree_host_size_t i = 0; i < type_count; ++i) {
     if (!loom_type_equal_after_value_remap(module, source_types[i],
                                            target_types[i], remap)) {
       return false;
@@ -334,8 +344,8 @@ bool loom_type_equal_after_value_remap(const loom_module_t* module,
       const loom_func_type_data_t* target_data =
           loom_type_func_data(target_type);
       if (!source_data || !target_data) return source_data == target_data;
-      uint16_t type_count =
-          (uint16_t)(source_data->arg_count + source_data->result_count);
+      iree_host_size_t type_count =
+          (iree_host_size_t)source_data->arg_count + source_data->result_count;
       return source_data->arg_count == target_data->arg_count &&
              source_data->result_count == target_data->result_count &&
              loom_type_sequence_equal_after_value_remap(
@@ -480,10 +490,13 @@ static bool loom_type_has_value_ref_dims(loom_type_t type) {
 }
 
 static iree_status_t loom_type_walk_value_ref_sequence(
-    const loom_module_t* module, const loom_type_t* types, uint16_t type_count,
-    loom_type_value_ref_callback_t callback, void* user_data) {
-  if (!types) return iree_ok_status();
-  for (uint16_t i = 0; i < type_count; ++i) {
+    const loom_module_t* module, const loom_type_t* types,
+    iree_host_size_t type_count, loom_type_value_ref_callback_t callback,
+    void* user_data) {
+  if (!types) {
+    return iree_ok_status();
+  }
+  for (iree_host_size_t i = 0; i < type_count; ++i) {
     IREE_RETURN_IF_ERROR(
         loom_type_walk_value_refs(module, types[i], callback, user_data));
   }
@@ -511,8 +524,9 @@ iree_status_t loom_type_walk_value_refs(const loom_module_t* module,
       const loom_func_type_data_t* data = loom_type_func_data(type);
       if (!data) return iree_ok_status();
       return loom_type_walk_value_ref_sequence(
-          module, data->types, (uint16_t)(data->arg_count + data->result_count),
-          callback, user_data);
+          module, data->types,
+          (iree_host_size_t)data->arg_count + data->result_count, callback,
+          user_data);
     }
 
     case LOOM_TYPE_DIALECT:
@@ -557,12 +571,16 @@ iree_status_t loom_type_walk_value_refs(const loom_module_t* module,
 }
 
 static bool loom_type_sequence_references_value(const loom_type_t* types,
-                                                uint16_t type_count,
+                                                iree_host_size_t type_count,
                                                 const loom_module_t* module,
                                                 loom_value_id_t value_id) {
-  if (!types) return false;
-  for (uint16_t i = 0; i < type_count; ++i) {
-    if (loom_type_references_value(module, types[i], value_id)) return true;
+  if (!types) {
+    return false;
+  }
+  for (iree_host_size_t i = 0; i < type_count; ++i) {
+    if (loom_type_references_value(module, types[i], value_id)) {
+      return true;
+    }
   }
   return false;
 }
@@ -632,8 +650,8 @@ bool loom_type_references_value(const loom_module_t* module, loom_type_t type,
       const loom_func_type_data_t* data = loom_type_func_data(type);
       if (!data) return false;
       return loom_type_sequence_references_value(
-          data->types, (uint16_t)(data->arg_count + data->result_count), module,
-          value_id);
+          data->types, (iree_host_size_t)data->arg_count + data->result_count,
+          module, value_id);
     }
 
     case LOOM_TYPE_DIALECT:
@@ -680,10 +698,12 @@ bool loom_type_references_value(const loom_module_t* module, loom_type_t type,
 
 static uint32_t loom_type_hash_mix_sequence(uint32_t hash,
                                             const loom_type_t* types,
-                                            uint16_t type_count) {
-  hash = loom_structural_hash_mix_u16(hash, type_count);
-  if (!types) return hash;
-  for (uint16_t i = 0; i < type_count; ++i) {
+                                            iree_host_size_t type_count) {
+  hash = loom_structural_hash_mix_u32(hash, (uint32_t)type_count);
+  if (!types) {
+    return hash;
+  }
+  for (iree_host_size_t i = 0; i < type_count; ++i) {
     uint32_t element_hash = loom_type_hash(types[i]);
     hash = loom_structural_hash_mix_u32(hash, element_hash);
   }
@@ -709,7 +729,8 @@ uint32_t loom_type_hash(loom_type_t type) {
       hash = loom_structural_hash_mix_u16(hash, data->arg_count);
       hash = loom_structural_hash_mix_u16(hash, data->result_count);
       hash = loom_type_hash_mix_sequence(
-          hash, data->types, (uint16_t)(data->arg_count + data->result_count));
+          hash, data->types,
+          (iree_host_size_t)data->arg_count + data->result_count);
       return loom_structural_hash_finalize(hash);
     }
     case LOOM_TYPE_DIALECT:

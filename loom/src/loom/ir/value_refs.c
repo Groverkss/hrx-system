@@ -628,23 +628,25 @@ static iree_status_t loom_module_replace_type_value_refs_impl(
     loom_value_id_t new_id, loom_type_t* out_type, bool* out_changed);
 
 static iree_status_t loom_module_replace_type_ref_sequence(
-    loom_module_t* module, const loom_type_t* types, uint16_t type_count,
-    loom_value_id_t old_id, loom_value_id_t new_id, loom_type_t** out_types,
-    bool* out_changed) {
+    loom_module_t* module, const loom_type_t* types,
+    iree_host_size_t type_count, loom_value_id_t old_id, loom_value_id_t new_id,
+    loom_type_t** out_types, bool* out_changed) {
   *out_types = NULL;
   *out_changed = false;
-  if (type_count == 0) return iree_ok_status();
+  if (type_count == 0) {
+    return iree_ok_status();
+  }
   if (!types) {
-    return iree_make_status(IREE_STATUS_INVALID_ARGUMENT,
-                            "type sequence has %u entries but a NULL payload",
-                            (unsigned)type_count);
+    return iree_make_status(
+        IREE_STATUS_INVALID_ARGUMENT,
+        "type sequence has %" PRIhsz " entries but a NULL payload", type_count);
   }
 
   loom_type_t* replaced_types = NULL;
   IREE_RETURN_IF_ERROR(iree_arena_allocate_array(&module->arena, type_count,
                                                  sizeof(loom_type_t),
                                                  (void**)&replaced_types));
-  for (uint16_t i = 0; i < type_count; ++i) {
+  for (iree_host_size_t i = 0; i < type_count; ++i) {
     bool element_changed = false;
     IREE_RETURN_IF_ERROR(loom_module_replace_type_value_refs_impl(
         module, types[i], old_id, new_id, &replaced_types[i],
@@ -668,7 +670,8 @@ static iree_status_t loom_module_replace_type_value_refs_impl(
     case LOOM_TYPE_FUNCTION: {
       const loom_func_type_data_t* data = loom_type_func_data(type);
       if (!data) return iree_ok_status();
-      uint16_t type_count = (uint16_t)(data->arg_count + data->result_count);
+      iree_host_size_t type_count =
+          (iree_host_size_t)data->arg_count + data->result_count;
       loom_type_t* replaced_types = NULL;
       IREE_RETURN_IF_ERROR(loom_module_replace_type_ref_sequence(
           module, data->types, type_count, old_id, new_id, &replaced_types,

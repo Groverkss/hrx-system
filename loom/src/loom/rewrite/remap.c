@@ -646,18 +646,20 @@ iree_status_t loom_ir_remap_symbol_ref(loom_ir_remap_t* remap,
 
 static iree_status_t loom_ir_remap_type_sequence(
     loom_ir_remap_t* remap, const loom_type_t* source_types,
-    uint16_t type_count, loom_type_t** out_target_types) {
+    iree_host_size_t type_count, loom_type_t** out_target_types) {
   *out_target_types = NULL;
-  if (type_count == 0) return iree_ok_status();
+  if (type_count == 0) {
+    return iree_ok_status();
+  }
   if (!source_types) {
-    return iree_make_status(IREE_STATUS_INVALID_ARGUMENT,
-                            "type sequence has %u entries but a NULL payload",
-                            (unsigned)type_count);
+    return iree_make_status(
+        IREE_STATUS_INVALID_ARGUMENT,
+        "type sequence has %" PRIhsz " entries but a NULL payload", type_count);
   }
   loom_type_t* target_types = NULL;
   IREE_RETURN_IF_ERROR(iree_arena_allocate_array(
       remap->arena, type_count, sizeof(loom_type_t), (void**)&target_types));
-  for (uint16_t i = 0; i < type_count; ++i) {
+  for (iree_host_size_t i = 0; i < type_count; ++i) {
     IREE_RETURN_IF_ERROR(
         loom_ir_remap_type(remap, source_types[i], &target_types[i]));
   }
@@ -707,8 +709,8 @@ iree_status_t loom_ir_remap_type(loom_ir_remap_t* remap,
           IREE_STATUS_INVALID_ARGUMENT,
           "function type has a NULL argument/result payload");
     }
-    uint16_t type_count =
-        (uint16_t)(source_data->arg_count + source_data->result_count);
+    iree_host_size_t type_count =
+        (iree_host_size_t)source_data->arg_count + source_data->result_count;
     loom_type_t* target_types = NULL;
     IREE_RETURN_IF_ERROR(loom_ir_remap_type_sequence(
         remap, source_data->types, type_count, &target_types));

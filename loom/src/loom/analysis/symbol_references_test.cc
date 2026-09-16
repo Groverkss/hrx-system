@@ -25,6 +25,7 @@
 #include "loom/ops/template/ops.h"
 #include "loom/ops/test/ops.h"
 #include "loom/ops/test/registry.h"
+#include "loom/ops/test/types.h"
 #include "loom/testing/module_ptr.h"
 
 namespace loom {
@@ -739,6 +740,49 @@ func.def @consumer() {
   for (iree_host_size_t i = 0; i < sccs.count; ++i) {
     EXPECT_FALSE(sccs.values[i].is_cycle);
   }
+}
+
+TEST_F(SymbolReferencesTest, FindsReferenceAfterFullFunctionArgumentSequence) {
+  ModulePtr module = AllocateModule();
+  loom_builder_t builder = {};
+  loom_builder_initialize(module.get(), &module->arena,
+                          loom_module_block(module.get()), &builder);
+  const auto target = AddSymbol(module.get(), IREE_SV("target"));
+  loom_op_t* target_op = nullptr;
+  IREE_ASSERT_OK(loom_test_record_build(&builder, 0, 0, target,
+                                        loom_named_attr_slice_empty(),
+                                        LOOM_LOCATION_UNKNOWN, &target_op));
+  const auto scalar = loom_type_scalar(LOOM_SCALAR_TYPE_F32);
+  loom_type_id_t scalar_id = LOOM_TYPE_ID_INVALID;
+  IREE_ASSERT_OK(loom_module_intern_type_id(module.get(), scalar, &scalar_id));
+  loom_type_t result_type = {};
+  IREE_ASSERT_OK(loom_test_matrix_type_make(
+      module.get(), LOOM_TEST_MATRIX_TYPE_BUILD_FLAG_HAS_TARGET, scalar_id,
+      LOOM_TEST_MATRIX_TYPE_SCOPE_SUBGROUP, 16, target, &result_type));
+  std::vector<loom_type_t> arguments(UINT16_MAX, scalar);
+  loom_type_t function_type = {};
+  IREE_ASSERT_OK(loom_module_intern_function_type(
+      module.get(), arguments.data(), UINT16_MAX, &result_type, 1,
+      &function_type));
+  loom_type_id_t function_id = LOOM_TYPE_ID_INVALID;
+  IREE_ASSERT_OK(
+      loom_module_intern_type_id(module.get(), function_type, &function_id));
+  loom_string_id_t key = LOOM_STRING_ID_INVALID;
+  IREE_ASSERT_OK(
+      loom_module_intern_string(module.get(), IREE_SV("signature"), &key));
+  const loom_named_attr_t attribute = {key, {}, loom_attr_type(function_id)};
+  const auto owner = AddSymbol(module.get(), IREE_SV("owner"));
+  loom_op_t* owner_op = nullptr;
+  IREE_ASSERT_OK(
+      loom_test_record_build(&builder, LOOM_TEST_RECORD_BUILD_FLAG_HAS_DICT, 0,
+                             owner, loom_make_named_attr_slice(&attribute, 1),
+                             LOOM_LOCATION_UNKNOWN, &owner_op));
+
+  const auto table = BuildTable(module.get());
+  ASSERT_EQ(table.occurrence_count, 1u);
+  EXPECT_NE(FindOccurrence(table, owner.symbol_id, target.symbol_id,
+                           LOOM_SYMBOL_REFERENCE_OCCURRENCE_TYPE_ATTR),
+            nullptr);
 }
 
 TEST_F(SymbolReferencesTest, RebuildsAfterAttrMutationAndErase) {

@@ -3907,8 +3907,7 @@ static uint32_t loom_function_type_hash(const loom_type_t* arg_types,
   hash = loom_structural_hash_mix_u16(hash, 0);
   hash = loom_structural_hash_mix_u16(hash, arg_count);
   hash = loom_structural_hash_mix_u16(hash, result_count);
-  hash =
-      loom_structural_hash_mix_u16(hash, (uint16_t)(arg_count + result_count));
+  hash = loom_structural_hash_mix_u32(hash, (uint32_t)arg_count + result_count);
   for (uint16_t i = 0; i < arg_count; ++i) {
     hash = loom_structural_hash_mix_u32(hash, loom_type_hash(arg_types[i]));
   }
@@ -3934,8 +3933,8 @@ static uint32_t loom_topological_type_hash(
       const loom_func_type_data_t* data = loom_type_func_data(type);
       hash = loom_structural_hash_mix_u16(hash, data->arg_count);
       hash = loom_structural_hash_mix_u16(hash, data->result_count);
-      hash = loom_structural_hash_mix_u16(hash,
-                                          (uint16_t)context->dependency_count);
+      hash = loom_structural_hash_mix_u32(hash,
+                                          (uint32_t)context->dependency_count);
       for (iree_host_size_t i = 0; i < context->dependency_count; ++i) {
         hash = loom_structural_hash_mix_u32(
             hash, context->module->types.hashes[context->dependency_ids[i]]);
