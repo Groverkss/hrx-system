@@ -50,10 +50,9 @@ STRIX_HALO_PROFILE = DeviceProfile(
         minimum_minor=12,
         transaction_device_generation=4,
     ),
-    native_elf_abi_major=1,
-    native_elf_abi_minor=0,
     limits=DeviceLimits(
         minimum_device_memory_alignment=32 * 1024,
+        instruction_address_alignment=32 * 1024,
         hardware_context_limit=16,
         context_limit=32,
         temporal_contexts_only=True,

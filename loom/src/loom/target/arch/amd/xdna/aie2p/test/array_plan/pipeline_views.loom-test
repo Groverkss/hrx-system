@@ -92,7 +92,7 @@ binding-dimension channel=0 index=1 step=2 wrap=0
 binding-patch ordinal=1 channel=2 shim=(0,0) direction=stream-to-memory dma-channel=0 partition=0/2 offset=128 span=12 transfer=12 repeat=1
 binding-patch ordinal=1 channel=3 shim=(0,0) direction=stream-to-memory dma-channel=1 partition=1/2 offset=140 span=12 transfer=12 repeat=1
 
-array-program records=76 payload-bytes=1528 writes=42 masked-writes=24 block-writes=8 tile-loads=2 waits=0
+array-program records=76 writes=42 masked-writes=24 block-writes=8 tile-loads=2 waits=0
 array-block record=50 address=0x0021d000 words=[0x00000001,0x00000000,0x00000000,0x00000000,0x00000000,0x0e043fe0]
 array-block record=51 address=0x0021d020 words=[0x04000001,0x00000000,0x00000000,0x00000000,0x00000000,0x06043fe0]
 array-block record=52 address=0x0031d000 words=[0x00000001,0x00000000,0x00000000,0x00000000,0x00000000,0x0e043fe0]
@@ -103,7 +103,7 @@ array-block record=56 address=0x0031d040 words=[0x08000001,0x00000000,0x00000000
 array-block record=57 address=0x0031d060 words=[0x0c000001,0x00000000,0x00000000,0x00000000,0x00000000,0x16045fe3]
 array-tile-load record=58 tile-program=0
 array-tile-load record=59 tile-program=1
-control-program records=10 payload-bytes=288 writes=3 masked-writes=2 block-writes=3 tile-loads=0 waits=2 relocations=3
+control-program records=10 writes=3 masked-writes=2 block-writes=3 tile-loads=0 waits=2 relocations=3
 control-block record=0 address=0x0001d000 words=[0x00000003,0x00000000,0x00000000,0x00100000,0xc0000001,0x02000000,0x00000000,0x02000000]
 control-write record=1 address=0x0001d214 value=0x00000000
 control-block record=2 address=0x0001d020 words=[0x00000003,0x00000000,0x00000000,0x00000000,0xc0000000,0x02000000,0x00000000,0x02000000]
@@ -114,9 +114,9 @@ control-mask-write record=6 address=0x0001d208 mask=0x00001f00 value=0x00000f00
 control-write record=7 address=0x0001d20c value=0x80000002
 control-wait record=8 tile=(0,0) direction=stream-to-memory dma-channel=0 columns=1 rows=1
 control-wait record=9 tile=(0,0) direction=stream-to-memory dma-channel=1 columns=1 rows=1
-control-relocation index=0 record=0 word=1 payload-offset=44 binding=0 addend=64 width=8 alignment=4
-control-relocation index=1 record=2 word=1 payload-offset=108 binding=1 addend=128 width=8 alignment=4
-control-relocation index=2 record=5 word=1 payload-offset=192 binding=1 addend=140 width=8 alignment=4
+control-relocation index=0 record=0 word=1 binding=0 addend=64 alignment=4
+control-relocation index=1 record=2 word=1 binding=1 addend=128 alignment=4
+control-relocation index=2 record=5 word=1 binding=1 addend=140 alignment=4
 
 resident-program workers=2
 resident worker=0 entry=@broadcast_read_array$worker$0 tile=(0,2) code-bytes=154 resources=0 fixups=1
@@ -274,7 +274,7 @@ binding-patch ordinal=0 channel=1 shim=(0,0) direction=memory-to-stream dma-chan
 binding-patch ordinal=1 channel=2 shim=(0,0) direction=stream-to-memory dma-channel=0 partition=0/2 offset=0 span=12 transfer=12 repeat=1
 binding-patch ordinal=1 channel=3 shim=(0,0) direction=stream-to-memory dma-channel=1 partition=1/2 offset=12 span=12 transfer=12 repeat=1
 
-array-program records=77 payload-bytes=1544 writes=43 masked-writes=24 block-writes=8 tile-loads=2 waits=0
+array-program records=77 writes=43 masked-writes=24 block-writes=8 tile-loads=2 waits=0
 array-block record=51 address=0x0021d000 words=[0x00000001,0x00000000,0x00000000,0x00000000,0x00000000,0x0e043fe0]
 array-block record=52 address=0x0021d020 words=[0x04000001,0x00000000,0x00000000,0x00000000,0x00000000,0x06043fe0]
 array-block record=53 address=0x0031d000 words=[0x00000001,0x00000000,0x00000000,0x00000000,0x00000000,0x0e043fe0]
@@ -285,7 +285,7 @@ array-block record=57 address=0x0031d040 words=[0x08000001,0x00000000,0x00000000
 array-block record=58 address=0x0031d060 words=[0x0c000001,0x00000000,0x00000000,0x00000000,0x00000000,0x16045fe3]
 array-tile-load record=59 tile-program=0
 array-tile-load record=60 tile-program=1
-control-program records=12 payload-bytes=352 writes=4 masked-writes=2 block-writes=4 tile-loads=0 waits=2 relocations=4
+control-program records=12 writes=4 masked-writes=2 block-writes=4 tile-loads=0 waits=2 relocations=4
 control-block record=0 address=0x0001d000 words=[0x00000003,0x00000000,0x00000000,0x00000000,0xc0000000,0x02000000,0x00000000,0x02000000]
 control-write record=1 address=0x0001d214 value=0x00000000
 control-block record=2 address=0x0001d020 words=[0x00000003,0x00000000,0x00000000,0x00000000,0xc0000000,0x02000000,0x00000000,0x02000000]
@@ -298,10 +298,10 @@ control-mask-write record=8 address=0x0001d208 mask=0x00001f00 value=0x00000f00
 control-write record=9 address=0x0001d20c value=0x80000003
 control-wait record=10 tile=(0,0) direction=stream-to-memory dma-channel=0 columns=1 rows=1
 control-wait record=11 tile=(0,0) direction=stream-to-memory dma-channel=1 columns=1 rows=1
-control-relocation index=0 record=0 word=1 payload-offset=44 binding=0 addend=0 width=8 alignment=4
-control-relocation index=1 record=2 word=1 payload-offset=108 binding=0 addend=12 width=8 alignment=4
-control-relocation index=2 record=4 word=1 payload-offset=172 binding=1 addend=0 width=8 alignment=4
-control-relocation index=3 record=7 word=1 payload-offset=256 binding=1 addend=12 width=8 alignment=4
+control-relocation index=0 record=0 word=1 binding=0 addend=0 alignment=4
+control-relocation index=1 record=2 word=1 binding=0 addend=12 alignment=4
+control-relocation index=2 record=4 word=1 binding=1 addend=0 alignment=4
+control-relocation index=3 record=7 word=1 binding=1 addend=12 alignment=4
 
 resident-program workers=2
 resident worker=0 entry=@partitioned_write_array$worker$0 tile=(0,2) code-bytes=154 resources=0 fixups=1

@@ -232,22 +232,22 @@ static iree_status_t iree_hal_amd_xdna_image_decode_elf_envelope(
     const iree_byte_sequence_t* source_sequence,
     iree_hal_amd_xdna_image_elf_envelope_t* out_envelope) {
   *out_envelope = (iree_hal_amd_xdna_image_elf_envelope_t){0};
-  uint8_t bytes[IREE_HAL_AMD_XDNA_ELF_HEADER_SIZE];
+  uint8_t bytes[IREE_XDNA_ELF_HEADER_SIZE];
   IREE_RETURN_IF_ERROR(iree_hal_amd_xdna_image_read_sequence_range(
       source_sequence,
       (iree_hal_amd_xdna_image_source_range_t){
           .offset = 0,
-          .length = IREE_HAL_AMD_XDNA_ELF_HEADER_SIZE,
+          .length = IREE_XDNA_ELF_HEADER_SIZE,
       },
       iree_make_byte_span(bytes, sizeof(bytes))));
 
   const uint8_t expected_magic[4] = {0x7F, 'E', 'L', 'F'};
   if (memcmp(bytes, expected_magic, sizeof(expected_magic)) != 0 ||
-      bytes[4] != IREE_HAL_AMD_XDNA_ELF_CLASS_32 ||
-      bytes[5] != IREE_HAL_AMD_XDNA_ELF_DATA_LITTLE_ENDIAN ||
-      bytes[6] != IREE_HAL_AMD_XDNA_ELF_VERSION_CURRENT ||
-      bytes[7] != IREE_HAL_AMD_XDNA_ELF_OS_ABI_NONE ||
-      bytes[8] != IREE_HAL_AMD_XDNA_ELF_ABI_VERSION_NONE) {
+      bytes[4] != IREE_XDNA_ELF_CLASS_32 ||
+      bytes[5] != IREE_XDNA_ELF_DATA_LITTLE_ENDIAN ||
+      bytes[6] != IREE_XDNA_ELF_VERSION_CURRENT ||
+      bytes[7] != IREE_XDNA_ELF_OS_ABI_NONE ||
+      bytes[8] != IREE_XDNA_ELF_ABI_VERSION_NONE) {
     return iree_make_status(IREE_STATUS_INVALID_ARGUMENT,
                             "XDNA image is not canonical ELF32LE");
   }
@@ -257,15 +257,11 @@ static iree_status_t iree_hal_amd_xdna_image_decode_elf_envelope(
                               "XDNA image ELF identity padding is not zero");
     }
   }
-  if (iree_unaligned_load_le_u16(bytes + 16) !=
-          IREE_HAL_AMD_XDNA_ELF_FILE_TYPE_EXEC ||
-      iree_unaligned_load_le_u16(bytes + 18) !=
-          IREE_HAL_AMD_XDNA_ELF_MACHINE_AIE ||
-      iree_unaligned_load_le_u32(bytes + 20) !=
-          IREE_HAL_AMD_XDNA_ELF_VERSION_CURRENT ||
+  if (iree_unaligned_load_le_u16(bytes + 16) != IREE_XDNA_ELF_FILE_TYPE_EXEC ||
+      iree_unaligned_load_le_u16(bytes + 18) != IREE_XDNA_ELF_MACHINE_AIE ||
+      iree_unaligned_load_le_u32(bytes + 20) != IREE_XDNA_ELF_VERSION_CURRENT ||
       iree_unaligned_load_le_u32(bytes + 24) != 0 ||
-      iree_unaligned_load_le_u16(bytes + 40) !=
-          IREE_HAL_AMD_XDNA_ELF_HEADER_SIZE) {
+      iree_unaligned_load_le_u16(bytes + 40) != IREE_XDNA_ELF_HEADER_SIZE) {
     return iree_make_status(IREE_STATUS_INVALID_ARGUMENT,
                             "XDNA image ELF header identity is invalid");
   }
@@ -278,10 +274,10 @@ static iree_status_t iree_hal_amd_xdna_image_decode_elf_envelope(
   const uint16_t section_header_count = iree_unaligned_load_le_u16(bytes + 48);
   const uint16_t section_name_table_ordinal =
       iree_unaligned_load_le_u16(bytes + 50);
-  if (program_header_offset != IREE_HAL_AMD_XDNA_ELF_HEADER_SIZE ||
-      program_header_size != IREE_HAL_AMD_XDNA_ELF_PROGRAM_HEADER_SIZE ||
+  if (program_header_offset != IREE_XDNA_ELF_HEADER_SIZE ||
+      program_header_size != IREE_XDNA_ELF_PROGRAM_HEADER_SIZE ||
       program_header_count == 0 ||
-      program_header_count > IREE_HAL_AMD_XDNA_ELF_MAX_PROGRAM_HEADER_COUNT) {
+      program_header_count > IREE_XDNA_ELF_MAX_PROGRAM_HEADER_COUNT) {
     return iree_make_status(
         IREE_STATUS_INVALID_ARGUMENT,
         "XDNA image ELF program-header directory is invalid");
@@ -292,9 +288,9 @@ static iree_status_t iree_hal_amd_xdna_image_decode_elf_envelope(
       section_header_count != 0 || section_name_table_ordinal != 0;
   if (has_section_headers &&
       (section_header_offset == 0 ||
-       section_header_size != IREE_HAL_AMD_XDNA_ELF_SECTION_HEADER_SIZE ||
+       section_header_size != IREE_XDNA_ELF_SECTION_HEADER_SIZE ||
        section_header_count == 0 ||
-       section_header_count > IREE_HAL_AMD_XDNA_ELF_MAX_SECTION_HEADER_COUNT ||
+       section_header_count > IREE_XDNA_ELF_MAX_SECTION_HEADER_COUNT ||
        section_name_table_ordinal >= section_header_count ||
        section_header_offset % 4 != 0)) {
     return iree_make_status(
@@ -324,7 +320,7 @@ static iree_status_t iree_hal_amd_xdna_image_decode_elf_envelope(
       source_sequence, envelope.section_header_range));
   const iree_hal_amd_xdna_image_source_range_t elf_header_range = {
       .offset = 0,
-      .length = IREE_HAL_AMD_XDNA_ELF_HEADER_SIZE,
+      .length = IREE_XDNA_ELF_HEADER_SIZE,
   };
   if (iree_hal_amd_xdna_image_source_ranges_overlap(
           elf_header_range, envelope.section_header_range) ||
@@ -365,7 +361,7 @@ typedef struct iree_hal_amd_xdna_image_program_range_index_t {
 } iree_hal_amd_xdna_image_program_range_index_t;
 
 static_assert(sizeof(iree_hal_amd_xdna_image_program_range_index_t) <=
-                  IREE_HAL_AMD_XDNA_ELF_PROGRAM_HEADER_SIZE,
+                  IREE_XDNA_ELF_PROGRAM_HEADER_SIZE,
               "program range indexes reuse raw program-header scratch storage");
 
 static int iree_hal_amd_xdna_image_compare_program_ranges(const void* lhs_ptr,
@@ -390,7 +386,7 @@ static iree_status_t iree_hal_amd_xdna_image_validate_program_headers(
     iree_hal_amd_xdna_image_directory_t* directory) {
   const iree_hal_amd_xdna_image_source_range_t elf_header_range = {
       .offset = 0,
-      .length = IREE_HAL_AMD_XDNA_ELF_HEADER_SIZE,
+      .length = IREE_XDNA_ELF_HEADER_SIZE,
   };
   for (iree_host_size_t i = 0; i < directory->program_header_count; ++i) {
     const iree_hal_amd_xdna_image_program_header_t* program_header =
@@ -405,10 +401,10 @@ static iree_status_t iree_hal_amd_xdna_image_validate_program_headers(
                               " has an invalid size or alignment",
                               i);
     }
-    const iree_hal_amd_xdna_elf_program_flags_t unknown_flags =
-        program_header->flags & ~(IREE_HAL_AMD_XDNA_ELF_PROGRAM_FLAG_READ |
-                                  IREE_HAL_AMD_XDNA_ELF_PROGRAM_FLAG_WRITE |
-                                  IREE_HAL_AMD_XDNA_ELF_PROGRAM_FLAG_EXECUTE);
+    const iree_xdna_elf_program_flags_t unknown_flags =
+        program_header->flags &
+        ~(IREE_XDNA_ELF_PROGRAM_FLAG_READ | IREE_XDNA_ELF_PROGRAM_FLAG_WRITE |
+          IREE_XDNA_ELF_PROGRAM_FLAG_EXECUTE);
     if (unknown_flags != 0) {
       return iree_make_status(IREE_STATUS_INVALID_ARGUMENT,
                               "XDNA image program header %" PRIhsz
@@ -497,8 +493,7 @@ iree_status_t iree_hal_amd_xdna_image_directory_create(
   if (iree_status_is_ok(status)) {
     for (iree_host_size_t i = 0; i < directory->program_header_count; ++i) {
       iree_hal_amd_xdna_image_decode_program_header(
-          program_header_storage.data +
-              i * IREE_HAL_AMD_XDNA_ELF_PROGRAM_HEADER_SIZE,
+          program_header_storage.data + i * IREE_XDNA_ELF_PROGRAM_HEADER_SIZE,
           &directory->program_headers[i]);
     }
   }

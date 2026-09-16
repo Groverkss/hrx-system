@@ -106,7 +106,7 @@ route channel=3 tile=(1,2) kind=switch source=south[1] destination=dma[1]
 binding-patch ordinal=0 channel=0 shim=(0,0) direction=memory-to-stream dma-channel=0 partition=0/2 offset=0 span=4 transfer=4 repeat=1
 binding-patch ordinal=0 channel=1 shim=(0,0) direction=memory-to-stream dma-channel=1 partition=1/2 offset=4 span=4 transfer=4 repeat=1
 
-array-program records=68 payload-bytes=1324 writes=38 masked-writes=23 block-writes=5 tile-loads=2 waits=0
+array-program records=68 writes=38 masked-writes=23 block-writes=5 tile-loads=2 waits=0
 array-block record=45 address=0x0021d000 words=[0x00000001,0x00000000,0x00000000,0x00000000,0x00000000,0x06043fe0]
 array-block record=46 address=0x0021d020 words=[0x04000001,0x00000000,0x00000000,0x00000000,0x00000000,0x0e047fe2]
 array-block record=47 address=0x0221d000 words=[0x00000001,0x00000000,0x00000000,0x00000000,0x00000000,0x0e043fe0]
@@ -114,13 +114,13 @@ array-block record=48 address=0x0221d020 words=[0x04000001,0x00000000,0x00000000
 array-block record=49 address=0x0221d040 words=[0x08000001,0x00000000,0x00000000,0x00000000,0x00000000,0x16047fe2]
 array-tile-load record=50 tile-program=0
 array-tile-load record=51 tile-program=1
-control-program records=4 payload-bytes=152 writes=2 masked-writes=0 block-writes=2 tile-loads=0 waits=0 relocations=2
+control-program records=4 writes=2 masked-writes=0 block-writes=2 tile-loads=0 waits=0 relocations=2
 control-block record=0 address=0x0001d000 words=[0x00000001,0x00000000,0x00000000,0x00000000,0xc0000000,0x02000000,0x00000000,0x02000000]
 control-write record=1 address=0x0001d214 value=0x00000000
 control-block record=2 address=0x0001d020 words=[0x00000001,0x00000000,0x00000000,0x00000000,0xc0000000,0x02000000,0x00000000,0x02000000]
 control-write record=3 address=0x0001d21c value=0x00000001
-control-relocation index=0 record=0 word=1 payload-offset=44 binding=0 addend=0 width=8 alignment=4
-control-relocation index=1 record=2 word=1 payload-offset=108 binding=0 addend=4 width=8 alignment=4
+control-relocation index=0 record=0 word=1 binding=0 addend=0 alignment=4
+control-relocation index=1 record=2 word=1 binding=0 addend=4 alignment=4
 
 resident-program workers=2
 resident worker=0 entry=@multicast_array$worker$0 tile=(0,2) code-bytes=148 resources=0 fixups=1

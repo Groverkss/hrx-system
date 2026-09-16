@@ -97,6 +97,7 @@ class TileMemoryFacts:
     bank_count: int
     program_base: int
     program_capacity: int
+    program_load_base: int
     load_windows: tuple[AddressWindow, ...]
 
 
@@ -220,7 +221,7 @@ class ArrayFamily:
     provenance: Provenance
 
 
-def _validate_tile_memory(tile: TileFacts) -> None:
+def _validate_tile_memory(tile: TileFacts, row_shift: int) -> None:
     memory = tile.memory
     if memory.local_base < 0 or memory.local_capacity < 0 or memory.bank_count < 0:
         raise ValueError(f"{tile.kind.value}: invalid local-memory geometry")
@@ -230,7 +231,12 @@ def _validate_tile_memory(tile: TileFacts) -> None:
         memory.bank_count == 0 or memory.local_capacity % memory.bank_count
     ):
         raise ValueError(f"{tile.kind.value}: local-memory banks do not partition")
-    if memory.program_base < 0 or memory.program_capacity < 0:
+    if (
+        memory.program_base < 0
+        or memory.program_capacity < 0
+        or memory.program_load_base < 0
+        or memory.program_load_base + memory.program_capacity > 1 << row_shift
+    ):
         raise ValueError(f"{tile.kind.value}: invalid program-memory geometry")
     if tile.kind is not TileKind.COMPUTE and memory.program_capacity != 0:
         raise ValueError(f"{tile.kind.value}: non-compute tile has program memory")
@@ -460,7 +466,7 @@ def validate_array_family(family: ArrayFamily) -> None:
         modules.update(tile.register_modules)
         if tile.lock_count <= 0 or tile.lock_value_minimum >= tile.lock_value_maximum:
             raise ValueError(f"{tile.kind.value}: invalid lock domain")
-        _validate_tile_memory(tile)
+        _validate_tile_memory(tile, family.row_shift)
         _validate_lock_windows(family, tile)
         _validate_dma(tile)
     if covered_rows != set(range(family.row_count)):

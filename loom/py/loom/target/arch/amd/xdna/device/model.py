@@ -41,6 +41,7 @@ class DeviceLimits:
     """Driver-visible resource limits outside individual array tiles."""
 
     minimum_device_memory_alignment: int
+    instruction_address_alignment: int
     hardware_context_limit: int
     context_limit: int
     temporal_contexts_only: bool
@@ -60,8 +61,6 @@ class DeviceProfile:
     available_column_mask: int
     minimum_partition_column_count: int
     firmware: FirmwareProtocol
-    native_elf_abi_major: int
-    native_elf_abi_minor: int
     limits: DeviceLimits
     provenance: Provenance
 
@@ -109,13 +108,14 @@ def validate_device_profile(profile: DeviceProfile) -> None:
         or firmware.transaction_device_generation <= 0
     ):
         raise ValueError(f"{profile.key}: invalid firmware protocol")
-    if profile.native_elf_abi_major <= 0 or profile.native_elf_abi_minor < 0:
-        raise ValueError(f"{profile.key}: invalid native ELF ABI")
     limits = profile.limits
     if (
         limits.minimum_device_memory_alignment <= 0
         or limits.minimum_device_memory_alignment
         & (limits.minimum_device_memory_alignment - 1)
+        or limits.instruction_address_alignment <= 0
+        or limits.instruction_address_alignment
+        & (limits.instruction_address_alignment - 1)
         or limits.hardware_context_limit <= 0
         or limits.context_limit < limits.hardware_context_limit
     ):

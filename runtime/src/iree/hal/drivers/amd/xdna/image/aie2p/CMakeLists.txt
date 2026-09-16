@@ -11,42 +11,12 @@ iree_add_all_subdirs()
 
 iree_cc_library(
   NAME
-    native_image
-  HDRS
-    "native_image.h"
-  SRCS
-    "native_image.c"
-  DEPS
-    ::program_format
-    ::target
-    ::transaction
-    iree::base
-    iree::hal::drivers::amd::xdna::image
-  PUBLIC
-)
-
-iree_cc_library(
-  NAME
-    program_format
-  HDRS
-    "program_format.h"
-  SRCS
-    "program_format.c"
-  DEPS
-    iree::base
-    iree::hal::drivers::amd::xdna::image::format
-  PUBLIC
-)
-
-iree_cc_library(
-  NAME
     npu2
   HDRS
     "npu2.h"
   SRCS
     "npu2.c"
   DEPS
-    ::program_format
     ::target
     iree::base
   PUBLIC
@@ -57,43 +27,9 @@ iree_cc_library(
     target
   HDRS
     "target.h"
-  SRCS
-    "target.c"
   DEPS
-    ::program_format
-    iree::base
-    iree::hal::drivers::amd::xdna::image::validation
-  PUBLIC
-)
-
-iree_cc_library(
-  NAME
-    transaction
-  HDRS
-    "transaction.h"
-  SRCS
-    "transaction.c"
-  DEPS
-    ::program_format
     iree::base
   PUBLIC
-)
-
-iree_cc_test(
-  NAME
-    native_image_test
-  SRCS
-    "native_image_test.cc"
-  DEPS
-    ::native_image
-    ::npu2
-    ::transaction
-    iree::base
-    iree::hal::drivers::amd::xdna::image
-    iree::hal::drivers::amd::xdna::image::testdata::mul_i32
-    iree::hal::drivers::amd::xdna::image::testing::aie2p_image_fixture
-    iree::testing::gtest
-    iree::testing::gtest_main
 )
 
 iree_cc_test(
@@ -103,45 +39,7 @@ iree_cc_test(
     "npu2_test.cc"
   DEPS
     ::npu2
-    ::program_format
     ::target
-    iree::base
-    iree::testing::gtest
-    iree::testing::gtest_main
-)
-
-iree_cc_test(
-  NAME
-    program_format_test
-  SRCS
-    "program_format_test.cc"
-  DEPS
-    ::program_format
-    iree::base
-    iree::testing::gtest
-    iree::testing::gtest_main
-)
-
-iree_cc_test(
-  NAME
-    target_test
-  SRCS
-    "target_test.cc"
-  DEPS
-    ::program_format
-    ::target
-    iree::base
-    iree::testing::gtest
-    iree::testing::gtest_main
-)
-
-iree_cc_test(
-  NAME
-    transaction_test
-  SRCS
-    "transaction_test.cc"
-  DEPS
-    ::transaction
     iree::base
     iree::testing::gtest
     iree::testing::gtest_main

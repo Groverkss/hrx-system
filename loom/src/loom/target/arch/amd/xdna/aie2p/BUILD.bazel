@@ -228,7 +228,6 @@ loom_cc_library(
         ":array_plan",
         "//loom/src/loom/target/arch/amd/xdna:array_facts",
         "//loom/src/loom/target/arch/amd/xdna:array_registers",
-        "//loom/src/loom/target/arch/amd/xdna:elf_format",
         "//runtime/src/iree/base",
         "//runtime/src/iree/base/internal:arena",
     ],
@@ -560,10 +559,10 @@ loom_cc_library(
         "//loom/src/loom/ir",
         "//loom/src/loom/ops:op_defs",
         "//loom/src/loom/ops/low",
-        "//loom/src/loom/target/arch/amd/xdna:elf_format",
         "//loom/src/loom/target/emit/native:object",
         "//runtime/src/iree/base",
         "//runtime/src/iree/base/internal:arena",
+        "//runtime/src/iree/schemas:xdna_executable",
     ],
 )
 
@@ -608,11 +607,11 @@ loom_cc_library(
         ":array_program",
         ":tile_link",
         "//loom/src/loom/target/arch/amd/xdna:device_profile",
-        "//loom/src/loom/target/arch/amd/xdna:elf_format",
         "//loom/src/loom/target/emit/native:elf",
         "//runtime/src/iree/base",
         "//runtime/src/iree/base/internal:arena",
         "//runtime/src/iree/io:stream",
+        "//runtime/src/iree/schemas:xdna_executable",
     ],
 )
 

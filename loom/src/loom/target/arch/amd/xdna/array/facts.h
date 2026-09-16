@@ -109,6 +109,8 @@ typedef struct loom_xdna_tile_memory_facts_t {
   uint32_t program_base;
   // Addressable program-memory bytes.
   uint32_t program_capacity;
+  // Tile-relative host aperture used to initialize program memory.
+  uint32_t program_load_base;
   // First load-window row in the owning array family.
   uint16_t window_start;
   // Number of load-window rows.

@@ -298,9 +298,9 @@ iree_status_t loom_aie2p_leaf_object_emit(
       .target_identity = LOOM_AIE2P_LEAF_TARGET_IDENTITY,
       .abi_identity = LOOM_AIE2P_LEAF_ABI_IDENTITY,
       .entry_symbol_index = 0,
-      .elf_machine = LOOM_XDNA_ELF_MACHINE_AIE,
-      .target_generation = LOOM_XDNA_TARGET_GENERATION_AIE2P,
-      .elf_flags = LOOM_XDNA_ELF_AIE2P_FLAGS,
+      .elf_machine = IREE_XDNA_ELF_MACHINE_AIE,
+      .target_generation = IREE_XDNA_TARGET_GENERATION_AIE2P,
+      .elf_flags = IREE_XDNA_ELF_AIE2P_FLAGS,
       .code =
           {
               .byte_length = plan->encoded_byte_length,

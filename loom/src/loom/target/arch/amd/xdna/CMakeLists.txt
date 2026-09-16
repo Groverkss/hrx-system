@@ -73,18 +73,6 @@ loom_cc_library(
   PUBLIC
 )
 
-loom_cc_library(
-  NAME
-    elf_format
-  HDRS
-    "elf_format.h"
-  SRCS
-    "elf_format.c"
-  DEPS
-    iree::base
-  PUBLIC
-)
-
 loom_cc_test(
   NAME
     array_facts_test

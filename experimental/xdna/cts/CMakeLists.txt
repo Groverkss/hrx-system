@@ -20,12 +20,11 @@ iree_cc_test(
     amdf::headers
     iree::base
     iree::experimental::xdna::executable
-    iree::experimental::xdna::prepared_command
     iree::hal
     iree::hal::drivers::amd::xdna::image::aie2p::npu2
     iree::hal::drivers::amd::xdna::image::testdata::mul_i32
     iree::hal::drivers::amd::xdna::image::testdata::mul_i32_npu4
-    iree::hal::drivers::amd::xdna::image::testing::aie2p_image_fixture
+    iree::hal::drivers::amd::xdna::image::testing::image_fixture
     iree::testing::gtest
     libamdf::cts::util::device_cache
     libamdf::cts::util::linked_test_main
@@ -54,12 +53,11 @@ iree_cc_test(
     amdf::headers
     iree::base
     iree::experimental::xdna::executable
-    iree::experimental::xdna::prepared_command
     iree::hal
     iree::hal::drivers::amd::xdna::image::aie2p::npu2
     iree::hal::drivers::amd::xdna::image::testdata::mul_i32
     iree::hal::drivers::amd::xdna::image::testdata::mul_i32_npu4
-    iree::hal::drivers::amd::xdna::image::testing::aie2p_image_fixture
+    iree::hal::drivers::amd::xdna::image::testing::image_fixture
     iree::testing::gtest
     libamdf::cts::util::device_cache
     libamdf::cts::util::linked_test_main

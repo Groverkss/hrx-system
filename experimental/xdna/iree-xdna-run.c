@@ -12,7 +12,6 @@
 #include "amdf/xdna.h"
 #include "experimental/xdna/amdf_status.h"
 #include "experimental/xdna/executable.h"
-#include "experimental/xdna/prepared_command.h"
 #include "iree/base/api.h"
 #include "iree/base/byte_sequence.h"
 #include "iree/base/tooling/flags.h"
@@ -28,7 +27,7 @@ IREE_FLAG(int32_t, columns, 0,
 IREE_FLAG(int32_t, device, 0, "XDNA endpoint ordinal in the native inventory.");
 IREE_FLAG(int32_t, invocation_count, 1,
           "Number of checked invocations; the first activates the program and "
-          "later invocations use control-only commands.");
+          "later invocations follow the image continuation.");
 IREE_FLAG(string, binding_memory, "system",
           "Backing for every binding: system or registered_host.");
 IREE_FLAG_LIST(string, binding,
@@ -52,7 +51,7 @@ typedef struct iree_xdna_run_binding_t {
   void* registered_host_pointer;
   // Stable XDNA attachment to provider-owned or registered physical backing.
   amdf_memory_t* memory;
-  // Explicit host view retained through prepared-command destruction.
+  // Explicit host view retained through terminal completion.
   amdf_host_mapping_t* mapping;
   // Immutable properties of the host view.
   amdf_host_mapping_info_t mapping_info;
@@ -84,27 +83,27 @@ typedef struct iree_xdna_run_t {
   amdf_memory_profile_roles_t binding_memory_role;
   // Native scheduling and placement context borrowed by memory and queues.
   amdf_xdna_context_t* context;
-  // Caller-owned cold instruction storage, released before its context.
+  // Caller-owned backing retained through all accepted work.
   struct {
-    // Device-required alignment of submitted instruction addresses.
-    uint32_t alignment;
-    // One private allocation backing this executable instance.
-    amdf_memory_t* memory;
-    // Explicit writable view used only during cold instantiation.
-    amdf_host_mapping_t* mapping;
-  } instructions;
+    // Number of entry-relative allocation uses.
+    uint32_t count;
+    // Allocation owning resolved backing and the trailing mapping handles.
+    iree_hal_amd_xdna_executable_storage_t* values;
+    // Native mapping handles in the same order as values.
+    amdf_host_mapping_t** mappings;
+  } storage;
   // Native kernel queue family selected from the libamdf endpoint.
   uint32_t queue_family_ordinal;
-  // Parsed and lowered executable retaining the immutable image bytes.
-  iree_hal_amd_xdna_executable_t* executable;
+  // Immutable image retaining source bytes and indexed native requirements.
+  iree_hal_amd_xdna_image_t* image;
+  // Selected exported entry in image metadata.
+  uint32_t entry_ordinal;
   // Number of dense input bindings and resolved command bindings.
   iree_host_size_t binding_count;
   // Allocation owning binding state and the trailing resolved-binding array.
   iree_xdna_run_binding_t* bindings;
-  // Resolved bindings borrowed during prepared-command construction.
-  iree_hal_amd_xdna_prepared_command_binding_t* prepared_bindings;
-  // Prepared command retaining the executable and every HAL buffer.
-  iree_hal_amd_xdna_prepared_command_t* prepared_command;
+  // Resolved bindings borrowed while patching native backing.
+  iree_hal_amd_xdna_executable_binding_t* resolved_bindings;
   // Exclusive native queue lease retained through accepted work retirement.
   amdf_kernel_queue_t* queue;
 } iree_xdna_run_t;
@@ -149,21 +148,20 @@ static iree_status_t iree_xdna_run_load_bindings(iree_xdna_run_t* run) {
   const iree_flag_string_list_t inputs = FLAG_binding_list();
   const iree_flag_string_list_t outputs = FLAG_output_list();
   iree_host_size_t total_size = 0;
-  iree_host_size_t prepared_offset = 0;
+  iree_host_size_t resolved_offset = 0;
   IREE_RETURN_IF_ERROR(IREE_STRUCT_LAYOUT(
       0, &total_size,
       IREE_STRUCT_FIELD(inputs.count, iree_xdna_run_binding_t, NULL),
       IREE_STRUCT_FIELD_ALIGNED(
-          inputs.count, iree_hal_amd_xdna_prepared_command_binding_t,
-          iree_alignof(iree_hal_amd_xdna_prepared_command_binding_t),
-          &prepared_offset)));
+          inputs.count, iree_hal_amd_xdna_executable_binding_t,
+          iree_alignof(iree_hal_amd_xdna_executable_binding_t),
+          &resolved_offset)));
   if (inputs.count != 0) {
     IREE_RETURN_IF_ERROR(iree_allocator_malloc(run->host_allocator, total_size,
                                                (void**)&run->bindings));
-    run->prepared_bindings =
-        (iree_hal_amd_xdna_prepared_command_binding_t*)((uint8_t*)
-                                                            run->bindings +
-                                                        prepared_offset);
+    run->resolved_bindings =
+        (iree_hal_amd_xdna_executable_binding_t*)((uint8_t*)run->bindings +
+                                                  resolved_offset);
   }
   run->binding_count = inputs.count;
   iree_status_t status = iree_ok_status();
@@ -321,7 +319,7 @@ static iree_status_t iree_xdna_run_create_device(
         IREE_STATUS_UNAVAILABLE,
         "endpoint does not support native instruction submission");
   }
-  run->instructions.alignment = device_info.instruction.address_alignment;
+  out_target->instruction_alignment = device_info.instruction.address_alignment;
   amdf_endpoint_info_t endpoint_info = {
       .type = AMDF_STRUCTURE_TYPE_ENDPOINT_INFO,
       .structure_size = sizeof(endpoint_info),
@@ -412,8 +410,7 @@ static iree_status_t iree_xdna_run_create_device(
 }
 
 static iree_status_t iree_xdna_run_prepare_registered_binding(
-    iree_xdna_run_t* run,
-    const iree_hal_amd_xdna_elf_binding_record_t* contract,
+    iree_xdna_run_t* run, const iree_xdna_elf_binding_record_t* contract,
     iree_const_byte_span_t initial, iree_xdna_run_binding_t* binding) {
   const uint64_t cover_granularity =
       run->memory_profile.registration.native_byte_length_granularity;
@@ -428,10 +425,9 @@ static iree_status_t iree_xdna_run_prepare_registered_binding(
   if (contract->minimum_alignment > maximum_alignment) {
     return iree_make_status(
         IREE_STATUS_UNAVAILABLE,
-        "binding %u requires alignment %" PRIu64
+        "binding requires alignment %" PRIu64
         " beyond the registered-host profile limit %" PRIu64,
-        contract->binding_ordinal, contract->minimum_alignment,
-        maximum_alignment);
+        contract->minimum_alignment, maximum_alignment);
   }
 
   const iree_host_size_t pointer_offset =
@@ -451,14 +447,15 @@ static iree_status_t iree_xdna_run_prepare_registered_binding(
 }
 
 static iree_status_t iree_xdna_run_prepare_binding(
-    iree_xdna_run_t* run, iree_hal_executable_function_t function,
-    iree_host_size_t ordinal) {
+    iree_xdna_run_t* run, const iree_xdna_elf_entry_record_t* entry,
+    uint32_t ordinal) {
   iree_xdna_run_binding_t* binding = &run->bindings[ordinal];
   const iree_const_byte_span_t initial =
       binding->initial_contents->const_buffer;
-  iree_hal_amd_xdna_elf_binding_record_t contract;
-  IREE_RETURN_IF_ERROR(iree_hal_amd_xdna_executable_query_binding(
-      run->executable, function, ordinal, &contract));
+  const iree_xdna_elf_binding_record_t contract =
+      iree_hal_amd_xdna_image_tables_binding(
+          iree_hal_amd_xdna_image_tables(run->image),
+          entry->first_binding + ordinal);
   if (run->binding_memory_role == AMDF_MEMORY_PROFILE_ROLE_REGISTER) {
     IREE_RETURN_IF_ERROR(iree_xdna_run_prepare_registered_binding(
         run, &contract, initial, binding));
@@ -510,7 +507,7 @@ static iree_status_t iree_xdna_run_prepare_binding(
       return iree_make_status(
           IREE_STATUS_FAILED_PRECONDITION,
           "registered binding %u returned inconsistent logical geometry",
-          contract.binding_ordinal);
+          ordinal);
     }
   }
   const amdf_memory_map_info_t map_info = {
@@ -535,7 +532,7 @@ static iree_status_t iree_xdna_run_prepare_binding(
     return iree_make_status(
         IREE_STATUS_FAILED_PRECONDITION,
         "registered binding %u did not preserve its logical host address",
-        contract.binding_ordinal);
+        ordinal);
   }
   iree_hal_memory_type_t memory_type = IREE_HAL_MEMORY_TYPE_HOST_LOCAL |
                                        IREE_HAL_MEMORY_TYPE_HOST_VISIBLE |
@@ -562,7 +559,7 @@ static iree_status_t iree_xdna_run_prepare_binding(
     memcpy(binding->mapping_info.pointer, initial.data, initial.data_length);
   } else {
     fprintf(stderr, "Registered binding %u at native page offset %" PRIu64 "\n",
-            contract.binding_ordinal, memory_info.source_byte_offset);
+            ordinal, memory_info.source_byte_offset);
     fflush(stderr);
   }
   IREE_RETURN_IF_ERROR(IREE_HAL_AMD_STATUS_FROM_AMDF(
@@ -570,54 +567,75 @@ static iree_status_t iree_xdna_run_prepare_binding(
                                            AMDF_HOST_CACHE_OPERATION_FLUSH, 0,
                                            initial.data_length),
       "host_mapping_cache_control(FLUSH)"));
-  run->prepared_bindings[ordinal] =
-      (iree_hal_amd_xdna_prepared_command_binding_t){
-          .buffer_ref =
-              iree_hal_make_buffer_ref(binding->buffer, 0, initial.data_length),
-          .memory = binding->memory,
-          .device_address = dma_address,
-      };
+  run->resolved_bindings[ordinal] = (iree_hal_amd_xdna_executable_binding_t){
+      .buffer_ref =
+          iree_hal_make_buffer_ref(binding->buffer, 0, initial.data_length),
+      .memory = binding->memory,
+      .device_address = dma_address,
+  };
   return iree_ok_status();
 }
 
-static iree_status_t iree_xdna_run_prepare_invocation(
-    iree_xdna_run_t* run, iree_hal_executable_function_t function) {
-  iree_host_size_t byte_length = 0;
-  IREE_RETURN_IF_ERROR(iree_hal_amd_xdna_prepared_command_query_storage_size(
-      run->executable, function, run->instructions.alignment, &byte_length));
-  amdf_memory_scope_t* scope = NULL;
-  uint32_t count = 0;
-  IREE_RETURN_IF_ERROR(IREE_HAL_AMD_STATUS_FROM_AMDF(
-      run->xdna_api->context_enumerate_memory_scopes(run->context, 1, &scope,
-                                                     &count),
-      "xdna.context_enumerate_memory_scopes"));
+static iree_status_t iree_xdna_run_allocate_storage(
+    iree_xdna_run_t* run, uint32_t use,
+    const iree_xdna_elf_allocation_record_t* requirement) {
+  iree_hal_amd_xdna_executable_storage_t* storage = &run->storage.values[use];
+  const bool is_command =
+      requirement->domain == IREE_XDNA_ELF_ALLOCATION_DOMAIN_COMMAND;
+  amdf_memory_scope_t* scope = run->memory_scope;
+  if (is_command) {
+    uint32_t count = 0;
+    IREE_RETURN_IF_ERROR(IREE_HAL_AMD_STATUS_FROM_AMDF(
+        run->xdna_api->context_enumerate_memory_scopes(run->context, 1, &scope,
+                                                       &count),
+        "xdna.context_enumerate_memory_scopes"));
+  }
+  const amdf_memory_address_kind_t address_kind =
+      is_command ? AMDF_MEMORY_ADDRESS_XDNA_FIRMWARE
+                 : AMDF_MEMORY_ADDRESS_XDNA_DMA;
   const amdf_memory_device_access_t access = {
       .device = run->device,
       .requirements =
           {
               .access = AMDF_MEMORY_ACCESS_READ | AMDF_MEMORY_ACCESS_WRITE |
-                        AMDF_MEMORY_ACCESS_EXECUTE,
+                        (is_command ? AMDF_MEMORY_ACCESS_EXECUTE : 0),
               .flags = AMDF_MEMORY_FLAG_DEVICE_ADDRESS,
-              .address_kinds = UINT64_C(1) << AMDF_MEMORY_ADDRESS_XDNA_FIRMWARE,
+              .address_kinds = UINT64_C(1) << address_kind,
           },
   };
   amdf_memory_profile_t profile = {
       .type = AMDF_STRUCTURE_TYPE_MEMORY_PROFILE,
       .structure_size = sizeof(profile),
+      .ordinal = AMDF_MEMORY_PROFILE_ORDINAL_UNKNOWN,
   };
-  amdf_memory_access_capabilities_t capabilities = {
-      .type = AMDF_STRUCTURE_TYPE_MEMORY_ACCESS_CAPABILITIES,
-      .structure_size = sizeof(capabilities),
-  };
-  IREE_RETURN_IF_ERROR(IREE_HAL_AMD_STATUS_FROM_AMDF(
-      run->api->memory_scope_query_device_profile(scope, 0, 1, &access,
-                                                  &profile, &capabilities),
-      "memory_scope_query_device_profile(instructions)"));
+  for (uint32_t ordinal = 0;; ++ordinal) {
+    amdf_memory_access_capabilities_t capabilities = {
+        .type = AMDF_STRUCTURE_TYPE_MEMORY_ACCESS_CAPABILITIES,
+        .structure_size = sizeof(capabilities),
+    };
+    const amdf_status_t status = run->api->memory_scope_query_device_profile(
+        scope, ordinal, 1, &access, &profile, &capabilities);
+    if (amdf_status_code(status) == AMDF_STATUS_CODE_OUT_OF_RANGE) {
+      return iree_make_status(
+          IREE_STATUS_UNAVAILABLE,
+          "no host-mappable allocation profile for XDNA storage");
+    }
+    if (status == amdf_make_api_status(AMDF_STATUS_CODE_UNSUPPORTED)) continue;
+    IREE_RETURN_IF_ERROR(IREE_HAL_AMD_STATUS_FROM_AMDF(
+        status, "memory_scope_query_device_profile"));
+    if ((profile.roles & (AMDF_MEMORY_PROFILE_ROLE_CREATE |
+                          AMDF_MEMORY_PROFILE_ROLE_HOST_MAP)) ==
+            (AMDF_MEMORY_PROFILE_ROLE_CREATE |
+             AMDF_MEMORY_PROFILE_ROLE_HOST_MAP) &&
+        (profile.supported_flags & AMDF_MEMORY_FLAG_HOST_VISIBLE) != 0)
+      break;
+  }
   const uint64_t granularity = profile.allocation.byte_length_granularity;
   uint64_t rounded_length = 0;
-  if (!iree_checked_add_u64(byte_length, granularity - 1, &rounded_length)) {
+  if (!iree_checked_add_u64(requirement->byte_length, granularity - 1,
+                            &rounded_length)) {
     return iree_make_status(IREE_STATUS_OUT_OF_RANGE,
-                            "instruction allocation size overflows");
+                            "XDNA allocation size overflows");
   }
   const amdf_memory_create_info_t create_info = {
       .type = AMDF_STRUCTURE_TYPE_MEMORY_CREATE_INFO,
@@ -630,51 +648,76 @@ static iree_status_t iree_xdna_run_prepare_invocation(
       .accesses = &access,
   };
   IREE_RETURN_IF_ERROR(IREE_HAL_AMD_STATUS_FROM_AMDF(
-      run->api->memory_create(scope, &create_info, &run->instructions.memory),
-      "memory_create(instructions)"));
-  uint64_t firmware_address = 0;
+      run->api->memory_create(scope, &create_info, &storage->memory),
+      "memory_create(storage)"));
   IREE_RETURN_IF_ERROR(IREE_HAL_AMD_STATUS_FROM_AMDF(
-      run->api->memory_query_address(run->instructions.memory, 0,
-                                     AMDF_MEMORY_ADDRESS_XDNA_FIRMWARE,
-                                     &firmware_address),
-      "memory_query_address(instructions)"));
-  if (firmware_address % run->instructions.alignment != 0) {
-    return iree_make_status(
-        IREE_STATUS_UNAVAILABLE,
-        "private allocation cannot satisfy instruction alignment");
-  }
+      run->api->memory_query_address(storage->memory, 0, address_kind,
+                                     &storage->device_address),
+      "memory_query_address(storage)"));
   const amdf_memory_map_info_t map_info = {
       .type = AMDF_STRUCTURE_TYPE_MEMORY_MAP_INFO,
       .structure_size = sizeof(map_info),
-      .byte_length = byte_length,
+      .byte_length = requirement->byte_length,
       .flags = AMDF_MEMORY_MAP_FLAG_READ | AMDF_MEMORY_MAP_FLAG_WRITE,
   };
   IREE_RETURN_IF_ERROR(IREE_HAL_AMD_STATUS_FROM_AMDF(
-      run->api->memory_map(run->instructions.memory, &map_info,
-                           &run->instructions.mapping),
-      "memory_map(instructions)"));
+      run->api->memory_map(storage->memory, &map_info,
+                           &run->storage.mappings[use]),
+      "memory_map(storage)"));
   amdf_host_mapping_info_t mapping_info = {
       .type = AMDF_STRUCTURE_TYPE_HOST_MAPPING_INFO,
       .structure_size = sizeof(mapping_info),
   };
   IREE_RETURN_IF_ERROR(IREE_HAL_AMD_STATUS_FROM_AMDF(
-      run->api->host_mapping_query_info(run->instructions.mapping,
+      run->api->host_mapping_query_info(run->storage.mappings[use],
                                         &mapping_info),
-      "host_mapping_query_info(instructions)"));
-  const amdf_xdna_kernel_command_t storage_range = {
-      .memory = run->instructions.memory,
-      .byte_length = byte_length,
-  };
-  IREE_RETURN_IF_ERROR(iree_hal_amd_xdna_prepared_command_create(
-      run->executable, function, run->instructions.alignment, &storage_range,
-      iree_make_byte_span(mapping_info.pointer, byte_length),
-      run->binding_count, run->prepared_bindings, run->host_allocator,
-      &run->prepared_command));
-  return IREE_HAL_AMD_STATUS_FROM_AMDF(
-      run->api->host_mapping_cache_control(run->instructions.mapping,
-                                           AMDF_HOST_CACHE_OPERATION_FLUSH, 0,
-                                           byte_length),
-      "host_mapping_cache_control(instructions)");
+      "host_mapping_query_info(storage)"));
+  storage->mapping = iree_make_byte_span(
+      mapping_info.pointer, (iree_host_size_t)requirement->byte_length);
+  return iree_ok_status();
+}
+
+static iree_status_t iree_xdna_run_prepare_storage(
+    iree_xdna_run_t* run, const iree_xdna_elf_entry_record_t* entry) {
+  iree_host_size_t total_size = 0;
+  iree_host_size_t mappings_offset = 0;
+  IREE_RETURN_IF_ERROR(IREE_STRUCT_LAYOUT(
+      0, &total_size,
+      IREE_STRUCT_FIELD(entry->allocation_use_count,
+                        iree_hal_amd_xdna_executable_storage_t, NULL),
+      IREE_STRUCT_FIELD(entry->allocation_use_count, amdf_host_mapping_t*,
+                        &mappings_offset)));
+  IREE_RETURN_IF_ERROR(iree_allocator_malloc(run->host_allocator, total_size,
+                                             (void**)&run->storage.values));
+  run->storage.mappings =
+      (amdf_host_mapping_t**)((uint8_t*)run->storage.values + mappings_offset);
+  run->storage.count = entry->allocation_use_count;
+  const iree_hal_amd_xdna_image_tables_t* tables =
+      iree_hal_amd_xdna_image_tables(run->image);
+  iree_status_t status = iree_ok_status();
+  for (uint32_t i = 0; iree_status_is_ok(status) && i < run->storage.count;
+       ++i) {
+    const uint32_t ordinal = iree_hal_amd_xdna_image_tables_allocation_use(
+        tables, entry->first_allocation_use + i);
+    const iree_xdna_elf_allocation_record_t allocation =
+        iree_hal_amd_xdna_image_tables_allocation(tables, ordinal);
+    status = iree_xdna_run_allocate_storage(run, i, &allocation);
+  }
+  if (!iree_status_is_ok(status)) return status;
+  IREE_RETURN_IF_ERROR(iree_hal_amd_xdna_executable_load(
+      run->image, run->entry_ordinal, run->storage.count, run->storage.values));
+  IREE_RETURN_IF_ERROR(iree_hal_amd_xdna_executable_bind(
+      run->image, run->entry_ordinal, run->storage.count, run->storage.values,
+      run->binding_count, run->resolved_bindings));
+  for (uint32_t i = 0; iree_status_is_ok(status) && i < run->storage.count;
+       ++i) {
+    status = IREE_HAL_AMD_STATUS_FROM_AMDF(
+        run->api->host_mapping_cache_control(
+            run->storage.mappings[i], AMDF_HOST_CACHE_OPERATION_FLUSH, 0,
+            run->storage.values[i].mapping.data_length),
+        "host_mapping_cache_control(storage)");
+  }
+  return status;
 }
 
 static iree_status_t iree_xdna_run_execute(iree_xdna_run_t* run,
@@ -682,58 +725,61 @@ static iree_status_t iree_xdna_run_execute(iree_xdna_run_t* run,
   IREE_RETURN_IF_ERROR(iree_xdna_run_open_endpoint(run));
   iree_hal_amd_xdna_aie2p_target_t target;
   IREE_RETURN_IF_ERROR(iree_xdna_run_create_device(run, &target));
-  IREE_RETURN_IF_ERROR(iree_hal_amd_xdna_executable_create(
-      image, &target, run->host_allocator, &run->executable));
-  iree_hal_executable_function_t function =
-      iree_hal_executable_function_from_index(0);
+  IREE_RETURN_IF_ERROR(iree_hal_amd_xdna_image_create(
+      image, &target, run->host_allocator, &run->image));
   if (FLAG_entry[0] != 0) {
-    IREE_RETURN_IF_ERROR(iree_hal_amd_xdna_executable_lookup_function_by_name(
-        run->executable, iree_make_cstring_view(FLAG_entry), &function));
+    IREE_RETURN_IF_ERROR(iree_hal_amd_xdna_image_find_entry(
+        run->image, iree_make_cstring_view(FLAG_entry), &run->entry_ordinal));
   }
-  iree_hal_executable_function_info_t function_info;
-  IREE_RETURN_IF_ERROR(iree_hal_amd_xdna_executable_function_info(
-      run->executable, function, &function_info));
-  if (function_info.binding_count != run->binding_count) {
+  const iree_hal_amd_xdna_image_tables_t* tables =
+      iree_hal_amd_xdna_image_tables(run->image);
+  const iree_xdna_elf_entry_record_t entry =
+      iree_hal_amd_xdna_image_tables_entry(tables, run->entry_ordinal);
+  const iree_string_view_t name =
+      iree_hal_amd_xdna_image_tables_entry_name(tables, &entry);
+  if (entry.binding_count != run->binding_count) {
     return iree_make_status(IREE_STATUS_INVALID_ARGUMENT,
                             "entry requires %u bindings but %" PRIhsz
                             " were supplied",
-                            function_info.binding_count, run->binding_count);
+                            entry.binding_count, run->binding_count);
   }
   iree_status_t status = iree_ok_status();
   for (iree_host_size_t i = 0;
        iree_status_is_ok(status) && i < run->binding_count; ++i) {
-    status = iree_xdna_run_prepare_binding(run, function, i);
+    status = iree_xdna_run_prepare_binding(run, &entry, (uint32_t)i);
   }
   if (!iree_status_is_ok(status)) return status;
-  IREE_RETURN_IF_ERROR(iree_xdna_run_prepare_invocation(run, function));
+  IREE_RETURN_IF_ERROR(iree_xdna_run_prepare_storage(run, &entry));
   const amdf_xdna_kernel_queue_create_info_t queue_info = {
       .type = AMDF_STRUCTURE_TYPE_XDNA_KERNEL_QUEUE_CREATE_INFO,
       .structure_size = sizeof(queue_info),
       .queue_family_ordinal = run->queue_family_ordinal,
   };
   fprintf(stderr, "Prepared %.*s; acquiring queue and admitting firmware\n",
-          (int)function_info.name.size, function_info.name.data);
+          (int)name.size, name.data);
   fflush(stderr);
   IREE_RETURN_IF_ERROR(
       IREE_HAL_AMD_STATUS_FROM_AMDF(run->xdna_api->kernel_queue_create(
                                         run->context, &queue_info, &run->queue),
                                     "xdna.kernel_queue_create"));
+  uint32_t next_invocation = 0;
   for (int32_t invocation_ordinal = 0;
        invocation_ordinal < FLAG_invocation_count; ++invocation_ordinal) {
+    amdf_xdna_kernel_command_t command;
+    uint32_t continuation = 0;
+    IREE_RETURN_IF_ERROR(iree_hal_amd_xdna_executable_query_invocation(
+        run->image, run->entry_ordinal, next_invocation, run->storage.count,
+        run->storage.values, &command, &continuation));
     const amdf_xdna_kernel_queue_submission_info_t submission_info = {
         .type = AMDF_STRUCTURE_TYPE_XDNA_KERNEL_QUEUE_SUBMISSION_INFO,
         .structure_size = sizeof(submission_info),
         .command_count = 1,
-        .commands = invocation_ordinal == 0
-                        ? iree_hal_amd_xdna_prepared_command_initialization(
-                              run->prepared_command)
-                        : iree_hal_amd_xdna_prepared_command_execution(
-                              run->prepared_command),
+        .commands = &command,
     };
     uint64_t submission = 0;
     fprintf(stderr, "Publishing invocation %d/%d (%s)\n",
             invocation_ordinal + 1, FLAG_invocation_count,
-            invocation_ordinal == 0 ? "load and control" : "control only");
+            invocation_ordinal == 0 ? "establish state" : "continue");
     fflush(stderr);
     IREE_RETURN_IF_ERROR(IREE_HAL_AMD_STATUS_FROM_AMDF(
         run->xdna_api->kernel_queue_submit(run->queue, &submission_info,
@@ -745,6 +791,7 @@ static iree_status_t iree_xdna_run_execute(iree_xdna_run_t* run,
         run->api->kernel_queue_wait(run->queue, submission,
                                     AMDF_TIMEOUT_INFINITE, 0),
         "kernel_queue_wait"));
+    next_invocation = continuation;
     fprintf(stderr, "Submission %" PRIu64 " completed and retired\n",
             submission);
     fflush(stderr);
@@ -781,22 +828,31 @@ static iree_status_t iree_xdna_run_deinitialize(iree_xdna_run_t* run) {
         run->api->kernel_queue_destroy(run->queue), "kernel_queue_destroy"));
     run->queue = NULL;
   }
-  iree_hal_amd_xdna_prepared_command_destroy(run->prepared_command);
-  run->prepared_command = NULL;
-  if (run->instructions.mapping != NULL) {
-    IREE_RETURN_IF_ERROR(IREE_HAL_AMD_STATUS_FROM_AMDF(
-        run->api->host_mapping_destroy(run->instructions.mapping),
-        "host_mapping_destroy(instructions)"));
-    run->instructions.mapping = NULL;
+  iree_status_t storage_status = iree_ok_status();
+  for (uint32_t i = 0;
+       iree_status_is_ok(storage_status) && i < run->storage.count; ++i) {
+    if (run->storage.mappings[i] != NULL) {
+      storage_status = IREE_HAL_AMD_STATUS_FROM_AMDF(
+          run->api->host_mapping_destroy(run->storage.mappings[i]),
+          "host_mapping_destroy(storage)");
+      if (iree_status_is_ok(storage_status)) run->storage.mappings[i] = NULL;
+    }
+    if (iree_status_is_ok(storage_status) &&
+        run->storage.values[i].memory != NULL) {
+      storage_status = IREE_HAL_AMD_STATUS_FROM_AMDF(
+          run->api->memory_destroy(run->storage.values[i].memory),
+          "memory_destroy(storage)");
+      if (iree_status_is_ok(storage_status))
+        run->storage.values[i].memory = NULL;
+    }
   }
-  if (run->instructions.memory != NULL) {
-    IREE_RETURN_IF_ERROR(IREE_HAL_AMD_STATUS_FROM_AMDF(
-        run->api->memory_destroy(run->instructions.memory),
-        "memory_destroy(instructions)"));
-    run->instructions.memory = NULL;
-  }
-  iree_hal_amd_xdna_executable_release(run->executable);
-  run->executable = NULL;
+  if (!iree_status_is_ok(storage_status)) return storage_status;
+  iree_allocator_free(run->host_allocator, run->storage.values);
+  run->storage.values = NULL;
+  run->storage.mappings = NULL;
+  run->storage.count = 0;
+  iree_hal_amd_xdna_image_destroy(run->image);
+  run->image = NULL;
   iree_status_t status = iree_ok_status();
   for (iree_host_size_t i = 0;
        iree_status_is_ok(status) && i < run->binding_count; ++i) {

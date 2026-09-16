@@ -560,7 +560,7 @@ NPU2_ARRAY_FAMILY = ArrayFamily(
             kind=TileKind.SHIM_NOC,
             first_row=0,
             row_count=1,
-            memory=TileMemoryFacts(0, 0, 0, 0, 0, ()),
+            memory=TileMemoryFacts(0, 0, 0, 0, 0, 0, ()),
             lock_count=16,
             lock_value_minimum=-64,
             lock_value_maximum=63,
@@ -600,6 +600,7 @@ NPU2_ARRAY_FAMILY = ArrayFamily(
                 bank_count=8,
                 program_base=0,
                 program_capacity=0,
+                program_load_base=0,
                 load_windows=(
                     AddressWindow(
                         "west", 0x00000, 512 * 1024, 0, -1, 0, TileKind.MEMORY
@@ -651,6 +652,7 @@ NPU2_ARRAY_FAMILY = ArrayFamily(
                 bank_count=4,
                 program_base=0,
                 program_capacity=16 * 1024,
+                program_load_base=0x20000,
                 load_windows=(
                     AddressWindow(
                         "south", 0x40000, 64 * 1024, 0, 0, -1, TileKind.COMPUTE

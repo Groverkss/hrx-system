@@ -12,7 +12,6 @@
 
 #include "benchmark/benchmark.h"
 #include "experimental/xdna/executable.h"
-#include "experimental/xdna/prepared_command.h"
 #include "iree/hal/drivers/amd/xdna/image/aie2p/npu2.h"
 #include "iree/hal/drivers/amd/xdna/image/testdata/mul_i32.h"
 #include "iree/hal/drivers/amd/xdna/image/testdata/mul_i32_npu4.h"
@@ -148,21 +147,19 @@ class ExecutionBenchmark {
     iree_byte_sequence_t* sequence = nullptr;
     CheckIreeStatus(iree_byte_sequence_create_from_span_move(
         &image_bytes, iree_allocator_system(), &sequence));
-    CheckIreeStatus(iree_hal_amd_xdna_executable_create(
+    CheckIreeStatus(iree_hal_amd_xdna_image_create(
         sequence, &target, iree_allocator_system(), &executable_));
     iree_byte_sequence_release(sequence);
-    iree_hal_executable_function_t function;
-    CheckIreeStatus(iree_hal_amd_xdna_executable_lookup_function_by_name(
-        executable_, IREE_SV("mul_i32"), &function));
+    uint32_t entry_ordinal = 0;
+    CheckIreeStatus(iree_hal_amd_xdna_image_find_entry(
+        executable_, IREE_SV("mul_i32"), &entry_ordinal));
     CreateBindings(instance);
-    PrepareExecution(function, device_info.instruction.address_alignment);
+    PrepareExecution(entry_ordinal);
 
     WriteInputs();
-    const uint64_t submission =
-        Submit(iree_hal_amd_xdna_prepared_command_initialization(prepared_));
+    const uint64_t submission = Submit(&initialization_);
     Wait(submission);
     VerifyOutput(submission);
-    VerifyInstructions();
     skip_reason_ = nullptr;
   }
 
@@ -172,9 +169,7 @@ class ExecutionBenchmark {
       state.SkipWithMessage(skip_reason_);
       return;
     }
-    VerifyInstructions();
-    const auto* command =
-        iree_hal_amd_xdna_prepared_command_execution(prepared_);
+    const auto* command = &continuation_;
     for (auto iteration : state) {
       (void)iteration;
       state.PauseTiming();
@@ -191,14 +186,12 @@ class ExecutionBenchmark {
       VerifyOutput(submission);
       state.ResumeTiming();
     }
-    VerifyInstructions();
     state.SetItemsProcessed(state.iterations());
   }
 
   void Deinitialize() {
     if (queue_)
       CheckStatus(api_->kernel_queue_destroy(queue_), "queue_destroy");
-    iree_hal_amd_xdna_prepared_command_destroy(prepared_);
     DestroyMemory(instructions_);
     if (context_)
       CheckStatus(xdna_api_->context_destroy(context_), "context_destroy");
@@ -206,7 +199,7 @@ class ExecutionBenchmark {
       iree_hal_buffer_release(binding.buffer);
       DestroyMemory(binding.storage);
     }
-    iree_hal_amd_xdna_executable_release(executable_);
+    iree_hal_amd_xdna_image_destroy(executable_);
   }
 
  private:
@@ -324,8 +317,7 @@ class ExecutionBenchmark {
     }
   }
 
-  void PrepareExecution(iree_hal_executable_function_t function,
-                        iree_host_size_t alignment) {
+  void PrepareExecution(uint32_t entry_ordinal) {
     amdf_xdna_context_create_info_t context_create = {};
     context_create.type = AMDF_STRUCTURE_TYPE_XDNA_CONTEXT_CREATE_INFO;
     context_create.structure_size = sizeof(context_create);
@@ -336,8 +328,17 @@ class ExecutionBenchmark {
         AMDF_XDNA_SCHEDULING_MODE_TIME_SLICED;
     CheckStatus(xdna_api_->context_create(device_, &context_create, &context_),
                 "context_create");
-    CheckIreeStatus(iree_hal_amd_xdna_prepared_command_query_storage_size(
-        executable_, function, alignment, &instruction_byte_length_));
+    const auto* tables = iree_hal_amd_xdna_image_tables(executable_);
+    const auto entry =
+        iree_hal_amd_xdna_image_tables_entry(tables, entry_ordinal);
+    Check(entry.allocation_use_count == 1,
+          "multiplication fixture requires one allocation");
+    const auto requirement = iree_hal_amd_xdna_image_tables_allocation(
+        tables, iree_hal_amd_xdna_image_tables_allocation_use(
+                    tables, entry.first_allocation_use));
+    Check(requirement.domain == IREE_XDNA_ELF_ALLOCATION_DOMAIN_COMMAND,
+          "multiplication fixture requires command backing");
+    instruction_byte_length_ = requirement.byte_length;
     amdf_memory_scope_t* scope = nullptr;
     uint32_t count = 0;
     CheckStatus(
@@ -377,10 +378,10 @@ class ExecutionBenchmark {
     CheckStatus(api_->memory_create(scope, &create, &instructions_.memory),
                 "instructions_create");
     MapMemory(instruction_byte_length_, instructions_);
-    std::array<iree_hal_amd_xdna_prepared_command_binding_t, 3>
-        prepared_bindings = {};
+    std::array<iree_hal_amd_xdna_executable_binding_t, 3> resolved_bindings =
+        {};
     for (size_t i = 0; i < bindings_.size(); ++i) {
-      auto& binding = prepared_bindings[i];
+      auto& binding = resolved_bindings[i];
       binding.buffer_ref =
           iree_hal_make_buffer_ref(bindings_[i].buffer, 0, kBindingByteLength);
       binding.memory = bindings_[i].storage.memory;
@@ -391,17 +392,28 @@ class ExecutionBenchmark {
                   "data_address");
       binding.device_address += kBindingByteLength;
     }
-    amdf_xdna_kernel_command_t storage = {};
+    iree_hal_amd_xdna_executable_storage_t storage = {};
     storage.memory = instructions_.memory;
-    storage.byte_length = instruction_byte_length_;
-    CheckIreeStatus(iree_hal_amd_xdna_prepared_command_create(
-        executable_, function, alignment, &storage,
-        iree_make_byte_span(instructions_.pointer, instruction_byte_length_),
-        prepared_bindings.size(), prepared_bindings.data(),
-        iree_allocator_system(), &prepared_));
-    original_instructions_.assign(
-        instructions_.pointer,
-        instructions_.pointer + instruction_byte_length_);
+    storage.mapping =
+        iree_make_byte_span(instructions_.pointer, instruction_byte_length_);
+    CheckStatus(api_->memory_query_address(storage.memory, 0,
+                                           AMDF_MEMORY_ADDRESS_XDNA_FIRMWARE,
+                                           &storage.device_address),
+                "instruction_address");
+    CheckIreeStatus(iree_hal_amd_xdna_executable_load(
+        executable_, entry_ordinal, 1, &storage));
+    CheckIreeStatus(iree_hal_amd_xdna_executable_bind(
+        executable_, entry_ordinal, 1, &storage, resolved_bindings.size(),
+        resolved_bindings.data()));
+    uint32_t continuation = 0;
+    CheckIreeStatus(iree_hal_amd_xdna_executable_query_invocation(
+        executable_, entry_ordinal, 0, 1, &storage, &initialization_,
+        &continuation));
+    Check(continuation == 1, "multiplication establishing continuation");
+    CheckIreeStatus(iree_hal_amd_xdna_executable_query_invocation(
+        executable_, entry_ordinal, continuation, 1, &storage, &continuation_,
+        &continuation));
+    Check(continuation == 1, "multiplication repeat continuation");
     CheckStatus(api_->host_mapping_cache_control(
                     instructions_.mapping, AMDF_HOST_CACHE_OPERATION_FLUSH, 0,
                     instruction_byte_length_),
@@ -488,16 +500,6 @@ class ExecutionBenchmark {
     }
   }
 
-  void VerifyInstructions() {
-    CheckStatus(api_->host_mapping_cache_control(
-                    instructions_.mapping, AMDF_HOST_CACHE_OPERATION_INVALIDATE,
-                    0, instruction_byte_length_),
-                "instruction_invalidation");
-    Check(std::memcmp(original_instructions_.data(), instructions_.pointer,
-                      instruction_byte_length_) == 0,
-          "prepared instructions changed");
-  }
-
   // Negotiated core and XDNA API tables borrowed from the linked provider.
   const amdf_api_t* api_ = nullptr;
   // XDNA extension paired with api_.
@@ -509,19 +511,19 @@ class ExecutionBenchmark {
   // Native kernel queue family selected from the libamdf endpoint.
   uint32_t queue_family_ordinal_ = UINT32_MAX;
   // Immutable parsed image retaining its owned input bytes.
-  iree_hal_amd_xdna_executable_t* executable_ = nullptr;
+  iree_hal_amd_xdna_image_t* executable_ = nullptr;
   // Native context outliving its private instruction backing and queue.
   amdf_xdna_context_t* context_ = nullptr;
   // One resident instruction allocation and explicit host view.
   MappedMemory instructions_;
   // Used instruction prefix, independent of native allocation granularity.
   iree_host_size_t instruction_byte_length_ = 0;
-  // Immutable prepared command retaining the executable and HAL wrappers.
-  iree_hal_amd_xdna_prepared_command_t* prepared_ = nullptr;
+  // Establishing command over live instruction backing.
+  amdf_xdna_kernel_command_t initialization_ = {};
+  // Continuation valid after establishment completes in context_.
+  amdf_xdna_kernel_command_t continuation_ = {};
   // Native publication lease borrowing context_.
   amdf_kernel_queue_t* queue_ = nullptr;
-  // Untimed byte oracle captured after cold relocation.
-  std::vector<uint8_t> original_instructions_;
   struct Binding {
     // Native data backing with a guard region on either side of the payload.
     MappedMemory storage;

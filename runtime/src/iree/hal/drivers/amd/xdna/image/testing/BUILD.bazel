@@ -13,14 +13,15 @@ package(
 )
 
 iree_runtime_cc_library(
-    name = "aie2p_image_fixture",
+    name = "image_fixture",
     testonly = True,
-    srcs = ["aie2p_image_fixture.cc"],
-    hdrs = ["aie2p_image_fixture.h"],
+    srcs = ["image_fixture.cc"],
+    hdrs = ["image_fixture.h"],
     deps = [
         ":image_builder",
         "//runtime/src/iree/base",
-        "//runtime/src/iree/hal/drivers/amd/xdna/image/aie2p:program_format",
+        "//runtime/src/iree/hal/drivers/amd/xdna/image",
+        "//runtime/src/iree/hal/drivers/amd/xdna/image/aie2p:npu2",
         "//runtime/src/iree/hal/drivers/amd/xdna/image/aie2p:target",
     ],
 )
@@ -33,6 +34,6 @@ iree_runtime_cc_library(
     deps = [
         "//runtime/src/iree/base",
         "//runtime/src/iree/hal/drivers/amd/xdna/image:directory",
-        "//runtime/src/iree/hal/drivers/amd/xdna/image:format",
+        "//runtime/src/iree/schemas:xdna_executable",
     ],
 )

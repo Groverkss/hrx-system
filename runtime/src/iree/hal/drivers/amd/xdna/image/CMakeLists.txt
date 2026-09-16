@@ -17,20 +17,8 @@ iree_cc_library(
   SRCS
     "directory.c"
   DEPS
-    ::format
     iree::base
-  PUBLIC
-)
-
-iree_cc_library(
-  NAME
-    format
-  HDRS
-    "format.h"
-  SRCS
-    "format.c"
-  DEPS
-    iree::base
+    iree::schemas::xdna_executable
   PUBLIC
 )
 
@@ -43,24 +31,10 @@ iree_cc_library(
     "image.c"
   DEPS
     ::directory
-    ::programs
     ::tables
     ::validation
     iree::base
-  PUBLIC
-)
-
-iree_cc_library(
-  NAME
-    programs
-  HDRS
-    "programs.h"
-  SRCS
-    "programs.c"
-  DEPS
-    ::directory
-    ::format
-    iree::base
+    iree::hal::drivers::amd::xdna::image::aie2p::target
   PUBLIC
 )
 
@@ -72,9 +46,8 @@ iree_cc_library(
   SRCS
     "tables.c"
   DEPS
-    ::directory
-    ::format
     iree::base
+    iree::schemas::xdna_executable
   PUBLIC
 )
 
@@ -87,10 +60,10 @@ iree_cc_library(
     "validation.c"
   DEPS
     ::directory
-    ::format
-    ::programs
     ::tables
     iree::base
+    iree::hal::drivers::amd::xdna::image::aie2p::target
+    iree::schemas::xdna_executable
   PUBLIC
 )
 
@@ -102,10 +75,9 @@ iree_cc_test(
   DEPS
     ::image
     iree::base
-    iree::hal::drivers::amd::xdna::image::aie2p::program_format
-    iree::hal::drivers::amd::xdna::image::aie2p::target
+    iree::hal::drivers::amd::xdna::image::aie2p::npu2
     iree::hal::drivers::amd::xdna::image::testdata::mul_i32
-    iree::hal::drivers::amd::xdna::image::testing::aie2p_image_fixture
+    iree::hal::drivers::amd::xdna::image::testdata::mul_i32_npu4
     iree::testing::gtest
     iree::testing::gtest_main
 )
@@ -117,21 +89,9 @@ iree_cc_test(
     "directory_test.cc"
   DEPS
     ::directory
-    ::format
     iree::base
     iree::hal::drivers::amd::xdna::image::testing::image_builder
-    iree::testing::gtest
-    iree::testing::gtest_main
-)
-
-iree_cc_test(
-  NAME
-    format_test
-  SRCS
-    "format_test.cc"
-  DEPS
-    ::format
-    iree::base
+    iree::schemas::xdna_executable
     iree::testing::gtest
     iree::testing::gtest_main
 )
@@ -145,55 +105,7 @@ iree_cc_test(
     ::image
     iree::base
     iree::hal::drivers::amd::xdna::image::aie2p::target
-    iree::hal::drivers::amd::xdna::image::testing::aie2p_image_fixture
-    iree::testing::gtest
-    iree::testing::gtest_main
-)
-
-iree_cc_test(
-  NAME
-    programs_test
-  SRCS
-    "programs_test.cc"
-  DEPS
-    ::directory
-    ::format
-    ::programs
-    iree::base
-    iree::hal::drivers::amd::xdna::image::testing::image_builder
-    iree::testing::gtest
-    iree::testing::gtest_main
-)
-
-iree_cc_test(
-  NAME
-    tables_test
-  SRCS
-    "tables_test.cc"
-  DEPS
-    ::directory
-    ::format
-    ::tables
-    iree::base
-    iree::hal::drivers::amd::xdna::image::testing::image_builder
-    iree::testing::gtest
-    iree::testing::gtest_main
-)
-
-iree_cc_test(
-  NAME
-    validation_test
-  SRCS
-    "validation_test.cc"
-  DEPS
-    ::directory
-    ::format
-    ::programs
-    ::tables
-    ::validation
-    iree::base
-    iree::hal::drivers::amd::xdna::image::aie2p::target
-    iree::hal::drivers::amd::xdna::image::testing::aie2p_image_fixture
+    iree::hal::drivers::amd::xdna::image::testing::image_fixture
     iree::testing::gtest
     iree::testing::gtest_main
 )

@@ -4,89 +4,85 @@
 // See https://llvm.org/LICENSE.txt for license information.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
-// Native executable backed by qualified XDNA images and immutable streams.
+// Direct loading and binding of native XDNA executable storage.
 
 #ifndef IREE_EXPERIMENTAL_XDNA_EXECUTABLE_H_
 #define IREE_EXPERIMENTAL_XDNA_EXECUTABLE_H_
 
+#include "amdf/xdna.h"
 #include "iree/base/api.h"
-#include "iree/base/byte_sequence.h"
-#include "iree/hal/drivers/amd/xdna/image/aie2p/native_image.h"
-#include "iree/hal/executable.h"
+#include "iree/hal/api.h"
+#include "iree/hal/drivers/amd/xdna/image/image.h"
 
 #ifdef __cplusplus
 extern "C" {
-#endif  // __cplusplus
+#endif
 
-// Reference-counted, immutable decoded image with no native device resources.
-// This standalone adapter has no HAL device or queue-family identity. Function
-// metadata uses HAL reflection value types without creating a HAL executable.
-typedef struct iree_hal_amd_xdna_executable_t iree_hal_amd_xdna_executable_t;
+// Borrowed backing in entry-relative allocation-use order. The caller resolves
+// each allocation's declared command or DMA address domain and owns its memory,
+// mapping and context. Loading needs exclusive write access; execution retains
+// all backing through terminal completion, including indirectly referenced DMA
+// storage. No operation below allocates or retains native resources.
+typedef struct iree_hal_amd_xdna_executable_storage_t {
+  // Writable mapping beginning at memory_byte_offset.
+  iree_byte_span_t mapping;
+  // Native memory owning the mapped range.
+  amdf_memory_t* memory;
+  // Native device-access ordinal associated with the command address.
+  uint32_t access_ordinal;
+  // Byte offset of mapping within memory.
+  uint64_t memory_byte_offset;
+  // Address of mapping in the allocation's declared native address domain.
+  uint64_t device_address;
+} iree_hal_amd_xdna_executable_storage_t;
 
-// Native objects and immutable metadata selected by one executable entry.
-//
-// All pointers borrow storage from the executable and remain valid until it is
-// destroyed. Native bytes are instantiated into caller-owned instruction
-// memory.
-typedef struct iree_hal_amd_xdna_executable_entry_t {
-  // Initialization ARRAY transaction shared by entries with the same placement.
-  iree_const_byte_span_t array;
-  // Immutable CONTROL transaction and its cold binding relocation records.
-  iree_hal_amd_xdna_aie2p_native_entry_t native;
-  // Number of dense buffer bindings accepted by this entry.
-  uint32_t binding_count;
-} iree_hal_amd_xdna_executable_entry_t;
+// Borrowed external binding resolved by the caller into a shim DMA address.
+// The caller keeps the logical buffer and native backing alive until every
+// invocation using the binding has reached terminal completion.
+typedef struct iree_hal_amd_xdna_executable_binding_t {
+  // Direct logical HAL buffer range whose access contract is validated.
+  iree_hal_buffer_ref_t buffer_ref;
+  // XDNA memory attachment backing buffer_ref.buffer.
+  amdf_memory_t* memory;
+  // Byte offset of the bound range within memory.
+  uint64_t memory_byte_offset;
+  // Exact shim DMA address of the first bound byte.
+  uint64_t device_address;
+} iree_hal_amd_xdna_executable_binding_t;
 
-// Creates a native XDNA executable from one canonical image.
-//
-// The image is completely decoded, target-qualified, and lowered without
-// activating a device or allocating native driver resources.
-// |source_sequence| and |target| are borrowed during the call. The executable
-// retains the source storage it needs. Success publishes one owning reference;
-// on failure, |out_executable| is unchanged.
-iree_status_t iree_hal_amd_xdna_executable_create(
-    iree_byte_sequence_t* source_sequence,
-    const iree_hal_amd_xdna_aie2p_target_t* target,
-    iree_allocator_t host_allocator,
-    iree_hal_amd_xdna_executable_t** out_executable);
+// Copies declared load ranges directly into final backing and applies static
+// allocation-address relocations. Only explicit load tails are zeroed; gaps are
+// untouched. Argument checks precede writes. A source IO failure may leave
+// partially loaded storage, which the caller cannot submit. Shared immutable
+// backing may be published only after all loading and static relocation ends.
+iree_status_t iree_hal_amd_xdna_executable_load(
+    const iree_hal_amd_xdna_image_t* image, uint32_t entry_ordinal,
+    iree_host_size_t storage_count,
+    const iree_hal_amd_xdna_executable_storage_t* storage);
 
-// Retains a reference to |executable|, which may be NULL.
-void iree_hal_amd_xdna_executable_retain(
-    iree_hal_amd_xdna_executable_t* executable);
+// Validates external binding ranges and patches their declared address fields
+// in loaded backing. Prior users of mutable backing must have drained. The
+// caller publishes mapped writes through the native cache API before
+// submission.
+iree_status_t iree_hal_amd_xdna_executable_bind(
+    const iree_hal_amd_xdna_image_t* image, uint32_t entry_ordinal,
+    iree_host_size_t storage_count,
+    const iree_hal_amd_xdna_executable_storage_t* storage,
+    iree_host_size_t binding_count,
+    const iree_hal_amd_xdna_executable_binding_t* bindings);
 
-// Releases a reference to |executable|, which may be NULL.
-void iree_hal_amd_xdna_executable_release(
-    iree_hal_amd_xdna_executable_t* executable);
-
-// Copies function metadata into |out_info|. Names borrow executable storage.
-// Only index function IDs are accepted. On failure, |out_info| is unchanged.
-iree_status_t iree_hal_amd_xdna_executable_function_info(
-    const iree_hal_amd_xdna_executable_t* executable,
-    iree_hal_executable_function_t function,
-    iree_hal_executable_function_info_t* out_info);
-
-// Finds an exported function by exact name. On failure, |out_function| is
-// unchanged. The returned index identifies a function within this executable.
-iree_status_t iree_hal_amd_xdna_executable_lookup_function_by_name(
-    const iree_hal_amd_xdna_executable_t* executable, iree_string_view_t name,
-    iree_hal_executable_function_t* out_function);
-
-// Copies the native entry selected by |function| into |out_entry|. On failure,
-// |out_entry| is unchanged.
-iree_status_t iree_hal_amd_xdna_executable_query_entry(
-    const iree_hal_amd_xdna_executable_t* executable,
-    iree_hal_executable_function_t function,
-    iree_hal_amd_xdna_executable_entry_t* out_entry);
-
-// Copies one entry-relative binding contract into |out_binding|. On failure,
-// |out_binding| is unchanged.
-iree_status_t iree_hal_amd_xdna_executable_query_binding(
-    const iree_hal_amd_xdna_executable_t* executable,
-    iree_hal_executable_function_t function, iree_host_size_t binding_ordinal,
-    iree_hal_amd_xdna_elf_binding_record_t* out_binding);
+// Resolves one invocation to a native command over caller-owned backing. The
+// returned continuation becomes valid only after terminal completion with
+// context, backing and resident state preserved. Reset or another entry's
+// configuration invalidates it; invocation zero establishes state again.
+iree_status_t iree_hal_amd_xdna_executable_query_invocation(
+    const iree_hal_amd_xdna_image_t* image, uint32_t entry_ordinal,
+    uint32_t invocation_ordinal, iree_host_size_t storage_count,
+    const iree_hal_amd_xdna_executable_storage_t* storage,
+    amdf_xdna_kernel_command_t* out_command, uint32_t* out_next_invocation);
 
 #ifdef __cplusplus
 }  // extern "C"
-#endif  // __cplusplus
+#endif
 
 #endif  // IREE_EXPERIMENTAL_XDNA_EXECUTABLE_H_

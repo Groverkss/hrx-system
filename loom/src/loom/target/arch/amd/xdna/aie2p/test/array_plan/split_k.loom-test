@@ -220,7 +220,7 @@ binding-patch ordinal=1 channel=3 shim=(1,0) direction=memory-to-stream dma-chan
 binding-patch ordinal=2 channel=4 shim=(2,0) direction=memory-to-stream dma-channel=0 partition=0/1 offset=0 span=256 transfer=256 repeat=1
 binding-patch ordinal=3 channel=5 shim=(0,0) direction=stream-to-memory dma-channel=0 partition=0/1 offset=0 span=256 transfer=256 repeat=1
 
-array-program records=143 payload-bytes=2840 writes=87 masked-writes=37 block-writes=16 tile-loads=3 waits=0
+array-program records=143 writes=87 masked-writes=37 block-writes=16 tile-loads=3 waits=0
 array-block record=98 address=0x0021d000 words=[0x00000004,0x00000000,0x00000000,0x00000000,0x00000000,0x0e043fe0]
 array-block record=99 address=0x0021d020 words=[0x04000004,0x00000000,0x00000000,0x00000000,0x00000000,0x06043fe0]
 array-block record=100 address=0x0021d040 words=[0x08000004,0x00000000,0x00000000,0x00000000,0x00000000,0x1e047fe2]
@@ -240,7 +240,7 @@ array-block record=113 address=0x0031d0a0 words=[0x04100040,0x00000000,0x0000000
 array-tile-load record=114 tile-program=0
 array-tile-load record=115 tile-program=1
 array-tile-load record=116 tile-program=2
-control-program records=14 payload-bytes=444 writes=6 masked-writes=1 block-writes=6 tile-loads=0 waits=1 relocations=6
+control-program records=14 writes=6 masked-writes=1 block-writes=6 tile-loads=0 waits=1 relocations=6
 control-block record=0 address=0x0001d000 words=[0x00000004,0x00000000,0x00000000,0x00000000,0xc0000000,0x02000000,0x00000000,0x02000000]
 control-write record=1 address=0x0001d214 value=0x00000000
 control-block record=2 address=0x0001d020 words=[0x00000004,0x00000000,0x00000000,0x00000000,0xc0000000,0x02000000,0x00000000,0x02000000]
@@ -255,12 +255,12 @@ control-block record=10 address=0x0001d040 words=[0x00000040,0x00000000,0x000000
 control-mask-write record=11 address=0x0001d200 mask=0x00001f00 value=0x00000f00
 control-write record=12 address=0x0001d204 value=0x80000002
 control-wait record=13 tile=(0,0) direction=stream-to-memory dma-channel=0 columns=1 rows=1
-control-relocation index=0 record=0 word=1 payload-offset=44 binding=0 addend=0 width=8 alignment=4
-control-relocation index=1 record=2 word=1 payload-offset=108 binding=1 addend=0 width=8 alignment=4
-control-relocation index=2 record=4 word=1 payload-offset=172 binding=0 addend=16 width=8 alignment=4
-control-relocation index=3 record=6 word=1 payload-offset=236 binding=1 addend=16 width=8 alignment=4
-control-relocation index=4 record=8 word=1 payload-offset=300 binding=2 addend=0 width=8 alignment=4
-control-relocation index=5 record=10 word=1 payload-offset=364 binding=3 addend=0 width=8 alignment=4
+control-relocation index=0 record=0 word=1 binding=0 addend=0 alignment=4
+control-relocation index=1 record=2 word=1 binding=1 addend=0 alignment=4
+control-relocation index=2 record=4 word=1 binding=0 addend=16 alignment=4
+control-relocation index=3 record=6 word=1 binding=1 addend=16 alignment=4
+control-relocation index=4 record=8 word=1 binding=2 addend=0 alignment=4
+control-relocation index=5 record=10 word=1 binding=3 addend=0 alignment=4
 
 resident-program workers=3
 resident worker=0 entry=@split_k_array$worker$0 tile=(0,2) code-bytes=270 resources=0 fixups=1

@@ -20,9 +20,6 @@
 extern "C" {
 #endif
 
-// First incompatible AIE2P placement and product-formation policy.
-#define LOOM_AIE2P_XDNA_PRODUCT_POLICY_ID UINT64_C(0x413250504C414E01)
-
 // One linked resident tile program and its physical placement.
 typedef struct loom_aie2p_xdna_tile_t {
   // Physical compute tile executing the program.
@@ -49,7 +46,7 @@ typedef struct loom_aie2p_xdna_entry_t {
 
 // Complete inputs to one canonical multi-entry AIE2P XDNA product.
 typedef struct loom_aie2p_xdna_product_t {
-  // Exact deployment profile serialized into the ABI note.
+  // Exact deployment profile serialized into image metadata.
   const loom_xdna_device_profile_t* device_profile;
   // Independently dispatchable entries in stable export-ordinal order.
   const loom_aie2p_xdna_entry_t* entries;
@@ -59,16 +56,13 @@ typedef struct loom_aie2p_xdna_product_t {
 
 // Writes one canonical ELF32LE `.xdna` product.
 //
-// The program-header table is the runtime directory. Tile programs are raw
-// linked sections in the outer ELF; no nested object or vendor container is
-// produced. Each entry owns a consecutive TILE program-header range containing
-// its executable core programs. Placed uninitialized function storage retains
-// its section addresses and symbols without a load or zero-fill segment.
-// Identical linked tile payloads share one file range even when multiple
-// entry-specific program headers refer to them. ARRAY and CONTROL programs
-// retain distinct file ranges in program-role order. Metadata tables, symbols,
-// section names, and final ELF layout use |scratch_arena| and remain live only
-// for the call.
+// Native commands are emitted directly from compiler-owned array plans. Load
+// ranges splice shared linked code and command fragments into caller-owned
+// backing; identical code and repeat bodies each occupy one file range. Entries
+// publish exact storage, binding, relocation and invocation requirements.
+// Placed uninitialized worker storage keeps its addresses without a load
+// operation. Temporary metadata and native bytes use |scratch_arena| for this
+// call.
 iree_status_t loom_aie2p_xdna_product_write(
     const loom_aie2p_xdna_product_t* product, iree_io_stream_t* stream,
     iree_arena_allocator_t* scratch_arena);

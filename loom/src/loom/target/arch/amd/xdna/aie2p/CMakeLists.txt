@@ -255,7 +255,6 @@ loom_cc_library(
     iree::base::internal::arena
     loom::target::arch::amd::xdna::array_facts
     loom::target::arch::amd::xdna::array_registers
-    loom::target::arch::amd::xdna::elf_format
   PUBLIC
 )
 
@@ -597,13 +596,13 @@ loom_cc_library(
     ::relocation
     iree::base
     iree::base::internal::arena
+    iree::schemas::xdna_executable
     loom::codegen::low::diagnostics
     loom::codegen::low::packet
     loom::codegen::low::storage_layout
     loom::ir
     loom::ops::low
     loom::ops::op_defs
-    loom::target::arch::amd::xdna::elf_format
     loom::target::emit::native::object
   PUBLIC
 )
@@ -660,8 +659,8 @@ loom_cc_library(
     iree::base
     iree::base::internal::arena
     iree::io::stream
+    iree::schemas::xdna_executable
     loom::target::arch::amd::xdna::device_profile
-    loom::target::arch::amd::xdna::elf_format
     loom::target::emit::native::elf
   PUBLIC
 )

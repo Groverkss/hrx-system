@@ -24,7 +24,7 @@ iree_hal_amd_xdna_image_program_header_t MakeProgramHeader(uint32_t type,
       /*.virtual_address=*/0,
       /*.physical_address=*/0,
       /*.memory_size=*/file_size,
-      /*.flags=*/IREE_HAL_AMD_XDNA_ELF_PROGRAM_FLAG_READ,
+      /*.flags=*/IREE_XDNA_ELF_PROGRAM_FLAG_READ,
       /*.alignment=*/4,
   };
 }
@@ -71,11 +71,11 @@ static void StoreProgramHeader(
 std::vector<uint8_t> ImageBuilder::Build() const {
   IREE_ASSERT(!programs_.empty());
   IREE_ASSERT(programs_.size() <= UINT16_MAX);
-  iree_host_size_t source_length = std::max(
-      options_.minimum_source_length,
-      static_cast<iree_host_size_t>(
-          IREE_HAL_AMD_XDNA_ELF_HEADER_SIZE +
-          programs_.size() * IREE_HAL_AMD_XDNA_ELF_PROGRAM_HEADER_SIZE));
+  iree_host_size_t source_length =
+      std::max(options_.minimum_source_length,
+               static_cast<iree_host_size_t>(
+                   IREE_XDNA_ELF_HEADER_SIZE +
+                   programs_.size() * IREE_XDNA_ELF_PROGRAM_HEADER_SIZE));
   for (const Program& program : programs_) {
     source_length = std::max(
         source_length,
@@ -84,10 +84,10 @@ std::vector<uint8_t> ImageBuilder::Build() const {
   }
   if (options_.section_header_count != 0) {
     source_length = std::max(
-        source_length, static_cast<iree_host_size_t>(
-                           options_.section_header_offset +
-                           options_.section_header_count *
-                               IREE_HAL_AMD_XDNA_ELF_SECTION_HEADER_SIZE));
+        source_length,
+        static_cast<iree_host_size_t>(options_.section_header_offset +
+                                      options_.section_header_count *
+                                          IREE_XDNA_ELF_SECTION_HEADER_SIZE));
   }
   std::vector<uint8_t> bytes(source_length, 0);
 
@@ -95,41 +95,36 @@ std::vector<uint8_t> ImageBuilder::Build() const {
   bytes[1] = 'E';
   bytes[2] = 'L';
   bytes[3] = 'F';
-  bytes[4] = IREE_HAL_AMD_XDNA_ELF_CLASS_32;
-  bytes[5] = IREE_HAL_AMD_XDNA_ELF_DATA_LITTLE_ENDIAN;
-  bytes[6] = IREE_HAL_AMD_XDNA_ELF_VERSION_CURRENT;
-  bytes[7] = IREE_HAL_AMD_XDNA_ELF_OS_ABI_NONE;
-  bytes[8] = IREE_HAL_AMD_XDNA_ELF_ABI_VERSION_NONE;
-  iree_unaligned_store_le_u16(bytes.data() + 16,
-                              IREE_HAL_AMD_XDNA_ELF_FILE_TYPE_EXEC);
-  iree_unaligned_store_le_u16(bytes.data() + 18,
-                              IREE_HAL_AMD_XDNA_ELF_MACHINE_AIE);
-  iree_unaligned_store_le_u32(bytes.data() + 20,
-                              IREE_HAL_AMD_XDNA_ELF_VERSION_CURRENT);
+  bytes[4] = IREE_XDNA_ELF_CLASS_32;
+  bytes[5] = IREE_XDNA_ELF_DATA_LITTLE_ENDIAN;
+  bytes[6] = IREE_XDNA_ELF_VERSION_CURRENT;
+  bytes[7] = IREE_XDNA_ELF_OS_ABI_NONE;
+  bytes[8] = IREE_XDNA_ELF_ABI_VERSION_NONE;
+  iree_unaligned_store_le_u16(bytes.data() + 16, IREE_XDNA_ELF_FILE_TYPE_EXEC);
+  iree_unaligned_store_le_u16(bytes.data() + 18, IREE_XDNA_ELF_MACHINE_AIE);
+  iree_unaligned_store_le_u32(bytes.data() + 20, IREE_XDNA_ELF_VERSION_CURRENT);
   iree_unaligned_store_le_u32(bytes.data() + 24, 0);
-  iree_unaligned_store_le_u32(bytes.data() + 28,
-                              IREE_HAL_AMD_XDNA_ELF_HEADER_SIZE);
+  iree_unaligned_store_le_u32(bytes.data() + 28, IREE_XDNA_ELF_HEADER_SIZE);
   iree_unaligned_store_le_u32(bytes.data() + 32,
                               options_.section_header_offset);
   iree_unaligned_store_le_u32(bytes.data() + 36, options_.target_flags);
-  iree_unaligned_store_le_u16(bytes.data() + 40,
-                              IREE_HAL_AMD_XDNA_ELF_HEADER_SIZE);
+  iree_unaligned_store_le_u16(bytes.data() + 40, IREE_XDNA_ELF_HEADER_SIZE);
   iree_unaligned_store_le_u16(bytes.data() + 42,
-                              IREE_HAL_AMD_XDNA_ELF_PROGRAM_HEADER_SIZE);
+                              IREE_XDNA_ELF_PROGRAM_HEADER_SIZE);
   iree_unaligned_store_le_u16(bytes.data() + 44,
                               static_cast<uint16_t>(programs_.size()));
   iree_unaligned_store_le_u16(bytes.data() + 46,
                               options_.section_header_count == 0
                                   ? 0
-                                  : IREE_HAL_AMD_XDNA_ELF_SECTION_HEADER_SIZE);
+                                  : IREE_XDNA_ELF_SECTION_HEADER_SIZE);
   iree_unaligned_store_le_u16(bytes.data() + 48, options_.section_header_count);
   iree_unaligned_store_le_u16(bytes.data() + 50, 0);
 
   for (iree_host_size_t i = 0; i < programs_.size(); ++i) {
     const Program& program = programs_[i];
     StoreProgramHeader(program.header,
-                       bytes.data() + IREE_HAL_AMD_XDNA_ELF_HEADER_SIZE +
-                           i * IREE_HAL_AMD_XDNA_ELF_PROGRAM_HEADER_SIZE);
+                       bytes.data() + IREE_XDNA_ELF_HEADER_SIZE +
+                           i * IREE_XDNA_ELF_PROGRAM_HEADER_SIZE);
     auto payload_begin = bytes.begin() + program.header.file_range.offset;
     if (program.has_payload) {
       std::copy(program.payload.begin(), program.payload.end(), payload_begin);

@@ -45,4 +45,16 @@ iree_cc_library(
   PUBLIC
 )
 
+iree_cc_library(
+  NAME
+    xdna_executable
+  HDRS
+    "xdna_executable.h"
+  SRCS
+    "xdna_executable.c"
+  DEPS
+    iree::base
+  PUBLIC
+)
+
 ### BAZEL_TO_CMAKE_PRESERVES_ALL_CONTENT_BELOW_THIS_LINE ###

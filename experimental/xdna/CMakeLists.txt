@@ -51,12 +51,10 @@ iree_cc_library(
   SRCS
     "executable.c"
   DEPS
+    amdf::headers
     iree::base
-    iree::base::internal
     iree::hal
     iree::hal::drivers::amd::xdna::image
-    iree::hal::drivers::amd::xdna::image::aie2p::native_image
-    iree::hal::drivers::amd::xdna::image::aie2p::target
   PUBLIC
 )
 endif()
@@ -71,53 +69,7 @@ iree_cc_test(
     ::executable
     iree::base
     iree::hal
-    iree::hal::drivers::amd::xdna::image::aie2p::npu2
-    iree::hal::drivers::amd::xdna::image::testdata::mul_i32
-    iree::hal::drivers::amd::xdna::image::testdata::mul_i32_npu4
-    iree::hal::drivers::amd::xdna::image::testing::aie2p_image_fixture
-    iree::testing::gtest
-    iree::testing::gtest_main
-  LABELS
-    "iree-build-requirement=libamdf"
-    "iree-build-requirement=libamdf.xdna"
-)
-endif()
-
-if(AMDF_BUILD AND AMDF_FAMILY_XDNA)
-iree_cc_library(
-  NAME
-    prepared_command
-  HDRS
-    "prepared_command.h"
-  SRCS
-    "prepared_command.c"
-  DEPS
-    ::executable
-    amdf::headers
-    iree::base
-    iree::hal
-    iree::hal::drivers::amd::xdna::image::aie2p::transaction
-  PUBLIC
-)
-endif()
-
-if(AMDF_BUILD AND AMDF_FAMILY_XDNA)
-iree_cc_test(
-  NAME
-    prepared_command_test
-  SRCS
-    "prepared_command_test.cc"
-  DEPS
-    ::executable
-    ::prepared_command
-    amdf::headers
-    iree::base
-    iree::hal
-    iree::hal::drivers::amd::xdna::image::aie2p::npu2
-    iree::hal::drivers::amd::xdna::image::directory
-    iree::hal::drivers::amd::xdna::image::format
-    iree::hal::drivers::amd::xdna::image::testdata::mul_i32
-    iree::hal::drivers::amd::xdna::image::testing::aie2p_image_fixture
+    iree::hal::drivers::amd::xdna::image::testing::image_fixture
     iree::testing::gtest
     iree::testing::gtest_main
   LABELS
@@ -149,7 +101,6 @@ iree_cc_binary(
   DEPS
     ::amdf_status
     ::executable
-    ::prepared_command
     amdf::amdf_static
     amdf::headers
     iree::base

@@ -18,17 +18,8 @@ iree_runtime_cc_library(
     srcs = ["directory.c"],
     hdrs = ["directory.h"],
     deps = [
-        ":format",
         "//runtime/src/iree/base",
-    ],
-)
-
-iree_runtime_cc_library(
-    name = "format",
-    srcs = ["format.c"],
-    hdrs = ["format.h"],
-    deps = [
-        "//runtime/src/iree/base",
+        "//runtime/src/iree/schemas:xdna_executable",
     ],
 )
 
@@ -38,21 +29,10 @@ iree_runtime_cc_library(
     hdrs = ["image.h"],
     deps = [
         ":directory",
-        ":programs",
         ":tables",
         ":validation",
         "//runtime/src/iree/base",
-    ],
-)
-
-iree_runtime_cc_library(
-    name = "programs",
-    srcs = ["programs.c"],
-    hdrs = ["programs.h"],
-    deps = [
-        ":directory",
-        ":format",
-        "//runtime/src/iree/base",
+        "//runtime/src/iree/hal/drivers/amd/xdna/image/aie2p:target",
     ],
 )
 
@@ -61,9 +41,8 @@ iree_runtime_cc_library(
     srcs = ["tables.c"],
     hdrs = ["tables.h"],
     deps = [
-        ":directory",
-        ":format",
         "//runtime/src/iree/base",
+        "//runtime/src/iree/schemas:xdna_executable",
     ],
 )
 
@@ -73,10 +52,10 @@ iree_runtime_cc_library(
     hdrs = ["validation.h"],
     deps = [
         ":directory",
-        ":format",
-        ":programs",
         ":tables",
         "//runtime/src/iree/base",
+        "//runtime/src/iree/hal/drivers/amd/xdna/image/aie2p:target",
+        "//runtime/src/iree/schemas:xdna_executable",
     ],
 )
 
@@ -86,10 +65,9 @@ iree_runtime_cc_test(
     deps = [
         ":image",
         "//runtime/src/iree/base",
-        "//runtime/src/iree/hal/drivers/amd/xdna/image/aie2p:program_format",
-        "//runtime/src/iree/hal/drivers/amd/xdna/image/aie2p:target",
+        "//runtime/src/iree/hal/drivers/amd/xdna/image/aie2p:npu2",
         "//runtime/src/iree/hal/drivers/amd/xdna/image/testdata:mul_i32",
-        "//runtime/src/iree/hal/drivers/amd/xdna/image/testing:aie2p_image_fixture",
+        "//runtime/src/iree/hal/drivers/amd/xdna/image/testdata:mul_i32_npu4",
         "//runtime/src/iree/testing:gtest",
         "//runtime/src/iree/testing:gtest_main",
     ],
@@ -100,20 +78,9 @@ iree_runtime_cc_test(
     srcs = ["directory_test.cc"],
     deps = [
         ":directory",
-        ":format",
         "//runtime/src/iree/base",
         "//runtime/src/iree/hal/drivers/amd/xdna/image/testing:image_builder",
-        "//runtime/src/iree/testing:gtest",
-        "//runtime/src/iree/testing:gtest_main",
-    ],
-)
-
-iree_runtime_cc_test(
-    name = "format_test",
-    srcs = ["format_test.cc"],
-    deps = [
-        ":format",
-        "//runtime/src/iree/base",
+        "//runtime/src/iree/schemas:xdna_executable",
         "//runtime/src/iree/testing:gtest",
         "//runtime/src/iree/testing:gtest_main",
     ],
@@ -126,52 +93,7 @@ iree_runtime_cc_test(
         ":image",
         "//runtime/src/iree/base",
         "//runtime/src/iree/hal/drivers/amd/xdna/image/aie2p:target",
-        "//runtime/src/iree/hal/drivers/amd/xdna/image/testing:aie2p_image_fixture",
-        "//runtime/src/iree/testing:gtest",
-        "//runtime/src/iree/testing:gtest_main",
-    ],
-)
-
-iree_runtime_cc_test(
-    name = "programs_test",
-    srcs = ["programs_test.cc"],
-    deps = [
-        ":directory",
-        ":format",
-        ":programs",
-        "//runtime/src/iree/base",
-        "//runtime/src/iree/hal/drivers/amd/xdna/image/testing:image_builder",
-        "//runtime/src/iree/testing:gtest",
-        "//runtime/src/iree/testing:gtest_main",
-    ],
-)
-
-iree_runtime_cc_test(
-    name = "tables_test",
-    srcs = ["tables_test.cc"],
-    deps = [
-        ":directory",
-        ":format",
-        ":tables",
-        "//runtime/src/iree/base",
-        "//runtime/src/iree/hal/drivers/amd/xdna/image/testing:image_builder",
-        "//runtime/src/iree/testing:gtest",
-        "//runtime/src/iree/testing:gtest_main",
-    ],
-)
-
-iree_runtime_cc_test(
-    name = "validation_test",
-    srcs = ["validation_test.cc"],
-    deps = [
-        ":directory",
-        ":format",
-        ":programs",
-        ":tables",
-        ":validation",
-        "//runtime/src/iree/base",
-        "//runtime/src/iree/hal/drivers/amd/xdna/image/aie2p:target",
-        "//runtime/src/iree/hal/drivers/amd/xdna/image/testing:aie2p_image_fixture",
+        "//runtime/src/iree/hal/drivers/amd/xdna/image/testing:image_fixture",
         "//runtime/src/iree/testing:gtest",
         "//runtime/src/iree/testing:gtest_main",
     ],

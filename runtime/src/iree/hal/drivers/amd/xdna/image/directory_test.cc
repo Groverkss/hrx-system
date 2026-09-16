@@ -103,8 +103,7 @@ static iree_status_t reject_source_segment(void* user_data,
 }
 
 TEST(ImageDirectoryTest, DecodesDirectoryAndReadsSourceRanges) {
-  auto first =
-      MakeProgramHeader(IREE_HAL_AMD_XDNA_ELF_PROGRAM_TYPE_NOTE, 256, 8);
+  auto first = MakeProgramHeader(IREE_XDNA_ELF_PROGRAM_TYPE_METADATA, 256, 8);
   auto second = MakeProgramHeader(0x6C58FFFF, 272, 12);
   second.virtual_address = 16;
   second.alignment = 16;
@@ -114,7 +113,7 @@ TEST(ImageDirectoryTest, DecodesDirectoryAndReadsSourceRanges) {
   EXPECT_EQ(iree_hal_amd_xdna_image_directory_source_length(directory.get()),
             bytes.size());
   EXPECT_EQ(iree_hal_amd_xdna_image_directory_target_flags(directory.get()),
-            IREE_HAL_AMD_XDNA_ELF_AIE2P_FLAGS);
+            IREE_XDNA_ELF_AIE2P_FLAGS);
   ASSERT_EQ(
       iree_hal_amd_xdna_image_directory_program_header_count(directory.get()),
       2);
@@ -153,7 +152,7 @@ TEST(ImageDirectoryTest, DecodesDirectoryAndReadsSourceRanges) {
 
 TEST(ImageDirectoryTest, PreservesTargetFlagsForQualification) {
   const auto program_header =
-      MakeProgramHeader(IREE_HAL_AMD_XDNA_ELF_PROGRAM_TYPE_ARRAY, 256, 8);
+      MakeProgramHeader(IREE_XDNA_ELF_PROGRAM_TYPE_LOAD, 256, 8);
   const std::vector<uint8_t> bytes =
       make_image({program_header}, {
                                        /*.target_flags=*/0x12345678,
@@ -168,10 +167,10 @@ TEST(ImageDirectoryTest, PreservesTargetFlagsForQualification) {
 
 TEST(ImageDirectoryTest, AcceptsBoundedDiagnosticSectionDirectory) {
   const auto program_header =
-      MakeProgramHeader(IREE_HAL_AMD_XDNA_ELF_PROGRAM_TYPE_ARRAY, 256, 16);
+      MakeProgramHeader(IREE_XDNA_ELF_PROGRAM_TYPE_LOAD, 256, 16);
   const std::vector<uint8_t> bytes = make_image(
       {program_header}, {
-                            /*.target_flags=*/IREE_HAL_AMD_XDNA_ELF_AIE2P_FLAGS,
+                            /*.target_flags=*/IREE_XDNA_ELF_AIE2P_FLAGS,
                             /*.section_header_offset=*/320,
                             /*.section_header_count=*/2,
                             /*.minimum_source_length=*/416,
@@ -182,8 +181,7 @@ TEST(ImageDirectoryTest, AcceptsBoundedDiagnosticSectionDirectory) {
 }
 
 TEST(ImageDirectoryTest, PreservesExactPayloadAliasesAsDistinctEntries) {
-  auto first =
-      MakeProgramHeader(IREE_HAL_AMD_XDNA_ELF_PROGRAM_TYPE_TILE, 256, 16);
+  auto first = MakeProgramHeader(IREE_XDNA_ELF_PROGRAM_TYPE_LOAD, 256, 16);
   first.physical_address = 0x00010200;
   auto second = first;
   second.physical_address = 0x00010400;
@@ -243,7 +241,7 @@ static const iree_byte_sequence_vtable_t test_segmented_sequence_vtable = {
 
 TEST(ImageDirectoryTest, ReadsFieldsAndPayloadAcrossArbitrarySegments) {
   const auto program_header =
-      MakeProgramHeader(IREE_HAL_AMD_XDNA_ELF_PROGRAM_TYPE_ARRAY, 256, 16);
+      MakeProgramHeader(IREE_XDNA_ELF_PROGRAM_TYPE_LOAD, 256, 16);
   const std::vector<uint8_t> bytes = make_image({program_header});
   const std::vector<iree_host_size_t> boundaries = {1,  7,  51,  53,
                                                     83, 85, 259, 263};
@@ -293,7 +291,7 @@ TEST(ImageDirectoryTest, ReadsFieldsAndPayloadAcrossArbitrarySegments) {
 
 TEST(ImageDirectoryTest, PropagatesRangeCallbackFailure) {
   const auto program_header =
-      MakeProgramHeader(IREE_HAL_AMD_XDNA_ELF_PROGRAM_TYPE_ARRAY, 256, 8);
+      MakeProgramHeader(IREE_XDNA_ELF_PROGRAM_TYPE_LOAD, 256, 8);
   DirectoryPtr directory = open_directory(make_image({program_header}));
   expect_status(Status(iree_hal_amd_xdna_image_directory_enumerate_source_range(
                     directory.get(), program_header.file_range,
@@ -306,7 +304,7 @@ TEST(ImageDirectoryTest, PropagatesRangeCallbackFailure) {
 
 TEST(ImageDirectoryTest, RejectsInvalidRangeAndDestinationSize) {
   const auto program_header =
-      MakeProgramHeader(IREE_HAL_AMD_XDNA_ELF_PROGRAM_TYPE_ARRAY, 256, 8);
+      MakeProgramHeader(IREE_XDNA_ELF_PROGRAM_TYPE_LOAD, 256, 8);
   DirectoryPtr directory = open_directory(make_image({program_header}));
   uint8_t storage[7];
   expect_status(Status(iree_hal_amd_xdna_image_directory_read_source_range(
@@ -329,7 +327,7 @@ TEST(ImageDirectoryTest, RejectsInvalidRangeAndDestinationSize) {
 
 TEST(ImageDirectoryTest, RejectsInvalidElfIdentity) {
   const auto program_header =
-      MakeProgramHeader(IREE_HAL_AMD_XDNA_ELF_PROGRAM_TYPE_ARRAY, 256, 8);
+      MakeProgramHeader(IREE_XDNA_ELF_PROGRAM_TYPE_LOAD, 256, 8);
   std::vector<uint8_t> bytes = make_image({program_header});
   bytes[4] = 2;
   expect_status(open_directory_status(bytes), StatusCode::kInvalidArgument,
@@ -338,7 +336,7 @@ TEST(ImageDirectoryTest, RejectsInvalidElfIdentity) {
 
 TEST(ImageDirectoryTest, RejectsTruncatedProgramHeaderDirectory) {
   const auto program_header =
-      MakeProgramHeader(IREE_HAL_AMD_XDNA_ELF_PROGRAM_TYPE_ARRAY, 256, 8);
+      MakeProgramHeader(IREE_XDNA_ELF_PROGRAM_TYPE_LOAD, 256, 8);
   std::vector<uint8_t> bytes = make_image({program_header});
   iree_unaligned_store_le_u16(bytes.data() + 44, 32);
   expect_status(open_directory_status(bytes), StatusCode::kOutOfRange,
@@ -347,7 +345,7 @@ TEST(ImageDirectoryTest, RejectsTruncatedProgramHeaderDirectory) {
 
 TEST(ImageDirectoryTest, RejectsIncompleteSectionHeaderDirectory) {
   const auto program_header =
-      MakeProgramHeader(IREE_HAL_AMD_XDNA_ELF_PROGRAM_TYPE_ARRAY, 256, 8);
+      MakeProgramHeader(IREE_XDNA_ELF_PROGRAM_TYPE_LOAD, 256, 8);
   std::vector<uint8_t> bytes = make_image({program_header});
   iree_unaligned_store_le_u32(bytes.data() + 32, 320);
   expect_status(open_directory_status(bytes), StatusCode::kInvalidArgument,
@@ -356,10 +354,9 @@ TEST(ImageDirectoryTest, RejectsIncompleteSectionHeaderDirectory) {
 
 TEST(ImageDirectoryTest, RejectsPayloadOutsideSource) {
   const auto program_header =
-      MakeProgramHeader(IREE_HAL_AMD_XDNA_ELF_PROGRAM_TYPE_ARRAY, 256, 8);
+      MakeProgramHeader(IREE_XDNA_ELF_PROGRAM_TYPE_LOAD, 256, 8);
   std::vector<uint8_t> bytes = make_image({program_header});
-  uint8_t* encoded_program_header =
-      bytes.data() + IREE_HAL_AMD_XDNA_ELF_HEADER_SIZE;
+  uint8_t* encoded_program_header = bytes.data() + IREE_XDNA_ELF_HEADER_SIZE;
   iree_unaligned_store_le_u32(encoded_program_header + 4, 508);
   iree_unaligned_store_le_u32(encoded_program_header + 16, 8);
   iree_unaligned_store_le_u32(encoded_program_header + 20, 8);
@@ -369,21 +366,20 @@ TEST(ImageDirectoryTest, RejectsPayloadOutsideSource) {
 
 TEST(ImageDirectoryTest, RejectsPayloadOverlappingElfDirectory) {
   const auto program_header =
-      MakeProgramHeader(IREE_HAL_AMD_XDNA_ELF_PROGRAM_TYPE_ARRAY, 256, 4);
+      MakeProgramHeader(IREE_XDNA_ELF_PROGRAM_TYPE_LOAD, 256, 4);
   std::vector<uint8_t> bytes = make_image({program_header});
-  uint8_t* encoded_program_header =
-      bytes.data() + IREE_HAL_AMD_XDNA_ELF_HEADER_SIZE;
+  uint8_t* encoded_program_header = bytes.data() + IREE_XDNA_ELF_HEADER_SIZE;
   iree_unaligned_store_le_u32(encoded_program_header + 4,
-                              IREE_HAL_AMD_XDNA_ELF_HEADER_SIZE);
+                              IREE_XDNA_ELF_HEADER_SIZE);
   expect_status(open_directory_status(bytes), StatusCode::kInvalidArgument,
                 "overlaps an ELF directory");
 }
 
 TEST(ImageDirectoryTest, RejectsPartiallyOverlappingPayloads) {
   const auto first =
-      MakeProgramHeader(IREE_HAL_AMD_XDNA_ELF_PROGRAM_TYPE_TILE, 256, 16);
+      MakeProgramHeader(IREE_XDNA_ELF_PROGRAM_TYPE_LOAD, 256, 16);
   const auto second =
-      MakeProgramHeader(IREE_HAL_AMD_XDNA_ELF_PROGRAM_TYPE_TILE, 264, 16);
+      MakeProgramHeader(IREE_XDNA_ELF_PROGRAM_TYPE_LOAD, 264, 16);
   const std::vector<uint8_t> bytes = make_image({first, second});
   expect_status(open_directory_status(bytes), StatusCode::kInvalidArgument,
                 "partially overlap");
@@ -391,7 +387,7 @@ TEST(ImageDirectoryTest, RejectsPartiallyOverlappingPayloads) {
 
 TEST(ImageDirectoryTest, RejectsInvalidProgramAlignment) {
   auto program_header =
-      MakeProgramHeader(IREE_HAL_AMD_XDNA_ELF_PROGRAM_TYPE_ARRAY, 256, 8);
+      MakeProgramHeader(IREE_XDNA_ELF_PROGRAM_TYPE_LOAD, 256, 8);
   program_header.alignment = 3;
   const std::vector<uint8_t> bytes = make_image({program_header});
   expect_status(open_directory_status(bytes), StatusCode::kInvalidArgument,
@@ -400,7 +396,7 @@ TEST(ImageDirectoryTest, RejectsInvalidProgramAlignment) {
 
 TEST(ImageDirectoryTest, RejectsUnknownProgramPermissionBits) {
   auto program_header =
-      MakeProgramHeader(IREE_HAL_AMD_XDNA_ELF_PROGRAM_TYPE_ARRAY, 256, 8);
+      MakeProgramHeader(IREE_XDNA_ELF_PROGRAM_TYPE_LOAD, 256, 8);
   program_header.flags |= 0x8;
   const std::vector<uint8_t> bytes = make_image({program_header});
   expect_status(open_directory_status(bytes), StatusCode::kInvalidArgument,
@@ -409,10 +405,10 @@ TEST(ImageDirectoryTest, RejectsUnknownProgramPermissionBits) {
 
 TEST(ImageDirectoryTest, RejectsSectionDirectoryOverlappingPayload) {
   const auto program_header =
-      MakeProgramHeader(IREE_HAL_AMD_XDNA_ELF_PROGRAM_TYPE_ARRAY, 320, 80);
+      MakeProgramHeader(IREE_XDNA_ELF_PROGRAM_TYPE_LOAD, 320, 80);
   const std::vector<uint8_t> bytes = make_image(
       {program_header}, {
-                            /*.target_flags=*/IREE_HAL_AMD_XDNA_ELF_AIE2P_FLAGS,
+                            /*.target_flags=*/IREE_XDNA_ELF_AIE2P_FLAGS,
                             /*.section_header_offset=*/384,
                             /*.section_header_count=*/1,
                             /*.minimum_source_length=*/512,

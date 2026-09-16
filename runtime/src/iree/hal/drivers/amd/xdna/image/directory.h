@@ -17,7 +17,7 @@
 
 #include "iree/base/api.h"
 #include "iree/base/byte_sequence.h"
-#include "iree/hal/drivers/amd/xdna/image/format.h"
+#include "iree/schemas/xdna_executable.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -44,7 +44,7 @@ typedef struct iree_hal_amd_xdna_image_program_header_t {
   // Target memory extent after loading, including any zero-filled tail.
   uint32_t memory_size;
   // ELF read, write, and execute permission bits.
-  iree_hal_amd_xdna_elf_program_flags_t flags;
+  iree_xdna_elf_program_flags_t flags;
   // Power-of-two ELF load alignment in bytes.
   uint32_t alignment;
 } iree_hal_amd_xdna_image_program_header_t;

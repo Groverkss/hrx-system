@@ -1,15 +1,16 @@
 # Experimental XDNA execution through libamdf
 
-This directory contains temporary executable and prepared-command adapters and
-a standalone runner. They bridge the HAL image loader to `libamdf/` during
-native bring-up. The adapters own ELF interpretation and cold relocation;
-libamdf owns native device admission, scoped memory, and range submission.
-See [XDNA native execution](../../libamdf/docs/xdna.md) for that boundary.
+This directory connects Loom's native `.xdna` images to libamdf. The image
+reader owns the immutable source and compact indexed metadata. Loading copies
+explicit ranges straight into caller-owned backing; binding patches declared
+address fields without interpreting native commands. libamdf owns device
+admission, scoped memory and range submission. See
+[XDNA native execution](../../libamdf/docs/xdna.md) for that boundary.
 
-The executable adapter is an opaque reference-counted image owner, independent
-of HAL devices and queue families. It reuses HAL reflection value types and
-buffer wrappers; native queue-family selection comes directly from libamdf.
-Prepared commands retain the executable and logical buffers until destruction.
+The load and bind operations allocate no memory and retain no resources. The
+caller owns the image, mappings, native backing, contexts and logical HAL
+buffers through actual terminal completion. Native command bytes remain opaque
+to the loader; they are executable code, not sandboxed input.
 
 `iree-xdna-run` executes one entry from an intact Loom `.xdna` file through the
 experimental adapters and libamdf. It selects the image target from the
@@ -60,26 +61,30 @@ Paths are overwritten. Multiple distinct bindings may be written. Output
 comparison belongs to the caller or the artifact's accompanying checker. The
 runner checks native completion status, not numerical correctness.
 
-Each run creates one device and context. The executable adapter parses,
-qualifies, and lowers the image without creating native resources. The runner
-then obtains the context's private memory scope, allocates one instruction
-backing at the scope's required granularity, and maps the used prefix. Cold
-preparation validates the bindings and writes fixed DMA addresses into that
-storage. Publishing the bytes is an explicit cache operation.
+Each run creates one device and context. Image admission checks the exact
+execution profile, backing requirements, load ranges, relocation fields and
+invocation ranges. The runner allocates only the selected entry's backing:
+command memory comes from the context's private scope and DMA catalogs use
+ordinary device-addressable storage. Shared file ranges initialize their exact
+destinations directly, and only declared zero-fill tails are cleared. Gaps are
+undefined. Binding validates logical HAL ranges and patches DMA addresses;
+publishing mapped writes remains an explicit cache operation.
 
-The first submission selects the initialization-plus-execution range; later
-`--invocation_count` iterations select only the execution range. Both occupy
-the same allocation and keep the same bindings. ARRAY and CONTROL describe
-those image-layer contents, not driver objects. libamdf receives memory handles
-and byte ranges, with no per-submission binding list or argument patching.
+Invocation zero establishes entry state. After completion, each invocation's
+metadata names its continuation. The current finite compiler protocol loads
+resident workers once and reuses the per-invocation DMA commands afterward.
+A reset, replacement by another entry or loss of backing invalidates that
+continuation and requires establishment again. Role changes within a held
+invocation remain compiled device behavior. libamdf receives memory handles and
+byte ranges, with no per-submission binding list or argument patching.
 
 The runner waits for each finite command before submitting the next. The
 image's output DMA wait, together with native command retirement, establishes
 completion for this fixture; retirement alone does not prove arbitrary
 autonomous tile work is finished. Callers own the lifetime of every indirectly
 referenced buffer. The runner waits without a hidden deadline, then destroys
-the queue and prepared command, unmaps and frees instruction storage, releases
-the executable and data bindings, and finally closes the context, device,
+the queue, unmaps and frees executable backing, releases
+the image and data bindings, and finally closes the context, device,
 endpoint, and instance. A native error is reported without retry. Failed
 cleanup stops at its ownership boundary and returns failure.
 
@@ -89,9 +94,8 @@ without creating a device.
 
 The native consumer tests in `cts/` select the matching canonical compiler
 image, allocate data and instruction backing through the public memory scopes,
-and execute three different inputs through one cold-prepared command. They
-check all 48 integer products, native retirement, byte-for-byte instruction
-immutability, and caller-ordered teardown. Each output is poisoned before its
+and execute three different inputs through one retained native allocation. They
+check all 48 integer products, native retirement and caller-ordered teardown. Each output is poisoned before its
 submission so missing writes cannot pass. Both process- and instance-scoped
 native lifetimes use the shared CTS device owner.
 
@@ -108,10 +112,9 @@ hosts without an XDNA endpoint or a matching compiler fixture report a skip.
 
 `benchmarks/execution_benchmark` measures native publication of the same
 canonical multiplication program. It retains one device, context, queue and
-set of allocations across every row and repetition. Image loading, cold
-relocation, instruction publication and the first initialization command all
+set of allocations across every row and repetition. Image loading, binding, instruction publication and the first initialization command all
 finish before measurement. Later submissions reuse immutable instructions and
-resident data addresses; libamdf receives only the prepared command range.
+resident data addresses; libamdf receives only the resolved command range.
 
 | Row | Timed region |
 | --- | --- |
@@ -120,8 +123,7 @@ resident data addresses; libamdf receives only the prepared command range.
 
 Each iteration publishes changed inputs and poisoned output before timing.
 After completion, outside timing, the caller checks native retirement, all
-input/output values, and guard regions. It also checks instruction immutability
-around each repetition. Completion waits use the infinite timeout contract;
+input/output values, and guard regions. Completion waits use the infinite timeout contract;
 unexpected native errors or incorrect output terminate the benchmark instead
 of producing later samples. Successful execution checks complete teardown.
 
@@ -141,4 +143,4 @@ with `--benchmark_out=execution.json --benchmark_out_format=json`. Fixed counts
 bound the untimed completion and verification work in submit-only rows.
 Measurements require an otherwise idle device and host, separate from builds
 and other hardware jobs. The two rows describe warm kernel-mediated dispatch,
-not cold setup, pipelined throughput, or autonomous user-mode scheduling.
+not image preparation, pipelined throughput, or autonomous user-mode scheduling.

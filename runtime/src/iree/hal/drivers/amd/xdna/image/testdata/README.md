@@ -1,37 +1,34 @@
-# XDNA image compatibility fixture
+# XDNA execution fixtures
 
-`mul_i32.xdna` is the exact Loom-generated vector multiplication image from the
-native driver smoke package. It targets AIE2P Strix Halo
-`amd.xdna.strix_halo.17f0_11`, with one compute core at context-relative `(0, 2)`
-in a one-column, six-row partition.
+`mul_i32.loom` produces both native images used by the loader and execution
+CTS. The `mul_i32` export multiplies sixteen little-endian i32 pairs, retaining
+each product's low 32 bits. Its three buffer bindings are read-only lhs,
+read-only rhs and write-only output, each 64 bytes.
 
-The entry `mul_i32` has three 64-byte buffer bindings: read-only lhs, read-only
-rhs, and write-only output. It multiplies sixteen little-endian i32 elements,
-retaining each product's low 32 bits. The image contains the tile program,
-ordered ARRAY initialization, finite CONTROL dispatch, three typed address
-relocations, and an output DMA completion wait.
+Both images use one column and six rows with a resident compute worker. The
+establishing invocation loads code and configures the array; its continuation
+reuses that state. Each finite invocation completes at the output DMA wait.
+Load ranges splice shared file bytes into final command backing, and declared
+binding relocations update both invocation ranges.
 
-These exact bytes completed native Linux XDNA execution with all sixteen
-results checked bit-for-bit and explicit resource teardown. The fixture tests
-the compiler/loader ABI without rebuilding the compiler or requiring a device.
-It does not establish concurrent or repeated dispatch behavior.
+Regenerate from the repository root after building `loom-compile`:
 
-SHA-256:
-`2085441fa886afc38ee8e850e6bcc5baeeb08cddaf8fe31c8fa11aa2c06cb3e7`
+```sh
+iree-bazel-run //loom/src/loom/tools/loom-compile -- \
+  runtime/src/iree/hal/drivers/amd/xdna/image/testdata/mul_i32.loom \
+  --root=@mul_i32 --target=amd.xdna.aie2p:amd.xdna.strix_halo.17f0_11 \
+  --format=xdna \
+  --output=runtime/src/iree/hal/drivers/amd/xdna/image/testdata/mul_i32.xdna
+iree-bazel-run //loom/src/loom/tools/loom-compile -- \
+  runtime/src/iree/hal/drivers/amd/xdna/image/testdata/mul_i32.loom \
+  --root=@mul_i32 --target=amd.xdna.aie2p:amd.xdna.strix.17f0_10 \
+  --format=xdna \
+  --output=runtime/src/iree/hal/drivers/amd/xdna/image/testdata/mul_i32_npu4.xdna
+```
 
-`mul_i32_npu4.xdna` is a separate canonical Loom image for Strix NPU4
-`amd.xdna.strix.17f0_10`. Its entry, context geometry and binding arithmetic
-match the contract above. A 270-byte resident worker consumes successive FIFO
-records; ARRAY initializes it once and finite CONTROL invocations complete at
-the output DMA wait. Binding addresses are cold relocations. The intact image
-uses profile ID `0x5354524958000001`, revision 1, rather than Halo's identity.
-Krackan NPU6 preserves its separate discovery identity and shares this execution
-profile: AMD's [NPU6 definition](https://github.com/amd/xdna-driver/blob/8dfda66f67a84aecf26cf68336efc9e4cc1756c3/drivers/accel/amdxdna/npu6_regs.c)
-selects NPU4 firmware, hardware operations and execution features. The consumer
-loads the unchanged Strix image for both devices and rejects the Halo image for
-either. Native context admission supplies the available array extent.
-Host-side fixture coverage alone does not establish native execution.
-
-Producer: Loom commit `4f5d05550c78b94dbd691baaa3a1beafec8c0d5d`.
-SHA-256:
-`216a871bb644695b0bad35cb52a0d8a59b529973042a30e4d9abfc58f394ee04`.
+Strix and Krackan share the NPU4 execution-profile identity; Halo uses its own
+profile. The native CTS selects the matching intact image from the endpoint,
+checks exact numerical results with changing inputs, and exercises independent
+context lifetimes and caller-owned shared data. Host loader tests exercise
+segmented source ownership and malformed external metadata through the actual
+image reader. They do not decode or emulate tile instructions.

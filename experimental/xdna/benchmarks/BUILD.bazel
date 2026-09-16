@@ -17,7 +17,6 @@ xdna_cc_benchmark(
     ],
     deps = [
         "//experimental/xdna:executable",
-        "//experimental/xdna:prepared_command",
         "//libamdf:amdf",
         "//libamdf:headers",
         "//libamdf/cts/util:device_cache",

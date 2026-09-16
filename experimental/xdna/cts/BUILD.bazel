@@ -24,7 +24,6 @@ package(
         }),
         deps = [
             "//experimental/xdna:executable",
-            "//experimental/xdna:prepared_command",
             "//libamdf:amdf_static",
             "//libamdf:headers",
             "//libamdf/cts/util:device_cache",
@@ -36,7 +35,7 @@ package(
             "//runtime/src/iree/hal/drivers/amd/xdna/image/aie2p:npu2",
             "//runtime/src/iree/hal/drivers/amd/xdna/image/testdata:mul_i32",
             "//runtime/src/iree/hal/drivers/amd/xdna/image/testdata:mul_i32_npu4",
-            "//runtime/src/iree/hal/drivers/amd/xdna/image/testing:aie2p_image_fixture",
+            "//runtime/src/iree/hal/drivers/amd/xdna/image/testing:image_fixture",
             "//runtime/src/iree/testing:gtest",
         ],
     )

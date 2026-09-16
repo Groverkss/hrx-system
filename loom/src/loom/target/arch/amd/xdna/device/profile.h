@@ -20,6 +20,8 @@ extern "C" {
 typedef struct loom_xdna_device_limits_t {
   // Minimum byte alignment of device allocations.
   uint32_t minimum_device_memory_alignment;
+  // Required alignment of native command entry addresses.
+  uint32_t instruction_address_alignment;
   // Maximum simultaneously resident hardware contexts.
   uint8_t hardware_context_limit;
   // Maximum driver contexts.
@@ -66,10 +68,6 @@ typedef struct loom_xdna_device_profile_t {
   uint8_t firmware_protocol_minor;
   // Device-generation value serialized in transaction streams.
   uint8_t transaction_device_generation;
-  // Native XDNA ELF ABI major version.
-  uint8_t native_elf_abi_major;
-  // Native XDNA ELF ABI minor version.
-  uint8_t native_elf_abi_minor;
   // Driver-visible resource limits.
   loom_xdna_device_limits_t limits;
 } loom_xdna_device_profile_t;

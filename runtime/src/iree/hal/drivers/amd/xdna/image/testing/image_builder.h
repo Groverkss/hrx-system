@@ -18,7 +18,7 @@ namespace iree::hal::amd::xdna::testing {
 // Options controlling the synthetic ELF envelope built for image tests.
 struct ImageBuilderOptions {
   // Target-specific ELF flags written to the image header.
-  uint32_t target_flags = IREE_HAL_AMD_XDNA_ELF_AIE2P_FLAGS;
+  uint32_t target_flags = IREE_XDNA_ELF_AIE2P_FLAGS;
   // Optional diagnostic section-header directory byte offset.
   uint32_t section_header_offset = 0;
   // Optional diagnostic section-header count.

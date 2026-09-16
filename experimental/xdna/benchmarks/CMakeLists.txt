@@ -21,7 +21,6 @@ iree_cc_binary_benchmark(
     amdf::headers
     iree::base
     iree::experimental::xdna::executable
-    iree::experimental::xdna::prepared_command
     iree::hal
     iree::hal::drivers::amd::xdna::image::aie2p::npu2
     iree::hal::drivers::amd::xdna::image::testdata::mul_i32

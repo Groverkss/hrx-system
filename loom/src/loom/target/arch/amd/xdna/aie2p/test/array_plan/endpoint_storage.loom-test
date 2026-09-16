@@ -94,7 +94,7 @@ binding-patch ordinal=0 channel=0 shim=(0,0) direction=stream-to-memory dma-chan
 binding-patch ordinal=1 channel=1 shim=(0,0) direction=stream-to-memory dma-channel=1 partition=0/1 offset=0 span=4 transfer=4 repeat=1
 binding-patch ordinal=2 channel=2 shim=(1,0) direction=stream-to-memory dma-channel=0 partition=0/1 offset=0 span=4 transfer=4 repeat=1
 
-array-program records=66 payload-bytes=1316 writes=37 masked-writes=22 block-writes=6 tile-loads=1 waits=0
+array-program records=66 writes=37 masked-writes=22 block-writes=6 tile-loads=1 waits=0
 array-block record=46 address=0x0021d000 words=[0x00000001,0x00000000,0x00000000,0x00000000,0x00000000,0x0e041fe1]
 array-block record=47 address=0x0021d020 words=[0x04000001,0x00000000,0x00000000,0x00000000,0x00000000,0x06041fe1]
 array-block record=48 address=0x0021d040 words=[0x08000001,0x00000000,0x00000000,0x00000000,0x00000000,0x1e045fe3]
@@ -102,7 +102,7 @@ array-block record=49 address=0x0021d060 words=[0x0c000001,0x00000000,0x00000000
 array-block record=50 address=0x0031d000 words=[0x00000001,0x00000000,0x00000000,0x00000000,0x00000000,0x0e041fe1]
 array-block record=51 address=0x0031d020 words=[0x04000001,0x00000000,0x00000000,0x00000000,0x00000000,0x06041fe1]
 array-tile-load record=52 tile-program=0
-control-program records=12 payload-bytes=324 writes=3 masked-writes=3 block-writes=3 tile-loads=0 waits=3 relocations=3
+control-program records=12 writes=3 masked-writes=3 block-writes=3 tile-loads=0 waits=3 relocations=3
 control-block record=0 address=0x0001d000 words=[0x00000001,0x00000000,0x00000000,0x00000000,0xc0000000,0x02000000,0x00000000,0x02000000]
 control-mask-write record=1 address=0x0001d200 mask=0x00001f00 value=0x00000f00
 control-write record=2 address=0x0001d204 value=0x80000000
@@ -115,9 +115,9 @@ control-write record=8 address=0x0201d204 value=0x80000000
 control-wait record=9 tile=(0,0) direction=stream-to-memory dma-channel=0 columns=1 rows=1
 control-wait record=10 tile=(0,0) direction=stream-to-memory dma-channel=1 columns=1 rows=1
 control-wait record=11 tile=(1,0) direction=stream-to-memory dma-channel=0 columns=1 rows=1
-control-relocation index=0 record=0 word=1 payload-offset=44 binding=0 addend=0 width=8 alignment=4
-control-relocation index=1 record=3 word=1 payload-offset=128 binding=1 addend=0 width=8 alignment=4
-control-relocation index=2 record=6 word=1 payload-offset=212 binding=2 addend=0 width=8 alignment=4
+control-relocation index=0 record=0 word=1 binding=0 addend=0 alignment=4
+control-relocation index=1 record=3 word=1 binding=1 addend=0 alignment=4
+control-relocation index=2 record=6 word=1 binding=2 addend=0 alignment=4
 
 resident-program workers=1
 resident worker=0 entry=@neighbor_egress$worker$0 tile=(0,2) code-bytes=174 resources=0 fixups=1

@@ -11,15 +11,16 @@ iree_add_all_subdirs()
 
 iree_cc_library(
   NAME
-    aie2p_image_fixture
+    image_fixture
   HDRS
-    "aie2p_image_fixture.h"
+    "image_fixture.h"
   SRCS
-    "aie2p_image_fixture.cc"
+    "image_fixture.cc"
   DEPS
     ::image_builder
     iree::base
-    iree::hal::drivers::amd::xdna::image::aie2p::program_format
+    iree::hal::drivers::amd::xdna::image
+    iree::hal::drivers::amd::xdna::image::aie2p::npu2
     iree::hal::drivers::amd::xdna::image::aie2p::target
   TESTONLY
   PUBLIC
@@ -35,7 +36,7 @@ iree_cc_library(
   DEPS
     iree::base
     iree::hal::drivers::amd::xdna::image::directory
-    iree::hal::drivers::amd::xdna::image::format
+    iree::schemas::xdna_executable
   TESTONLY
   PUBLIC
 )

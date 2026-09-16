@@ -73,14 +73,6 @@ loom_cc_library(
     ],
 )
 
-loom_cc_library(
-    name = "elf_format",
-    srcs = ["elf_format.c"],
-    hdrs = ["elf_format.h"],
-    visibility = ["//visibility:public"],
-    deps = ["//runtime/src/iree/base"],
-)
-
 loom_cc_test(
     name = "array_facts_test",
     srcs = ["array/facts_test.cc"],

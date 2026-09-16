@@ -76,20 +76,20 @@ route channel=1 tile=(0,2) kind=switch source=south[1] destination=dma[1]
 binding-patch ordinal=0 channel=0 shim=(0,0) direction=memory-to-stream dma-channel=0 partition=0/1 offset=0 span=4 transfer=4 repeat=1
 binding-patch ordinal=1 channel=1 shim=(0,0) direction=memory-to-stream dma-channel=1 partition=0/1 offset=0 span=4 transfer=4 repeat=1
 
-array-program records=36 payload-bytes=772 writes=18 masked-writes=12 block-writes=5 tile-loads=1 waits=0
+array-program records=36 writes=18 masked-writes=12 block-writes=5 tile-loads=1 waits=0
 array-block record=22 address=0x0021d000 words=[0x00000001,0x00000000,0x00000000,0x00000000,0x00000000,0x0e043fe0]
 array-block record=23 address=0x0021d020 words=[0x04000001,0x00000000,0x00000000,0x00000000,0x00000000,0x06043fe0]
 array-block record=24 address=0x0021d040 words=[0x08000001,0x00000000,0x00000000,0x00000000,0x00000000,0x1e047fe2]
 array-block record=25 address=0x0021d060 words=[0x0c000001,0x00000000,0x00000000,0x00000000,0x00000000,0x26047fe2]
 array-block record=26 address=0x0021d080 words=[0x00040001,0x00000000,0x00000000,0x00000000,0x00000000,0x16047fe2]
 array-tile-load record=27 tile-program=0
-control-program records=4 payload-bytes=152 writes=2 masked-writes=0 block-writes=2 tile-loads=0 waits=0 relocations=2
+control-program records=4 writes=2 masked-writes=0 block-writes=2 tile-loads=0 waits=0 relocations=2
 control-block record=0 address=0x0001d000 words=[0x00000001,0x00000000,0x00000000,0x00000000,0xc0000000,0x02000000,0x00000000,0x02000000]
 control-write record=1 address=0x0001d214 value=0x00000000
 control-block record=2 address=0x0001d020 words=[0x00000001,0x00000000,0x00000000,0x00000000,0xc0000000,0x02000000,0x00000000,0x02000000]
 control-write record=3 address=0x0001d21c value=0x00000001
-control-relocation index=0 record=0 word=1 payload-offset=44 binding=0 addend=0 width=8 alignment=4
-control-relocation index=1 record=2 word=1 payload-offset=108 binding=1 addend=0 width=8 alignment=4
+control-relocation index=0 record=0 word=1 binding=0 addend=0 alignment=4
+control-relocation index=1 record=2 word=1 binding=1 addend=0 alignment=4
 
 resident-program workers=1
 resident worker=0 entry=@coprime_ring_array$worker$0 tile=(0,2) code-bytes=320 resources=0 fixups=5

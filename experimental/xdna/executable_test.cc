@@ -6,219 +6,259 @@
 
 #include "experimental/xdna/executable.h"
 
-#include <cstddef>
-#include <cstdint>
-#include <memory>
+#include <algorithm>
+#include <array>
 #include <vector>
 
-#include "iree/hal/drivers/amd/xdna/image/aie2p/npu2.h"
-#include "iree/hal/drivers/amd/xdna/image/testdata/mul_i32.h"
-#include "iree/hal/drivers/amd/xdna/image/testdata/mul_i32_npu4.h"
-#include "iree/hal/drivers/amd/xdna/image/testing/aie2p_image_fixture.h"
+#include "iree/hal/drivers/amd/xdna/image/testing/image_fixture.h"
 #include "iree/testing/gtest.h"
 #include "iree/testing/status_matchers.h"
 
 namespace {
 
-using iree::Status;
 using iree::StatusCode;
-using iree::hal::amd::xdna::testing::ByteSequencePtr;
+using iree::hal::amd::xdna::testing::ImageFixture;
+using iree::hal::amd::xdna::testing::MakeImageTarget;
 using iree::hal::amd::xdna::testing::MakeOwnedByteSequence;
 
-struct ExecutableDeleter {
-  void operator()(iree_hal_amd_xdna_executable_t* executable) const {
-    iree_hal_amd_xdna_executable_release(executable);
-  }
+// Models an immutable source whose backing becomes unavailable during loading.
+struct FailingSource {
+  // Sequence interface borrowing bytes for this scope.
+  iree_byte_sequence_t base;
+  // Unchanged source bytes.
+  std::vector<uint8_t> bytes;
+  // Successful reads remaining before the backing fails.
+  mutable size_t remaining_reads = SIZE_MAX;
 };
 
-using ExecutablePtr =
-    std::unique_ptr<iree_hal_amd_xdna_executable_t, ExecutableDeleter>;
+void DestroyFailingSource(iree_byte_sequence_t* base) {}
 
-static ByteSequencePtr LoadMulI32Image() {
-  EXPECT_EQ(iree_hal_amd_xdna_test_mul_i32_size(), 1u);
-  if (iree_hal_amd_xdna_test_mul_i32_size() != 1u) return {};
-  const iree_file_toc_t* file = iree_hal_amd_xdna_test_mul_i32_create();
-  const auto* begin = reinterpret_cast<const uint8_t*>(file->data);
-  return MakeOwnedByteSequence(std::vector<uint8_t>(begin, begin + file->size));
+iree_status_t EnumerateFailingSource(
+    const iree_byte_sequence_t* base,
+    iree_byte_sequence_segment_callback_t callback) {
+  const auto& source = *reinterpret_cast<const FailingSource*>(base);
+  if (source.remaining_reads == 0) {
+    return iree_make_status(IREE_STATUS_UNAVAILABLE,
+                            "source backing unavailable");
+  }
+  --source.remaining_reads;
+  return callback.fn(
+      callback.user_data,
+      iree_make_const_byte_span(source.bytes.data(), source.bytes.size()));
 }
+
+const iree_byte_sequence_vtable_t kFailingSourceVtable = {
+    DestroyFailingSource, EnumerateFailingSource, nullptr};
 
 class XdnaExecutableTest : public ::testing::Test {
  protected:
-  ExecutablePtr LoadCanonical() {
-    ByteSequencePtr sequence = LoadMulI32Image();
-    iree_hal_amd_xdna_aie2p_target_t target;
-    IREE_CHECK_OK(iree_hal_amd_xdna_aie2p_npu2_target_initialize(
-        IREE_SV("amd.xdna.strix_halo.17f0_11"),
-        /*context_column_count=*/1, &target));
-    iree_hal_amd_xdna_executable_t* executable = nullptr;
-    IREE_CHECK_OK(iree_hal_amd_xdna_executable_create(
-        sequence.get(), &target, iree_allocator_system(), &executable));
-    return ExecutablePtr(executable);
+  void SetUp() override {
+    auto source = MakeOwnedByteSequence(ImageFixture().Build());
+    const auto target = MakeImageTarget();
+    IREE_ASSERT_OK(iree_hal_amd_xdna_image_create(
+        source.get(), &target, iree_allocator_system(), &image_));
+    for (size_t i = 0; i < storage_.size(); ++i) {
+      const auto allocation = iree_hal_amd_xdna_image_tables_allocation(
+          iree_hal_amd_xdna_image_tables(image_), i);
+      bytes_[i].assign(allocation.byte_length, 0xCC);
+      storage_[i].mapping =
+          iree_make_byte_span(bytes_[i].data(), bytes_[i].size());
+      storage_[i].memory = reinterpret_cast<amdf_memory_t*>(uintptr_t{16} + i);
+      storage_[i].access_ordinal = 3;
+      storage_[i].memory_byte_offset = 65536;
+      storage_[i].device_address = UINT64_C(0x123456780000) + i * 32768;
+    }
+    ASSERT_NO_FATAL_FAILURE(
+        WrapBinding(IREE_HAL_MEMORY_TYPE_DEVICE_VISIBLE,
+                    IREE_HAL_MEMORY_ACCESS_READ | IREE_HAL_MEMORY_ACCESS_WRITE,
+                    IREE_HAL_BUFFER_USAGE_STORAGE));
   }
+
+  void TearDown() override {
+    iree_hal_buffer_release(binding_.buffer_ref.buffer);
+    iree_hal_amd_xdna_image_destroy(image_);
+  }
+
+  void WrapBinding(iree_hal_memory_type_t type, iree_hal_memory_access_t access,
+                   iree_hal_buffer_usage_t usage) {
+    iree_hal_buffer_release(binding_.buffer_ref.buffer);
+    binding_.buffer_ref.buffer = nullptr;
+    IREE_ASSERT_OK(iree_hal_heap_buffer_wrap(
+        iree_hal_buffer_placement_undefined(), type, access, usage,
+        buffer_.size(), iree_make_byte_span(buffer_.data(), buffer_.size()),
+        iree_hal_buffer_release_callback_null(), iree_allocator_system(),
+        &binding_.buffer_ref.buffer));
+    binding_.buffer_ref.offset = 0;
+    binding_.buffer_ref.length = 16;
+    binding_.memory = reinterpret_cast<amdf_memory_t*>(uintptr_t{32});
+    binding_.memory_byte_offset = 128;
+    binding_.device_address = UINT64_C(0xABCD12340000);
+  }
+
+  iree_status_t Load() {
+    return iree_hal_amd_xdna_executable_load(image_, 0, storage_.size(),
+                                             storage_.data());
+  }
+  iree_status_t Bind() {
+    return iree_hal_amd_xdna_executable_bind(image_, 0, storage_.size(),
+                                             storage_.data(), 1, &binding_);
+  }
+
+  // Admitted image with no native resource ownership.
+  iree_hal_amd_xdna_image_t* image_ = nullptr;
+  // Caller-owned command and catalog bytes.
+  std::array<std::vector<uint8_t>, 2> bytes_;
+  // Resolved native ranges borrowing bytes_.
+  std::array<iree_hal_amd_xdna_executable_storage_t, 2> storage_ = {};
+  // Logical binding storage with room to exercise nonzero offsets.
+  alignas(IREE_HAL_HEAP_BUFFER_ALIGNMENT) std::array<uint8_t, 128> buffer_ = {};
+  // Owning HAL buffer reference and borrowed native address.
+  iree_hal_amd_xdna_executable_binding_t binding_ = {};
 };
 
-TEST_F(XdnaExecutableTest, LoadsCanonicalImageAndReflection) {
-  ExecutablePtr executable = LoadCanonical();
+TEST_F(XdnaExecutableTest, LoadsSharedPayloadsAndOnlyExplicitZeroTails) {
+  IREE_ASSERT_OK(Load());
+  const ImageFixture fixture;
+  EXPECT_TRUE(std::equal(bytes_[0].begin() + 32768, bytes_[0].end(),
+                         fixture.payloads[1].begin()));
+  EXPECT_TRUE(std::all_of(bytes_[0].begin() + 16, bytes_[0].begin() + 32768,
+                          [](uint8_t byte) { return byte == 0xCC; }));
+  EXPECT_TRUE(std::equal(bytes_[1].begin(), bytes_[1].begin() + 8,
+                         fixture.payloads[2].begin()));
+  EXPECT_TRUE(std::all_of(bytes_[1].begin() + 8, bytes_[1].end(),
+                          [](uint8_t byte) { return byte == 0; }));
+  const uint64_t catalog_address = storage_[1].device_address + 4;
+  EXPECT_EQ(iree_unaligned_load_le_u32(bytes_[0].data()),
+            (uint32_t)catalog_address | 1u);
+  EXPECT_EQ(iree_unaligned_load_le_u32(bytes_[0].data() + 4),
+            UINT32_C(0xA5A50000) | (uint32_t)(catalog_address >> 32));
+}
 
-  iree_hal_executable_function_t function =
-      iree_hal_executable_function_invalid();
-  IREE_ASSERT_OK(iree_hal_amd_xdna_executable_lookup_function_by_name(
-      executable.get(), IREE_SV("mul_i32"), &function));
-  EXPECT_EQ(function.value, 0u);
-
-  iree_hal_executable_function_info_t function_info;
-  IREE_ASSERT_OK(iree_hal_amd_xdna_executable_function_info(
-      executable.get(), function, &function_info));
-  EXPECT_TRUE(iree_string_view_equal(function_info.name, IREE_SV("mul_i32")));
-  EXPECT_EQ(function_info.binding_count, 3u);
-  EXPECT_EQ(function_info.parameter_count, 3u);
-  EXPECT_EQ(function_info.maximum_workgroup_invocations, 1u);
-  EXPECT_EQ(function_info.workgroup_size[0], 1u);
-  EXPECT_EQ(function_info.workgroup_size[1], 1u);
-  EXPECT_EQ(function_info.workgroup_size[2], 1u);
-
-  iree_hal_amd_xdna_executable_entry_t entry;
-  IREE_ASSERT_OK(iree_hal_amd_xdna_executable_query_entry(executable.get(),
-                                                          function, &entry));
-  EXPECT_EQ(entry.binding_count, 3u);
-  EXPECT_EQ(entry.native.relocation_count, 3u);
-  EXPECT_EQ(iree_unaligned_load_le_u32(entry.array.data + 8), 50u);
-  ASSERT_GE(entry.native.control.data_length, 16u);
-  EXPECT_EQ(iree_unaligned_load_le_u32(entry.native.control.data + 8), 8u);
-  EXPECT_EQ(iree_unaligned_load_le_u32(entry.native.control.data + 12),
-            entry.native.control.data_length);
-
-  constexpr uint64_t kExpectedBindingByteLengths[] = {64, 64, 64};
-  for (iree_host_size_t i = 0; i < entry.binding_count; ++i) {
-    iree_hal_amd_xdna_elf_binding_record_t binding;
-    IREE_ASSERT_OK(iree_hal_amd_xdna_executable_query_binding(
-        executable.get(), function, i, &binding));
-    EXPECT_EQ(binding.binding_ordinal, i);
-    EXPECT_EQ(binding.entry_ordinal, 0u);
-    EXPECT_EQ(binding.kind, IREE_HAL_AMD_XDNA_ELF_BINDING_KIND_BUFFER);
-    EXPECT_EQ(binding.address_space,
-              IREE_HAL_AMD_XDNA_ELF_BINDING_ADDRESS_SPACE_GLOBAL);
-    EXPECT_EQ(binding.access, i == 2
-                                  ? IREE_HAL_AMD_XDNA_ELF_BINDING_ACCESS_WRITE
-                                  : IREE_HAL_AMD_XDNA_ELF_BINDING_ACCESS_READ);
-    EXPECT_EQ(binding.usage,
-              IREE_HAL_AMD_XDNA_ELF_BINDING_USAGE_DEVICE_VISIBLE |
-                  IREE_HAL_AMD_XDNA_ELF_BINDING_USAGE_COHERENT);
-    EXPECT_EQ(binding.minimum_byte_length, kExpectedBindingByteLengths[i]);
-    EXPECT_EQ(binding.minimum_alignment, 4u);
+TEST_F(XdnaExecutableTest, RebindsWithoutReloadingOrChangingOtherStorage) {
+  IREE_ASSERT_OK(Load());
+  for (uint64_t address :
+       {UINT64_C(0xABCD12340000), UINT64_C(0x123456789000)}) {
+    const auto before = bytes_;
+    binding_.device_address = address;
+    IREE_ASSERT_OK(Bind());
+    EXPECT_TRUE(std::equal(bytes_[0].begin(), bytes_[0].begin() + 8,
+                           before[0].begin()));
+    EXPECT_TRUE(std::equal(bytes_[0].begin() + 16, bytes_[0].end(),
+                           before[0].begin() + 16));
+    EXPECT_EQ(bytes_[1], before[1]);
+    EXPECT_EQ(iree_unaligned_load_le_u32(bytes_[0].data() + 8),
+              (uint32_t)(address + 4) | 1u);
+    EXPECT_EQ(iree_unaligned_load_le_u32(bytes_[0].data() + 12),
+              UINT32_C(0xA5A50000) | (uint32_t)((address + 4) >> 32));
   }
 }
 
-TEST_F(XdnaExecutableTest, CanonicalImagesRequireCompatibleExecutionProfiles) {
-  const iree_file_toc_t* images[] = {
-      iree_hal_amd_xdna_test_mul_i32_npu4_create(),
-      iree_hal_amd_xdna_test_mul_i32_create(),
-  };
-  const iree_string_view_t target_ids[] = {
-      IREE_SVL("amd.xdna.strix.17f0_10"),
-      IREE_SVL("amd.xdna.strix_halo.17f0_11"),
-      IREE_SVL("amd.xdna.krackan.17f0_20"),
-  };
-  const size_t compatible_image_ordinals[] = {0, 1, 0};
-  for (size_t image_ordinal = 0; image_ordinal < 2; ++image_ordinal) {
-    const auto* begin =
-        reinterpret_cast<const uint8_t*>(images[image_ordinal]->data);
-    ByteSequencePtr sequence = MakeOwnedByteSequence(
-        std::vector<uint8_t>(begin, begin + images[image_ordinal]->size));
-    for (size_t target_ordinal = 0; target_ordinal < IREE_ARRAYSIZE(target_ids);
-         ++target_ordinal) {
-      SCOPED_TRACE(::testing::Message() << "image=" << image_ordinal
-                                        << " target=" << target_ordinal);
-      iree_hal_amd_xdna_aie2p_target_t target;
-      IREE_ASSERT_OK(iree_hal_amd_xdna_aie2p_npu2_target_initialize(
-          target_ids[target_ordinal], 1, &target));
-      auto* executable =
-          reinterpret_cast<iree_hal_amd_xdna_executable_t*>(uintptr_t{1});
-      auto* sentinel = executable;
-      Status status(iree_hal_amd_xdna_executable_create(
-          sequence.get(), &target, iree_allocator_system(), &executable));
-      if (image_ordinal != compatible_image_ordinals[target_ordinal]) {
-        EXPECT_EQ(status.code(), StatusCode::kFailedPrecondition);
-        EXPECT_EQ(executable, sentinel);
-        continue;
-      }
-      IREE_ASSERT_OK(status);
-      ExecutablePtr owned_executable(executable);
-      iree_hal_executable_function_t function;
-      IREE_ASSERT_OK(iree_hal_amd_xdna_executable_lookup_function_by_name(
-          executable, IREE_SV("mul_i32"), &function));
-      iree_hal_amd_xdna_executable_entry_t entry;
-      IREE_ASSERT_OK(iree_hal_amd_xdna_executable_query_entry(
-          executable, function, &entry));
-      EXPECT_EQ(entry.binding_count, 3u);
-      EXPECT_EQ(entry.native.relocation_count, 3u);
-      EXPECT_GT(entry.array.data_length, 0u);
-      EXPECT_GT(entry.native.control.data_length, 0u);
-    }
-  }
-}
-
-TEST_F(XdnaExecutableTest, InvalidFunctionQueriesPreserveOutputs) {
-  ExecutablePtr executable = LoadCanonical();
-  auto function = iree_hal_executable_function_from_index(0);
-  IREE_EXPECT_STATUS_IS(StatusCode::kNotFound,
-                        iree_hal_amd_xdna_executable_lookup_function_by_name(
-                            executable.get(), IREE_SV("missing"), &function));
-  EXPECT_EQ(function.value, 0u);
-
-  for (auto invalid_function : {iree_hal_executable_function_invalid(),
-                                iree_hal_executable_function_from_index(1)}) {
-    iree_hal_executable_function_info_t info = {};
-    info.name = IREE_SV("unchanged");
-    IREE_EXPECT_STATUS_IS(StatusCode::kOutOfRange,
-                          iree_hal_amd_xdna_executable_function_info(
-                              executable.get(), invalid_function, &info));
-    EXPECT_TRUE(iree_string_view_equal(info.name, IREE_SV("unchanged")));
-    iree_hal_amd_xdna_executable_entry_t entry = {};
-    entry.binding_count = UINT32_MAX;
-    IREE_EXPECT_STATUS_IS(StatusCode::kOutOfRange,
-                          iree_hal_amd_xdna_executable_query_entry(
-                              executable.get(), invalid_function, &entry));
-    EXPECT_EQ(entry.binding_count, UINT32_MAX);
-  }
-
-  iree_hal_amd_xdna_elf_binding_record_t binding = {};
-  binding.binding_ordinal = UINT32_MAX;
-  IREE_EXPECT_STATUS_IS(StatusCode::kOutOfRange,
-                        iree_hal_amd_xdna_executable_query_binding(
-                            executable.get(), function, 3, &binding));
-  EXPECT_EQ(binding.binding_ordinal, UINT32_MAX);
-}
-
-TEST_F(XdnaExecutableTest, RejectsMismatchedTargetWithoutPublishing) {
-  ByteSequencePtr sequence = LoadMulI32Image();
-  iree_hal_amd_xdna_aie2p_target_t target;
-  IREE_ASSERT_OK(iree_hal_amd_xdna_aie2p_npu2_target_initialize(
-      IREE_SV("amd.xdna.strix_halo.17f0_11"), 1, &target));
-  ++target.identity.policy_id;
-  auto* executable =
-      reinterpret_cast<iree_hal_amd_xdna_executable_t*>(uintptr_t{1});
-  auto* sentinel = executable;
+TEST_F(XdnaExecutableTest, ResolvesBorrowedNativeRangesAndContinuations) {
+  amdf_xdna_kernel_command_t command = {};
+  uint32_t next = 0;
+  IREE_ASSERT_OK(iree_hal_amd_xdna_executable_query_invocation(
+      image_, 0, 0, storage_.size(), storage_.data(), &command, &next));
+  EXPECT_EQ(command.memory, storage_[0].memory);
+  EXPECT_EQ(command.access_ordinal, 3u);
+  EXPECT_EQ(command.byte_offset, storage_[0].memory_byte_offset);
+  EXPECT_EQ(command.byte_length, 16u);
+  EXPECT_EQ(next, 1u);
+  IREE_ASSERT_OK(iree_hal_amd_xdna_executable_query_invocation(
+      image_, 0, next, storage_.size(), storage_.data(), &command, &next));
+  EXPECT_EQ(command.byte_offset, storage_[0].memory_byte_offset + 32768);
+  EXPECT_EQ(next, 1u);
   IREE_EXPECT_STATUS_IS(
-      StatusCode::kFailedPrecondition,
-      iree_hal_amd_xdna_executable_create(
-          sequence.get(), &target, iree_allocator_system(), &executable));
-  EXPECT_EQ(executable, sentinel);
+      StatusCode::kOutOfRange,
+      iree_hal_amd_xdna_executable_query_invocation(
+          image_, 0, 2, storage_.size(), storage_.data(), &command, &next));
 }
 
-TEST_F(XdnaExecutableTest, AllocationFailureDoesNotPublish) {
-  ByteSequencePtr sequence = LoadMulI32Image();
-  iree_hal_amd_xdna_aie2p_target_t target;
-  IREE_ASSERT_OK(iree_hal_amd_xdna_aie2p_npu2_target_initialize(
-      IREE_SV("amd.xdna.strix_halo.17f0_11"), 1, &target));
-  auto* executable =
-      reinterpret_cast<iree_hal_amd_xdna_executable_t*>(uintptr_t{1});
-  auto* sentinel = executable;
+TEST_F(XdnaExecutableTest, ChecksAllBackingBeforeLoading) {
+  const auto before = bytes_;
+  --storage_[1].mapping.data_length;
+  IREE_EXPECT_STATUS_IS(StatusCode::kInvalidArgument, Load());
+  EXPECT_EQ(bytes_, before);
+  ++storage_[1].mapping.data_length;
+  ++storage_[0].device_address;
+  IREE_EXPECT_STATUS_IS(StatusCode::kInvalidArgument, Load());
+  EXPECT_EQ(bytes_, before);
+}
+
+TEST_F(XdnaExecutableTest, PropagatesSourceFailureAfterPartialLoad) {
+  FailingSource source = {};
+  source.bytes = ImageFixture().Build();
+  iree_byte_sequence_initialize(&kFailingSourceVtable, source.bytes.size(),
+                                &source.base);
+  const auto target = MakeImageTarget();
+  iree_hal_amd_xdna_image_t* image = nullptr;
+  iree_status_t status = iree_hal_amd_xdna_image_create(
+      &source.base, &target, iree_allocator_system(), &image);
+  iree_byte_sequence_release(&source.base);
+  std::unique_ptr<iree_hal_amd_xdna_image_t,
+                  decltype(&iree_hal_amd_xdna_image_destroy)>
+      image_owner(image, iree_hal_amd_xdna_image_destroy);
+  IREE_ASSERT_OK(status);
+  source.remaining_reads = 1;
+  IREE_EXPECT_STATUS_IS(StatusCode::kUnavailable,
+                        iree_hal_amd_xdna_executable_load(
+                            image, 0, storage_.size(), storage_.data()));
+  EXPECT_TRUE(std::all_of(bytes_[0].begin(), bytes_[0].begin() + 16,
+                          [](uint8_t byte) { return byte == 0xA5; }));
+  EXPECT_TRUE(std::all_of(bytes_[0].begin() + 16, bytes_[0].end(),
+                          [](uint8_t byte) { return byte == 0xCC; }));
+  EXPECT_TRUE(std::all_of(bytes_[1].begin(), bytes_[1].end(),
+                          [](uint8_t byte) { return byte == 0xCC; }));
+}
+
+TEST_F(XdnaExecutableTest, ChecksBindingCountAndLogicalRanges) {
+  IREE_ASSERT_OK(Load());
+  const auto before = bytes_;
   IREE_EXPECT_STATUS_IS(
       StatusCode::kInvalidArgument,
-      iree_hal_amd_xdna_executable_create(sequence.get(), &target,
-                                          iree_allocator_null(), &executable));
-  EXPECT_EQ(executable, sentinel);
+      iree_hal_amd_xdna_executable_bind(image_, 0, storage_.size(),
+                                        storage_.data(), 0, nullptr));
+  binding_.buffer_ref.offset = buffer_.size() - 8;
+  IREE_EXPECT_STATUS_IS(StatusCode::kOutOfRange, Bind());
+  binding_.buffer_ref.offset = 4;
+  binding_.buffer_ref.length = IREE_HAL_WHOLE_BUFFER;
+  IREE_ASSERT_OK(Bind());
+  binding_.buffer_ref.length = 8;
+  IREE_EXPECT_STATUS_IS(StatusCode::kOutOfRange, Bind());
+  binding_.buffer_ref.offset = UINT64_MAX;
+  IREE_EXPECT_STATUS_IS(StatusCode::kOutOfRange, Bind());
+  EXPECT_EQ(bytes_[1], before[1]);
+}
+
+TEST_F(XdnaExecutableTest, RejectsInvalidAddressesBeforePatching) {
+  IREE_ASSERT_OK(Load());
+  const auto before = bytes_;
+  for (uint64_t address :
+       {UINT64_MAX - 3, UINT64_C(0x1000000000000), UINT64_C(3)}) {
+    binding_.device_address = address;
+    IREE_EXPECT_STATUS_IS(StatusCode::kOutOfRange, Bind());
+    EXPECT_EQ(bytes_, before);
+  }
+  storage_[1].device_address = UINT64_C(0xFFFFFFFFFFFC);
+  IREE_EXPECT_STATUS_IS(StatusCode::kOutOfRange, Load());
+  EXPECT_EQ(bytes_, before);
+}
+
+TEST_F(XdnaExecutableTest, EnforcesHalAccessUsageAndVisibility) {
+  IREE_ASSERT_OK(Load());
+  const auto before = bytes_;
+  ASSERT_NO_FATAL_FAILURE(WrapBinding(IREE_HAL_MEMORY_TYPE_DEVICE_VISIBLE,
+                                      IREE_HAL_MEMORY_ACCESS_WRITE,
+                                      IREE_HAL_BUFFER_USAGE_STORAGE));
+  IREE_EXPECT_STATUS_IS(StatusCode::kPermissionDenied, Bind());
+  ASSERT_NO_FATAL_FAILURE(WrapBinding(IREE_HAL_MEMORY_TYPE_DEVICE_VISIBLE,
+                                      IREE_HAL_MEMORY_ACCESS_READ,
+                                      IREE_HAL_BUFFER_USAGE_TRANSFER));
+  IREE_EXPECT_STATUS_IS(StatusCode::kPermissionDenied, Bind());
+  ASSERT_NO_FATAL_FAILURE(WrapBinding(IREE_HAL_MEMORY_TYPE_HOST_VISIBLE,
+                                      IREE_HAL_MEMORY_ACCESS_READ,
+                                      IREE_HAL_BUFFER_USAGE_STORAGE));
+  IREE_EXPECT_STATUS_IS(StatusCode::kPermissionDenied, Bind());
+  EXPECT_EQ(bytes_, before);
 }
 
 }  // namespace

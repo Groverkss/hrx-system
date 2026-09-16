@@ -12,13 +12,12 @@
 #include "iree/base/api.h"
 #include "iree/base/internal/arena.h"
 #include "loom/target/arch/amd/xdna/aie2p/array/plan.h"
-#include "loom/target/arch/amd/xdna/elf_format.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-// AIE2P payload-ABI operation executed by the native XDNA loader.
+// Compiler-owned operation awaiting native command emission.
 typedef enum loom_aie2p_program_record_type_e {
   LOOM_AIE2P_PROGRAM_RECORD_REGISTER_WRITE32 = 1,
   LOOM_AIE2P_PROGRAM_RECORD_REGISTER_MASK_WRITE32 = 2,
@@ -57,7 +56,7 @@ typedef struct loom_aie2p_program_register_block_write32_t {
 
 // One resident tile program loaded while its destination core remains reset.
 typedef struct loom_aie2p_program_tile_program_load_t {
-  // Index relative to the array payload's first tile program header.
+  // Index into the entry's linked worker table.
   uint32_t tile_program_index;
 } loom_aie2p_program_tile_program_load_t;
 
@@ -77,7 +76,7 @@ typedef struct loom_aie2p_program_dma_task_wait_t {
 
 // One typed operation in an array or invocation-control program.
 typedef struct loom_aie2p_program_record_t {
-  // Payload-ABI operation kind selecting one union member.
+  // Native operation kind selecting one union member.
   loom_aie2p_program_record_type_t type;
   union {
     // REGISTER_WRITE32 payload.
@@ -93,7 +92,7 @@ typedef struct loom_aie2p_program_record_t {
   } value;
 } loom_aie2p_program_record_t;
 
-// Runtime relocation targeting one word range in a block-write record.
+// Runtime shim-address relocation targeting a block-write word pair.
 typedef struct loom_aie2p_program_relocation_t {
   // Control-program record containing the target block write.
   uint32_t target_record_index;
@@ -101,10 +100,6 @@ typedef struct loom_aie2p_program_relocation_t {
   uint32_t target_word_index;
   // Dense entry-relative binding ordinal supplying the runtime value.
   uint32_t binding_ordinal;
-  // Runtime field interpretation.
-  loom_xdna_elf_relocation_kind_t kind;
-  // Number of consecutive target bytes.
-  uint8_t field_byte_width;
   // Signed addend applied to the supplied runtime value.
   int64_t addend;
   // Minimum permitted relocated unsigned value.
@@ -129,21 +124,9 @@ typedef struct loom_aie2p_array_program_t {
   const loom_aie2p_program_relocation_t* relocations;
   // Number of runtime patches.
   iree_host_size_t relocation_count;
-  // Number of tile program headers referenced by the array program.
+  // Number of linked workers referenced by the array program.
   uint32_t tile_program_count;
 } loom_aie2p_array_program_t;
-
-// Encoded canonical XDNA payloads and their resolved relocation table rows.
-typedef struct loom_aie2p_encoded_array_program_t {
-  // Complete encoded ARRAY program-header payload.
-  iree_const_byte_span_t array_payload;
-  // Complete encoded CONTROL program-header payload.
-  iree_const_byte_span_t control_payload;
-  // Arena-owned fixed-width runtime relocation rows.
-  const loom_xdna_elf_relocation_record_t* relocations;
-  // Number of runtime relocation rows.
-  iree_host_size_t relocation_count;
-} loom_aie2p_encoded_array_program_t;
 
 // Materializes executable AIE2P array and invocation-control operations.
 //
@@ -156,21 +139,6 @@ typedef struct loom_aie2p_encoded_array_program_t {
 iree_status_t loom_aie2p_array_program_build(
     const loom_aie2p_array_plan_t* plan, iree_arena_allocator_t* arena,
     loom_aie2p_array_program_t* out_program);
-
-// Encodes one typed program after final ELF program-header placement.
-//
-// Tile program indices are resolved relative to
-// |first_tile_program_header_ordinal|. |tile_program_header_count| covers the
-// complete consecutive TILE program-header range owned by the array,
-// including data contributions following the directly referenced core program
-// headers. Runtime relocation targets are resolved against
-// |control_program_header_ordinal| and the encoded control record offsets.
-iree_status_t loom_aie2p_array_program_encode(
-    const loom_aie2p_array_program_t* program,
-    uint32_t first_tile_program_header_ordinal,
-    uint32_t tile_program_header_count, uint32_t control_program_header_ordinal,
-    iree_arena_allocator_t* arena,
-    loom_aie2p_encoded_array_program_t* out_program);
 
 #ifdef __cplusplus
 }  // extern "C"

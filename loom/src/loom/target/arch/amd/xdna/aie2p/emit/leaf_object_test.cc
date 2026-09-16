@@ -301,9 +301,9 @@ TEST_F(Aie2pLeafObjectTest, LowFunctionsEmitOptimizedVectorLeaves) {
     EXPECT_TRUE(iree_string_view_equal(realization.abi_identity,
                                        LOOM_AIE2P_LEAF_ABI_IDENTITY));
     EXPECT_EQ(realization.entry_symbol_index, 0u);
-    EXPECT_EQ(realization.elf_machine, LOOM_XDNA_ELF_MACHINE_AIE);
-    EXPECT_EQ(realization.target_generation, LOOM_XDNA_TARGET_GENERATION_AIE2P);
-    EXPECT_EQ(realization.elf_flags, LOOM_XDNA_ELF_AIE2P_FLAGS);
+    EXPECT_EQ(realization.elf_machine, IREE_XDNA_ELF_MACHINE_AIE);
+    EXPECT_EQ(realization.target_generation, IREE_XDNA_TARGET_GENERATION_AIE2P);
+    EXPECT_EQ(realization.elf_flags, IREE_XDNA_ELF_AIE2P_FLAGS);
     EXPECT_EQ(realization.capability_flags, 0u);
     EXPECT_EQ(realization.code.byte_length, 36u);
     EXPECT_EQ(realization.code.minimum_alignment, 16u);
