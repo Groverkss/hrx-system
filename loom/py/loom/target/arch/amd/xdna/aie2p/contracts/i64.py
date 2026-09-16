@@ -114,17 +114,37 @@ def _pair_add_sub_rule(
 ) -> DescriptorRule:
     lhs_emits, lhs_low, lhs_high = _split_pair(ValueRef.operand("lhs"), "lhs")
     rhs_emits, rhs_low, rhs_high = _split_pair(ValueRef.operand("rhs"), "rhs")
-    program = ScalarProgram()
-    result_low = program.binary("result_low", low_operation, lhs_low, rhs_low)
-    result_high = program.binary("result_high", high_operation, lhs_high, rhs_high)
+    low_descriptor = _descriptor(f"amd.xdna.aie2p.{low_operation}")
+    high_descriptor = _descriptor(f"amd.xdna.aie2p.{high_operation}")
+    result_low = ValueRef.temporary("result_low")
+    result_high = ValueRef.temporary("result_high")
+    carry_low = ValueRef.temporary("carry_low")
+    carry_high = ValueRef.temporary("carry_high")
     return DescriptorRule(
         source_op=source_op,
-        descriptor=_descriptor(f"amd.xdna.aie2p.{high_operation}"),
+        descriptor=high_descriptor,
         guards=_typed_guards(("lhs", "rhs", "result"), _I64),
         emit=(
             *lhs_emits,
             *rhs_emits,
-            *program.emits,
+            EmitDescriptorOp(
+                descriptor=low_descriptor,
+                operands={"s0": lhs_low, "s1": rhs_low},
+                results={"d0": result_low, "carry_out": carry_low},
+                result_types={
+                    "d0": DescriptorResultType(),
+                    "carry_out": DescriptorResultType(),
+                },
+            ),
+            EmitDescriptorOp(
+                descriptor=high_descriptor,
+                operands={"s0": lhs_high, "s1": rhs_high, "carry_in": carry_low},
+                results={"d0": result_high, "carry_out": carry_high},
+                result_types={
+                    "d0": DescriptorResultType(),
+                    "carry_out": DescriptorResultType(),
+                },
+            ),
             _concat_pair(result_low, result_high),
         ),
     )
@@ -541,14 +561,14 @@ AIE2P_I64_RULES = (
     _pair_bitwise_rule(scalar_bitwise.scalar_xori, "xor.i32"),
     _pair_add_sub_rule(
         scalar_arithmetic.scalar_addi,
-        "add.i32",
+        "add.carry_out.i32",
         "add.carry.i32",
     ),
     _pair_multiply_rule(),
     _pair_left_shift_rule(),
     _pair_add_sub_rule(
         scalar_arithmetic.scalar_subi,
-        "sub.i32",
+        "sub.borrow_out.i32",
         "sub.borrow.i32",
     ),
     *(

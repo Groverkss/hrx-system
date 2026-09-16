@@ -40,13 +40,12 @@ def _native_class(operand: MachineOperand) -> str:
 def descriptor_constraints(
     spec: _DescriptorSpec,
     form: MachineForm,
-    explicit_operands: tuple[MachineOperand, ...],
+    operand_names: tuple[str, ...],
 ) -> tuple[Constraint, ...]:
     """Returns direct update ties and heterogeneous tuple constraints."""
 
     operand_indices = {
-        operand.name: operand_index
-        for operand_index, operand in enumerate(explicit_operands)
+        name: operand_index for operand_index, name in enumerate(operand_names)
     }
     result = [
         Constraint(

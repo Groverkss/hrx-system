@@ -54,3 +54,5 @@ class _DescriptorSpec:
     effects: tuple[Effect, ...] = ()
     # Whether allocation may use the descriptor for physical register copies.
     allocation_move: bool = False
+    # Exposes native srCarry reads and writes as fixed-register SSA values.
+    expose_carry: bool = False

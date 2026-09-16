@@ -47,9 +47,9 @@ low.func.def target<amd.xdna.aie2p.core>(@target) abi(object_function) @scalar_i
   %12 = slice %lhs[1] : reg<aie2p.er x2> -> reg<aie2p.er>
   %13 = slice %rhs[0] : reg<aie2p.er x2> -> reg<aie2p.er>
   %14 = slice %rhs[1] : reg<aie2p.er x2> -> reg<aie2p.er>
-  %15 = add.rr %11, %13
-  %16 = adc %12, %14
-  %sum = concat(%15, %16) : (reg<aie2p.er>, reg<aie2p.er>) -> reg<aie2p.er x2>
+  %15, %16 = add.carry %11, %13
+  %17, %18 = adc %12, %14, %16
+  %sum = concat(%15, %17) : (reg<aie2p.er>, reg<aie2p.er>) -> reg<aie2p.er x2>
   return %sum
 }
 
@@ -72,9 +72,9 @@ low.func.def target<amd.xdna.aie2p.core>(@target) abi(object_function) @scalar_i
   %12 = slice %lhs[1] : reg<aie2p.er x2> -> reg<aie2p.er>
   %13 = slice %rhs[0] : reg<aie2p.er x2> -> reg<aie2p.er>
   %14 = slice %rhs[1] : reg<aie2p.er x2> -> reg<aie2p.er>
-  %15 = sub %11, %13
-  %16 = sbc %12, %14
-  %difference = concat(%15, %16) : (reg<aie2p.er>, reg<aie2p.er>) -> reg<aie2p.er x2>
+  %15, %16 = sub.borrow %11, %13
+  %17, %18 = sbc %12, %14, %16
+  %difference = concat(%15, %17) : (reg<aie2p.er>, reg<aie2p.er>) -> reg<aie2p.er x2>
   return %difference
 }
 
@@ -383,9 +383,9 @@ low.func.def target<amd.xdna.aie2p.core>(@target) abi(object_function) @scalar_i
   %8 = slice %lhs[1] : reg<aie2p.er x2> -> reg<aie2p.er>
   %9 = slice %rhs[0] : reg<aie2p.er x2> -> reg<aie2p.er>
   %10 = slice %rhs[1] : reg<aie2p.er x2> -> reg<aie2p.er>
-  %11 = add.rr %7, %9
-  %12 = adc %8, %10
-  %result = concat(%11, %12) : (reg<aie2p.er>, reg<aie2p.er>) -> reg<aie2p.er x2>
+  %11, %12 = add.carry %7, %9
+  %13, %14 = adc %8, %10, %12
+  %result = concat(%11, %13) : (reg<aie2p.er>, reg<aie2p.er>) -> reg<aie2p.er x2>
   return %result
 }
 

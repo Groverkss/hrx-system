@@ -981,8 +981,11 @@ def _fixed_operand_encoding_field_values(
 
 def _implicit_operands(spec: descriptor_specs._DescriptorSpec) -> tuple[Operand, ...]:
     form = descriptor_specs._MACHINE_FORMS[spec.form_name]
+    if spec.expose_carry and "srCarry" not in form.implicit_defs:
+        raise ValueError(f"{form.name}: explicit carry requires a native srCarry write")
     result: list[Operand] = []
     for register_name in form.implicit_defs:
+        explicit_carry = spec.expose_carry and register_name == "srCarry"
         operand_ordinal = (
             len(form.outputs)
             + len(form.inputs)
@@ -993,8 +996,12 @@ def _implicit_operands(spec: descriptor_specs._DescriptorSpec) -> tuple[Operand,
         )
         result.append(
             Operand(
-                field_name=f"implicit_def_{register_name.lower()}",
-                role=OperandRole.IMPLICIT,
+                field_name=(
+                    "carry_out"
+                    if explicit_carry
+                    else f"implicit_def_{register_name.lower()}"
+                ),
+                role=OperandRole.RESULT if explicit_carry else OperandRole.IMPLICIT,
                 reg_alts=(
                     RegClassAlt(
                         _implicit_register_class_name(register_name),
@@ -1008,6 +1015,7 @@ def _implicit_operands(spec: descriptor_specs._DescriptorSpec) -> tuple[Operand,
             )
         )
     for register_name in form.implicit_uses:
+        explicit_carry = spec.expose_carry and register_name == "srCarry"
         operand_ordinal = (
             len(form.outputs)
             + len(form.inputs)
@@ -1019,8 +1027,12 @@ def _implicit_operands(spec: descriptor_specs._DescriptorSpec) -> tuple[Operand,
         )
         result.append(
             Operand(
-                field_name=f"implicit_use_{register_name.lower()}",
-                role=OperandRole.IMPLICIT,
+                field_name=(
+                    "carry_in"
+                    if explicit_carry
+                    else f"implicit_use_{register_name.lower()}"
+                ),
+                role=OperandRole.OPERAND if explicit_carry else OperandRole.IMPLICIT,
                 reg_alts=(
                     RegClassAlt(
                         _implicit_register_class_name(register_name),
@@ -1297,7 +1309,6 @@ def _descriptor(spec: descriptor_specs._DescriptorSpec) -> Descriptor:
         for operand in form.inputs
         if operand.kind is MachineOperandKind.IMMEDIATE
     )
-    explicit_register_operands = (*register_outputs, *register_inputs)
     storage_continuation = _storage_continuation_operand(spec, register_outputs)
     tied_fixed_operands = {
         name
@@ -1316,26 +1327,34 @@ def _descriptor(spec: descriptor_specs._DescriptorSpec) -> Descriptor:
     mnemonic = (
         f"{physical_mnemonic}.volatile" if spec.ordered_memory else physical_mnemonic
     )
+    state_operands = _implicit_operands(spec)
+    operands = (
+        *(
+            _low_operand(spec, operand, OperandRole.RESULT)
+            for operand in register_outputs
+        ),
+        *(operand for operand in state_operands if operand.role is OperandRole.RESULT),
+        *(
+            _low_operand(spec, operand, OperandRole.OPERAND)
+            for operand in register_inputs
+        ),
+        *((storage_continuation,) if storage_continuation is not None else ()),
+        *(
+            _fixed_operand(spec, operand)
+            for operand in (*implicit_outputs, *implicit_inputs)
+        ),
+        *(
+            operand
+            for operand in state_operands
+            if operand.role is not OperandRole.RESULT
+        ),
+    )
+    operand_names = tuple(operand.field_name for operand in operands)
     descriptor = Descriptor(
         key=spec.key,
         mnemonic=mnemonic,
         semantic_tag=spec.semantic_tag,
-        operands=(
-            *(
-                _low_operand(spec, operand, OperandRole.RESULT)
-                for operand in register_outputs
-            ),
-            *(
-                _low_operand(spec, operand, OperandRole.OPERAND)
-                for operand in register_inputs
-            ),
-            *((storage_continuation,) if storage_continuation is not None else ()),
-            *(
-                _fixed_operand(spec, operand)
-                for operand in (*implicit_outputs, *implicit_inputs)
-            ),
-            *_implicit_operands(spec),
-        ),
+        operands=operands,
         immediates=tuple(
             _immediate(spec.form_name, operand) for operand in immediate_inputs
         ),
@@ -1351,14 +1370,15 @@ def _descriptor(spec: descriptor_specs._DescriptorSpec) -> Descriptor:
                 native_assembly_mnemonic=(
                     physical_mnemonic if spec.ordered_memory else None
                 ),
-                results=tuple(operand.name for operand in register_outputs),
-                operands=(
-                    *(operand.name for operand in register_inputs),
-                    *(
-                        (storage_continuation.field_name,)
-                        if storage_continuation
-                        else ()
-                    ),
+                results=tuple(
+                    operand.field_name
+                    for operand in operands
+                    if operand.role is OperandRole.RESULT
+                ),
+                operands=tuple(
+                    operand.field_name
+                    for operand in operands
+                    if operand.role is OperandRole.OPERAND
                 ),
                 immediates=tuple(
                     AsmImmediate(operand.name) for operand in immediate_inputs
@@ -1367,7 +1387,7 @@ def _descriptor(spec: descriptor_specs._DescriptorSpec) -> Descriptor:
         ),
         effects=_effects(spec, form),
         constraints=(
-            *descriptor_constraints(spec, form, explicit_register_operands),
+            *descriptor_constraints(spec, form, operand_names),
             *(
                 (Constraint(ConstraintKind.REMATERIALIZABLE, 0),)
                 if spec.op_kind is DescriptorOpKind.CONST
@@ -1378,7 +1398,7 @@ def _descriptor(spec: descriptor_specs._DescriptorSpec) -> Descriptor:
                     Constraint(
                         ConstraintKind.TIED,
                         0,
-                        len(explicit_register_operands),
+                        operand_names.index(storage_continuation.field_name),
                     ),
                 )
                 if storage_continuation is not None

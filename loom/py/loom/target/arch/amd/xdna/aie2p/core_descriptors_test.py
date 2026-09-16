@@ -1611,6 +1611,27 @@ def test_implicit_registers_and_machine_ties_reach_low() -> None:
         assert carry.reg_alts[0].flags == (RegClassAltFlag.PHYSICAL_ONLY,)
         assert carry.ready_stage == 1
 
+    for ordinary_key, carry_key in (
+        ("add.i32", "add.carry_out.i32"),
+        ("add.i32.immediate", "add.carry_out.i32.immediate"),
+        ("sub.i32", "sub.borrow_out.i32"),
+    ):
+        ordinary = descriptors[f"amd.xdna.aie2p.{ordinary_key}"]
+        explicit = descriptors[f"amd.xdna.aie2p.{carry_key}"]
+        assert explicit.encoding_id == ordinary.encoding_id
+        assert explicit.schedule_class == ordinary.schedule_class
+        assert explicit.flags == ordinary.flags
+        assert explicit.operands[0] == ordinary.operands[0]
+        carry = explicit.operands[1]
+        implicit = next(
+            operand
+            for operand in ordinary.operands
+            if operand.field_name == "implicit_def_srcarry"
+        )
+        assert carry == replace(
+            implicit, field_name="carry_out", role=OperandRole.RESULT
+        )
+
     for key in (
         "amd.xdna.aie2p.add.carry.i32",
         "amd.xdna.aie2p.sub.borrow.i32",
@@ -1618,8 +1639,10 @@ def test_implicit_registers_and_machine_ties_reach_low() -> None:
         carry_operands = {
             operand.field_name: operand for operand in descriptors[key].operands
         }
-        carry_definition = carry_operands["implicit_def_srcarry"]
-        carry_use = carry_operands["implicit_use_srcarry"]
+        carry_definition = carry_operands["carry_out"]
+        carry_use = carry_operands["carry_in"]
+        assert carry_definition.role is OperandRole.RESULT
+        assert carry_use.role is OperandRole.OPERAND
         assert set(carry_definition.flags) == {
             OperandFlag.IMPLICIT,
             OperandFlag.STATE_WRITE,
@@ -1671,7 +1694,9 @@ def test_implicit_registers_and_machine_ties_reach_low() -> None:
 
     divs = next(form for form in CORE_MACHINE_TABLE.forms if form.name == "DIVS")
     spec = next(spec for spec in _DESCRIPTOR_SPECS if spec.form_name == "DIVS")
-    constraints = descriptor_constraints(spec, divs, (*divs.outputs, *divs.inputs))
+    constraints = descriptor_constraints(
+        spec, divs, tuple(operand.name for operand in (*divs.outputs, *divs.inputs))
+    )
     assert len(constraints) == 1
     assert constraints[0].kind is ConstraintKind.TIED
     assert constraints[0].lhs_operand_index == 1

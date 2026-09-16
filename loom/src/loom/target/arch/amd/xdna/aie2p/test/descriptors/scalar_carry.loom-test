@@ -1,0 +1,86 @@
+// A dead low word must not remove the carry needed by the high word.
+// RUN: with-low-asm pass low-cse,low-dce
+
+low.func.def target<amd.xdna.aie2p.core> @high_sum(%a_low: reg<aie2p.er>, %a_high: reg<aie2p.er>, %b_low: reg<aie2p.er>, %b_high: reg<aie2p.er>) -> (reg<aie2p.er>) asm {
+  %low, %carry = add.carry %a_low, %b_low
+  %high, %carry_out = adc %a_high, %b_high, %carry
+  return %high
+}
+
+// ====
+
+// Each borrow contributes to the next word even when earlier words are unused.
+// RUN: with-low-asm pass low-cse,low-dce
+
+low.func.def target<amd.xdna.aie2p.core> @high_difference(%a: reg<aie2p.er>, %b: reg<aie2p.er>) -> (reg<aie2p.er>) asm {
+  %low, %borrow = sub.borrow %a, %b
+  %middle, %next_borrow = sbc %a, %b, %borrow
+  %high, %borrow_out = sbc %a, %b, %next_borrow
+  return %high
+}
+
+// ====
+
+// The immediate form retains the same carry dependency.
+// RUN: with-low-asm pass low-cse,low-dce
+
+low.func.def target<amd.xdna.aie2p.core> @increment_high(%low: reg<aie2p.er>, %high: reg<aie2p.er>, %zero: reg<aie2p.er>) -> (reg<aie2p.er>) asm {
+  %incremented, %carry = add.carry.immediate %low, 1
+  %result, %carry_out = adc %high, %zero, %carry
+  return %result
+}
+
+// ====
+
+// A fully unused chain and ordinary unused arithmetic are removable.
+// RUN: with-low-asm pass low-cse,low-dce
+
+low.func.def target<amd.xdna.aie2p.core> @dead_chains(%a: reg<aie2p.er>, %b: reg<aie2p.er>) -> (reg<aie2p.er>) asm {
+  %sum, %carry = add.carry %a, %b
+  %high_sum, %carry_out = adc %a, %b, %carry
+  %difference, %borrow = sub.borrow %a, %b
+  %high_difference, %borrow_out = sbc %a, %b, %borrow
+  %ordinary_sum = add.rr %a, %b
+  %ordinary_difference = sub %a, %b
+  return %a
+}
+
+// ----
+low.func.def target<amd.xdna.aie2p.core> @dead_chains(%a: reg<aie2p.er>, %b: reg<aie2p.er>) -> (reg<aie2p.er>) asm {
+  return %a
+}
+
+// ====
+
+// Separate correctly ordered chains both retain their own carry producers.
+// RUN: with-low-asm pass low-cse,low-dce
+
+low.func.def target<amd.xdna.aie2p.core> @separate_chains(%a: reg<aie2p.er>, %b: reg<aie2p.er>) -> (reg<aie2p.er>, reg<aie2p.er>) asm {
+  %low_sum, %carry = add.carry %a, %b
+  %high_sum, %carry_out = adc %a, %b, %carry
+  %low_difference, %borrow = sub.borrow %a, %b
+  %high_difference, %borrow_out = sbc %a, %b, %borrow
+  return %high_sum, %high_difference
+}
+
+// ====
+
+// Loading both halves of an i64 must not incur false carry-register pressure.
+// RUN: emit low-schedule-json @load_carry_chain strategy=resource-stall diagnostics=candidates output=none
+
+aie2p.target<core> @core_target
+
+low.func.def target<amd.xdna.aie2p.core>(@core_target) @load_carry_chain(%input: reg<aie2p.ep>) -> (reg<aie2p.er>, reg<aie2p.er>) asm {
+  // REMARK@+1: BACKEND/015 {scheduled_ordinal="0", chosen_pressure_cliff_penalty="0"}
+  %a_low = lda %input, 0
+  // REMARK@+1: BACKEND/015 {scheduled_ordinal="1", chosen_pressure_cliff_penalty="0"}
+  %b_low = lda %input, 8
+  // REMARK@+1: BACKEND/015 {scheduled_ordinal="2", chosen_pressure_cliff_penalty="0"}
+  %a_high = lda %input, 4
+  // The remaining load can issue while the carry-producing ADD waits for data.
+  // REMARK@+1: BACKEND/015 {scheduled_ordinal="3", chosen_packet="amd.xdna.aie2p.load.scalar.i32.indexed.immediate", rejected_packet="amd.xdna.aie2p.add.carry_out.i32", chosen_effective_stall_cycles="1", rejected_effective_stall_cycles="6", rejected_pressure_cliff_penalty="0"}
+  %b_high = lda %input, 12
+  %low, %carry = add.carry %a_low, %b_low
+  %high, %carry_out = adc %a_high, %b_high, %carry
+  return %low, %high
+}

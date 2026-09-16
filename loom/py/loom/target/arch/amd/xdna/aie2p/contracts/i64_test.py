@@ -56,8 +56,6 @@ def _evaluate_rule(rule: DescriptorRule, lhs: int, rhs: int) -> int:
         ValueRef.operand("lhs"): _split_i64(lhs),
         ValueRef.operand("rhs"): _split_i64(rhs),
     }
-    carry = 0
-    borrow = 0
     for emit in rule.emit:
         if isinstance(emit, EmitRegisterSlice):
             source = values[emit.source]
@@ -91,25 +89,26 @@ def _evaluate_rule(rule: DescriptorRule, lhs: int, rhs: int) -> int:
             result = operands["s0"] * operands["s1"]
         elif semantic_tag == "integer.madd.i32":
             result = operands["a0"] + operands["s0"] * operands["s1"]
-        elif semantic_tag == "integer.add.i32":
+        elif semantic_tag in (
+            "integer.add.i32",
+            "integer.add.carry_out.i32",
+            "integer.add.carry_in_out.i32",
+        ):
             rhs_value = (
                 emit.immediates["imm"] if "imm" in emit.immediates else operands["s1"]
             )
             assert isinstance(rhs_value, int)
-            total = operands["s0"] + rhs_value
-            result = total
-            carry = int(total > _U32_MASK)
-        elif semantic_tag == "integer.add.carry.i32":
-            total = operands["s0"] + operands["s1"] + carry
-            result = total
-            carry = int(total > _U32_MASK)
-        elif semantic_tag == "integer.sub.i32":
-            result = operands["s0"] - operands["s1"]
-            borrow = int(operands["s0"] < operands["s1"])
-        elif semantic_tag == "integer.sub.borrow.i32":
-            subtrahend = operands["s1"] + borrow
-            result = operands["s0"] - subtrahend
-            borrow = int(operands["s0"] < subtrahend)
+            result = operands["s0"] + rhs_value + operands.get("carry_in", 0)
+            if "carry_out" in emit.results:
+                values[emit.results["carry_out"]] = int(result > _U32_MASK)
+        elif semantic_tag in (
+            "integer.sub.i32",
+            "integer.sub.borrow_out.i32",
+            "integer.sub.borrow_in_out.i32",
+        ):
+            result = operands["s0"] - operands["s1"] - operands.get("carry_in", 0)
+            if "carry_out" in emit.results:
+                values[emit.results["carry_out"]] = int(result < 0)
         elif semantic_tag == "integer.lshl.i32":
             result = _logical_shift(operands["s0"], operands["s1"])
         elif semantic_tag == "integer.cmp.eq.i32":
@@ -124,8 +123,11 @@ def _evaluate_rule(rule: DescriptorRule, lhs: int, rhs: int) -> int:
             result = operands["s0"] if operands["s2"] else operands["s1"]
         else:
             raise AssertionError(f"unsupported recipe operation {semantic_tag}")
-        assert len(emit.results) == 1
-        values[next(iter(emit.results.values()))] = _u32(result)
+        data_results = [
+            ref for name, ref in emit.results.items() if name != "carry_out"
+        ]
+        assert len(data_results) == 1
+        values[data_results[0]] = _u32(result)
 
     result = values[ValueRef.result("result")]
     if isinstance(result, tuple):
