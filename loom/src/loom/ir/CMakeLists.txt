@@ -82,6 +82,7 @@ loom_cc_library(
     iree::base
     iree::base::internal::arena
     loom::error::emitter
+    loom::util::adaptive_sort
     loom::util::bstring
     loom::util::segmented_storage
   PUBLIC
@@ -163,6 +164,7 @@ loom_cc_test(
   NAME
     module_test
   SRCS
+    "module_dictionary_test.cc"
     "module_test.cc"
     "module_type_uses_test.cc"
   DEPS

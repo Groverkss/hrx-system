@@ -87,6 +87,7 @@ loom_cc_library(
     ],
     deps = [
         "//loom/src/loom/error:emitter",
+        "//loom/src/loom/util:adaptive_sort",
         "//loom/src/loom/util:bstring",
         "//loom/src/loom/util:segmented_storage",
         "//runtime/src/iree/base",
@@ -161,6 +162,7 @@ loom_cc_test(
 loom_cc_test(
     name = "module_test",
     srcs = [
+        "module_dictionary_test.cc",
         "module_test.cc",
         "module_type_uses_test.cc",
     ],

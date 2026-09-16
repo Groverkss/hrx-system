@@ -11,6 +11,7 @@
 #include "loom/ir/context.h"
 #include "loom/ir/parameterized_type.h"
 #include "loom/ir/structural_hash.h"
+#include "loom/util/adaptive_sort.h"
 
 //===----------------------------------------------------------------------===//
 // Hash function
@@ -2630,6 +2631,17 @@ static iree_status_t loom_module_canonicalize_attr_value(
     loom_attribute_t value, iree_host_size_t depth,
     loom_attribute_t* out_value);
 
+static bool loom_module_attr_dict_key_less(const loom_module_t* module,
+                                           const loom_named_attr_t* lhs,
+                                           const loom_named_attr_t* rhs) {
+  return iree_string_view_compare(module->strings.entries[lhs->name_id],
+                                  module->strings.entries[rhs->name_id]) < 0;
+}
+
+LOOM_DEFINE_ADAPTIVE_SORT_WITH_CONTEXT(loom_module_sort_attr_dict_entries,
+                                       loom_named_attr_t, const loom_module_t*,
+                                       loom_module_attr_dict_key_less)
+
 static iree_status_t loom_module_make_canonical_attr_dict_entries(
     loom_module_t* module, const loom_named_attr_t* entries,
     iree_host_size_t count, iree_host_size_t depth,
@@ -2660,46 +2672,33 @@ static iree_status_t loom_module_make_canonical_attr_dict_entries(
                                                  sizeof(loom_named_attr_t),
                                                  (void**)&canonical_entries));
 
-  iree_host_size_t canonical_count = 0;
   for (iree_host_size_t i = 0; i < count; ++i) {
     iree_string_view_t key_name = iree_string_view_empty();
     IREE_RETURN_IF_ERROR(loom_module_resolve_attr_dict_key_name(
         module, entries[i].name_id, &key_name));
 
-    loom_named_attr_t entry = {
+    canonical_entries[i] = (loom_named_attr_t){
         .name_id = entries[i].name_id,
         .value = {0},
     };
     IREE_RETURN_IF_ERROR(loom_module_canonicalize_attr_value(
         module, /*descriptor=*/NULL, entries[i].value, depth + 1,
-        &entry.value));
-
-    iree_host_size_t insert_index = canonical_count;
-    while (insert_index > 0) {
-      iree_string_view_t previous_key_name = iree_string_view_empty();
-      IREE_RETURN_IF_ERROR(loom_module_resolve_attr_dict_key_name(
-          module, canonical_entries[insert_index - 1].name_id,
-          &previous_key_name));
-
-      int comparison = iree_string_view_compare(key_name, previous_key_name);
-      if (comparison == 0) {
-        return iree_make_status(IREE_STATUS_INVALID_ARGUMENT,
-                                "duplicate dict attribute key '%.*s'",
-                                (int)key_name.size, key_name.data);
-      }
-      if (comparison > 0) {
-        break;
-      }
-
-      canonical_entries[insert_index] = canonical_entries[insert_index - 1];
-      --insert_index;
-    }
-
-    canonical_entries[insert_index] = entry;
-    ++canonical_count;
+        &canonical_entries[i].value));
   }
 
-  *out_attr = loom_make_canonical_attr_dict(canonical_entries, canonical_count);
+  // Keys are validated once above. Interned spelling identity makes duplicate
+  // detection an ID comparison after the bounded spelling-order sort.
+  loom_module_sort_attr_dict_entries(module, canonical_entries, count);
+  for (iree_host_size_t i = 1; i < count; ++i) {
+    if (canonical_entries[i - 1].name_id == canonical_entries[i].name_id) {
+      iree_string_view_t key_name =
+          module->strings.entries[canonical_entries[i].name_id];
+      return iree_make_status(IREE_STATUS_INVALID_ARGUMENT,
+                              "duplicate dict attribute key '%.*s'",
+                              (int)key_name.size, key_name.data);
+    }
+  }
+  *out_attr = loom_make_canonical_attr_dict(canonical_entries, count);
   return iree_ok_status();
 }
 

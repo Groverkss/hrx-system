@@ -388,7 +388,9 @@ iree_status_t loom_module_make_canonical_attribute(
 // Each name_id must refer to a string interned in |module|. The builder
 // recursively canonicalizes nested DICT values, sorts entries by key spelling,
 // rejects duplicate keys, arena-copies the resulting immutable entry array,
-// and stores the canonical wrapper in |out_attr|.
+// and stores the canonical wrapper in |out_attr|. Ordering uses linear key
+// comparisons for sorted input and O(n log n) comparisons in the worst case,
+// with no scratch allocation beyond the owned entries and payload copies.
 iree_status_t loom_module_make_canonical_attr_dict(
     loom_module_t* module, loom_named_attr_slice_t entries,
     loom_attribute_t* out_attr);
