@@ -378,6 +378,30 @@ def _emit_move_tables() -> str:
     ]
     for name, values in zip(("Destination", "Source"), masks, strict=True):
         lines.extend((f"static const uint8_t kMove{name}Masks[] = {{", *(f"    0x{value:02x}," for value in values), "};", ""))
+    # Scalar L values have no direct move instruction. Retain their exact
+    # native R subregisters so emission never searches the machine hierarchy.
+    native_classes = {row.name: row for row in CORE_MACHINE_TABLE.register_classes}
+    native_registers = {row.name: row for row in CORE_MACHINE_TABLE.physical_registers}
+    scalar_registers = set(native_classes["eR"].candidates)
+    pairs = [(0, 0)]
+    pair_indices = [0] * len(register_ids)
+    for name in native_classes["eL"].candidates:
+        register = native_registers[name]
+        if len(register.subregisters) != 2 or not set(register.subregisters) <= scalar_registers:
+            raise ValueError(f"{name}: scalar pair must contain two native R registers")
+        units = tuple(unit for part in register.subregisters for unit in native_registers[part].atomic_units)
+        if units != register.atomic_units:
+            raise ValueError(f"{name}: scalar parts must cover native storage in order")
+        pair_indices[register_ids[name]] = len(pairs)
+        pairs.append(tuple(register_ids[part] for part in register.subregisters))
+    if len(pairs) > 256:
+        raise ValueError("AIE2P scalar pair indices exceed uint8")
+    for source_pair in pairs[1:]:
+        for destination_pair in pairs[1:]:
+            if any(not (masks[1][source] & masks[0][destination]) for source, destination in zip(source_pair, destination_pair, strict=True)):
+                raise ValueError("AIE2P scalar pair parts need direct native moves")
+    lines.extend(("static const uint8_t kMoveScalarPairIndices[] = {", *(f"    {value}," for value in pair_indices), "};", ""))
+    lines.extend(("static const uint16_t kMoveScalarPairs[][2] = {", *(f"    {{{low}, {high}}}," for low, high in pairs), "};", ""))
     return "\n".join(lines)
 
 

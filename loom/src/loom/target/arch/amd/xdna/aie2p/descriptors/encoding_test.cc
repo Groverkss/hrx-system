@@ -754,6 +754,40 @@ TEST(DescriptorEncodingTest, MoveLookupMatchesEveryPhysicalRegisterPair) {
   }
 }
 
+TEST(DescriptorEncodingTest, ScalarPairMovesPreserveBothWords) {
+  const uint32_t scalar_move = loom_low_descriptor_set_lookup_descriptor(
+      loom_aie2p_core_descriptor_set(), IREE_SV("amd.xdna.aie2p.move.scalar"));
+  ASSERT_NE(scalar_move, LOOM_LOW_DESCRIPTOR_ORDINAL_NONE);
+  auto register_id = [](const std::string& name) {
+    return loom_aie2p_machine_find_physical_register(
+        iree_make_string_view(name.data(), name.size()));
+  };
+  for (unsigned source = 0; source < 16; ++source) {
+    for (unsigned destination = 0; destination < 16; ++destination) {
+      const loom_aie2p_register_move_t move = {
+          /*.source=*/register_id("l" + std::to_string(source)),
+          /*.destination=*/register_id("l" + std::to_string(destination)),
+      };
+      loom_aie2p_register_move_t parts[2];
+      ASSERT_EQ(loom_aie2p_descriptor_move_parts(move, parts), 2);
+      for (unsigned part = 0; part < 2; ++part) {
+        EXPECT_EQ(parts[part].source,
+                  register_id("r" + std::to_string(source * 2 + part)));
+        EXPECT_EQ(parts[part].destination,
+                  register_id("r" + std::to_string(destination * 2 + part)));
+        EXPECT_EQ(loom_aie2p_descriptor_select_move(parts[part].source,
+                                                    parts[part].destination),
+                  scalar_move);
+        loom_aie2p_register_move_t scalar_parts[2];
+        ASSERT_EQ(loom_aie2p_descriptor_move_parts(parts[part], scalar_parts),
+                  1);
+        EXPECT_EQ(scalar_parts[0].source, parts[part].source);
+        EXPECT_EQ(scalar_parts[0].destination, parts[part].destination);
+      }
+    }
+  }
+}
+
 TEST(DescriptorEncodingTest, PhysicalRegisterRowsAlignWithMachineTable) {
   const loom_low_descriptor_set_t* descriptor_set =
       loom_aie2p_core_descriptor_set();

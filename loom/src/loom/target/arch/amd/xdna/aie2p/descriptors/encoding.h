@@ -38,6 +38,21 @@ uint32_t loom_aie2p_descriptor_select_move(
     loom_aie2p_physical_register_id_t source,
     loom_aie2p_physical_register_id_t destination);
 
+// Physical operands of one native register-move instruction.
+typedef struct loom_aie2p_register_move_t {
+  // Physical register read by the instruction.
+  loom_aie2p_physical_register_id_t source;
+  // Physical register written by the instruction.
+  loom_aie2p_physical_register_id_t destination;
+} loom_aie2p_register_move_t;
+
+// Decomposes an allocated move into native register operands. L registers
+// require two scalar moves in low-to-high order; other registers retain one
+// move. The caller preserves allocation's sequential move order and selects
+// each instruction with loom_aie2p_descriptor_select_move.
+uint8_t loom_aie2p_descriptor_move_parts(
+    loom_aie2p_register_move_t move, loom_aie2p_register_move_t out_parts[2]);
+
 #ifdef __cplusplus
 }  // extern "C"
 #endif

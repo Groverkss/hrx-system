@@ -26,6 +26,23 @@ uint32_t loom_aie2p_descriptor_select_move(
              : LOOM_LOW_DESCRIPTOR_ORDINAL_NONE;
 }
 
+uint8_t loom_aie2p_descriptor_move_parts(
+    loom_aie2p_register_move_t move, loom_aie2p_register_move_t out_parts[2]) {
+  const uint8_t source_pair = kMoveScalarPairIndices[move.source];
+  const uint8_t destination_pair = kMoveScalarPairIndices[move.destination];
+  if (source_pair != 0 && destination_pair != 0) {
+    for (uint8_t i = 0; i < 2; ++i) {
+      out_parts[i] = (loom_aie2p_register_move_t){
+          .source = kMoveScalarPairs[source_pair][i],
+          .destination = kMoveScalarPairs[destination_pair][i],
+      };
+    }
+    return 2;
+  }
+  out_parts[0] = move;
+  return 1;
+}
+
 static void loom_aie2p_descriptor_append_field(
     loom_aie2p_encoding_field_id_t field_id, uint64_t value,
     iree_host_size_t* field_count,
