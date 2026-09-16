@@ -16,6 +16,7 @@ from loom.target.arch.amd.xdna.aie.machine import (
 from loom.target.arch.amd.xdna.aie2p.core_address_descriptors import (
     DIMENSION_REGISTER_PARTS,
     _address_descriptor_specs,
+    _dimension_update,
 )
 from loom.target.arch.amd.xdna.aie2p.core_descriptor_spec import _DescriptorSpec
 from loom.target.arch.amd.xdna.aie2p.core_fifo_descriptors import (
@@ -63,33 +64,35 @@ _REGISTER_PARTS = (
 _REGISTER_PARTS_BY_NAME = {part.name: part for part in _REGISTER_PARTS}
 
 
+# Each lane names its linear address stem, dimension template, and adapter.
 _VECTOR_MEMORY_FORM_FAMILIES = (
     (
         128,
-        (
-            "VLDA_128_dmv_lda_w_idx",
-            "VLDA_128_dmv_lda_w_idx_imm",
-            "OP_mWa",
-        ),
-        ("VLDB_128_idx", "VLDB_128_idx_imm", "OP_mWb"),
-        (
-            "VST_128_dmv_sts_w_idx",
-            "VST_128_dmv_sts_w_idx_imm",
-            "OP_mWs",
-        ),
+        ("VLDA_128_dmv_lda_w", "VLDA_{dimension}D_128", "OP_mWa"),
+        ("VLDB_128", "VLDB_{dimension}D_128", "OP_mWb"),
+        ("VST_128_dmv_sts_w", "VST_{dimension}D_128", "OP_mWs"),
     ),
     (
         256,
-        ("VLDA_dmw_lda_w_idx", "VLDA_dmw_lda_w_idx_imm", "OP_mWa"),
-        ("VLDB_dmw_ldb_idx", "VLDB_dmw_ldb_idx_imm", "OP_mWb"),
-        ("VST_dmw_sts_w_idx", "VST_dmw_sts_w_idx_imm", "OP_mWs"),
+        ("VLDA_dmw_lda_w", "VLDA_{dimension}D_dmw_lda_w", "OP_mWa"),
+        ("VLDB_dmw_ldb", "VLDB_{dimension}D_dmw_ldb", "OP_mWb"),
+        ("VST_dmw_sts_w", "VST_{dimension}D_dmw_sts_w", "OP_mWs"),
     ),
     (
         512,
-        ("VLDA_dmx_lda_x_idx", "VLDA_dmx_lda_x_idx_imm", None),
-        ("VLDB_dmx_ldb_x_idx", "VLDB_dmx_ldb_x_idx_imm", None),
-        ("VST_dmx_sts_x_idx", "VST_dmx_sts_x_idx_imm", None),
+        ("VLDA_dmx_lda_x", "VLDA_{dimension}D_dmx_lda_x", None),
+        ("VLDB_dmx_ldb_x", "VLDB_{dimension}D_dmx_ldb_x", None),
+        ("VST_dmx_sts_x", "VST_{dimension}D_dmx_sts_x", None),
     ),
+)
+
+_VECTOR_MEMORY_ADDRESS_FORMS = (
+    ("indexed.immediate", "idx_imm", "", 0),
+    ("indexed.register", "idx", ".index", 0),
+    ("postincrement.immediate", "pstm_nrm_imm", ".post", 0),
+    ("postincrement.register", "pstm_nrm", ".post.modifier", 0),
+    ("2d", None, ".2d", 2),
+    ("3d", None, ".3d", 3),
 )
 
 # Value types with native register layouts for the bit-preserving vector
@@ -137,99 +140,54 @@ def _vector_memory_operand_overrides(
 
 
 def _vector_memory_descriptor_specs() -> tuple[_DescriptorSpec, ...]:
-    """Selects every exact-width native vector memory form."""
+    """Selects native widths and address updates for both load lanes and stores."""
 
     result = []
     for width_bits, load_a, load_b, store in _VECTOR_MEMORY_FORM_FAMILIES:
         for element_type, element_bits in AIE2P_VECTOR_MEMORY_ELEMENT_TYPES:
             shape = f"{element_type}x{width_bits // element_bits}"
-            load_a_register_key = f"{_TARGET_KEY}.load.a.{shape}.indexed.register"
-            load_a_immediate_key = f"{_TARGET_KEY}.load.a.{shape}.indexed.immediate"
-            load_b_register_key = f"{_TARGET_KEY}.load.b.{shape}.indexed.register"
-            load_b_immediate_key = f"{_TARGET_KEY}.load.b.{shape}.indexed.immediate"
-            store_register_key = f"{_TARGET_KEY}.store.{shape}.indexed.register"
-            store_immediate_key = f"{_TARGET_KEY}.store.{shape}.indexed.immediate"
-            load_a_overrides = _vector_memory_operand_overrides(
-                width_bits, element_type, "dst", load_a[2]
-            )
-            load_b_overrides = _vector_memory_operand_overrides(
-                width_bits, element_type, "dst", load_b[2]
-            )
-            store_overrides = _vector_memory_operand_overrides(
-                width_bits, element_type, "src", store[2]
-            )
-            result.extend(
-                (
-                    _DescriptorSpec(
-                        load_a[1],
-                        load_a_immediate_key,
-                        f"memory.load.indexed.{shape}",
-                        f"II_{load_a[1]}",
-                        storage_overrides=load_a_overrides[0],
-                        asm_mnemonic=f"vlda.{width_bits}.{shape}",
-                        operand_register_parts=load_a_overrides[1],
-                        encoding_adapter_overrides=load_a_overrides[2],
-                        schedule_alternatives=(load_b_immediate_key,),
-                        memory_width_bits=width_bits,
-                    ),
-                    _DescriptorSpec(
-                        load_a[0],
-                        load_a_register_key,
-                        f"memory.load.indexed.{shape}",
-                        f"II_{load_a[0]}",
-                        storage_overrides=load_a_overrides[0],
-                        asm_mnemonic=f"vlda.{width_bits}.{shape}.index",
-                        operand_register_parts=load_a_overrides[1],
-                        encoding_adapter_overrides=load_a_overrides[2],
-                        schedule_alternatives=(load_b_register_key,),
-                        memory_width_bits=width_bits,
-                    ),
-                    _DescriptorSpec(
-                        load_b[1],
-                        load_b_immediate_key,
-                        f"memory.load.indexed.{shape}",
-                        f"II_{load_b[1]}",
-                        storage_overrides=load_b_overrides[0],
-                        asm_mnemonic=f"vldb.{width_bits}.{shape}",
-                        operand_register_parts=load_b_overrides[1],
-                        encoding_adapter_overrides=load_b_overrides[2],
-                        memory_width_bits=width_bits,
-                    ),
-                    _DescriptorSpec(
-                        load_b[0],
-                        load_b_register_key,
-                        f"memory.load.indexed.{shape}",
-                        f"II_{load_b[0]}",
-                        storage_overrides=load_b_overrides[0],
-                        asm_mnemonic=f"vldb.{width_bits}.{shape}.index",
-                        operand_register_parts=load_b_overrides[1],
-                        encoding_adapter_overrides=load_b_overrides[2],
-                        memory_width_bits=width_bits,
-                    ),
-                    _DescriptorSpec(
-                        store[1],
-                        store_immediate_key,
-                        f"memory.store.indexed.{shape}",
-                        f"II_{store[1]}",
-                        storage_overrides=store_overrides[0],
-                        asm_mnemonic=f"vst.{width_bits}.{shape}",
-                        operand_register_parts=store_overrides[1],
-                        encoding_adapter_overrides=store_overrides[2],
-                        memory_width_bits=width_bits,
-                    ),
-                    _DescriptorSpec(
-                        store[0],
-                        store_register_key,
-                        f"memory.store.indexed.{shape}",
-                        f"II_{store[0]}",
-                        storage_overrides=store_overrides[0],
-                        asm_mnemonic=f"vst.{width_bits}.{shape}.index",
-                        operand_register_parts=store_overrides[1],
-                        encoding_adapter_overrides=store_overrides[2],
-                        memory_width_bits=width_bits,
-                    ),
+            for family, mnemonic, forms in (
+                ("load.a", "vlda", load_a),
+                ("load.b", "vldb", load_b),
+                ("store", "vst", store),
+            ):
+                operation = "store" if family == "store" else "load"
+                overrides = _vector_memory_operand_overrides(
+                    width_bits,
+                    element_type,
+                    "src" if family == "store" else "dst",
+                    forms[2],
                 )
-            )
+                for (
+                    addressing,
+                    native_suffix,
+                    asm_suffix,
+                    dimension,
+                ) in _VECTOR_MEMORY_ADDRESS_FORMS:
+                    form = (
+                        forms[1].format(dimension=dimension)
+                        if dimension
+                        else f"{forms[0]}_{native_suffix}"
+                    )
+                    spec = _DescriptorSpec(
+                        form,
+                        f"{_TARGET_KEY}.{family}.{shape}.{addressing}",
+                        f"memory.{operation}.{addressing.split('.')[0]}.{shape}",
+                        f"II_{form}",
+                        storage_overrides=overrides[0],
+                        asm_mnemonic=f"{mnemonic}.{width_bits}.{shape}{asm_suffix}",
+                        operand_register_parts=overrides[1],
+                        encoding_adapter_overrides=overrides[2],
+                        schedule_alternatives=(
+                            (f"{_TARGET_KEY}.load.b.{shape}.{addressing}",)
+                            if family == "load.a"
+                            else ()
+                        ),
+                        memory_width_bits=width_bits,
+                    )
+                    result.append(
+                        _dimension_update(spec, dimension) if dimension else spec
+                    )
     return tuple(result)
 
 

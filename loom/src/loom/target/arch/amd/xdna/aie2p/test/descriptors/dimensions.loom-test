@@ -145,3 +145,53 @@ low.func.def target<amd.xdna.aie2p.core> @consumed_address_state(%pointer: reg<a
   %stale = mov.3d.outer.count-to-scalar %dimension
   return
 }
+
+// ====
+
+// All vector widths share the same owning 2D state. Each access preserves its
+// pointer and count update even when the loaded vector is unused.
+// RUN: with-low-asm pass low-cse,low-dce
+
+low.func.def target<amd.xdna.aie2p.core> @vector_recurrence(%pointer: reg<aie2p.ep>, %dimension: reg<aie2p.ed>, %wide: reg<aie2p.vec256 x2>) -> (reg<aie2p.er>) asm {
+  %unused128, %pointer1, %dimension1 = vlda.128.i32x4.2d %pointer, %dimension
+  %unused256, %pointer2, %dimension2 = vldb.256.i32x8.2d %pointer1, %dimension1
+  %pointer3, %dimension3 = vst.512.i32x16.2d %wide, %pointer2, %dimension2
+  %count = mov.2d.count-to-scalar %dimension3
+  return %count
+}
+
+// ====
+
+// Both 3D counters survive a load/store chain independently of vector width.
+// RUN: with-low-asm pass low-cse,low-dce
+
+low.func.def target<amd.xdna.aie2p.core> @vector_volume(%pointer: reg<aie2p.ep>, %dimension: reg<aie2p.eds>) -> (reg<aie2p.er>, reg<aie2p.er>) asm {
+  %value, %pointer1, %dimension1 = vldb.512.f32x16.3d %pointer, %dimension
+  %pointer2, %dimension2 = vst.512.f32x16.3d %value, %pointer1, %dimension1
+  %inner = mov.3d.inner.count-to-scalar %dimension2
+  %outer = mov.3d.outer.count-to-scalar %dimension2
+  return %inner, %outer
+}
+
+// ====
+
+// Vector accesses require all dimension fields and consume the old state.
+// RUN: verify
+
+low.func.def target<amd.xdna.aie2p.core> @incomplete_vector_dimension(%pointer: reg<aie2p.ep>) asm {
+  %count = mova.2d.count 0
+  // ERROR@+1: DOMINANCE/011 {op_name="amd.xdna.aie2p.load.a.i32x4.2d", field_name="mod"}
+  %value, %next_pointer, %next_dimension = vlda.128.i32x4.2d %pointer, %count
+  return
+}
+
+// ====
+
+// RUN: verify
+
+low.func.def target<amd.xdna.aie2p.core> @consumed_vector_dimension(%pointer: reg<aie2p.ep>, %dimension: reg<aie2p.eds>) asm {
+  %value, %next_pointer, %next_dimension = vlda.128.bf16x8.3d %pointer, %dimension
+  // ERROR@+1: DOMINANCE/002
+  %stale = mov.3d.inner.count-to-scalar %dimension
+  return
+}

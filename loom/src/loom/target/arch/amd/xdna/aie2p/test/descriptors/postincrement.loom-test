@@ -96,3 +96,29 @@ low.func.def target<amd.xdna.aie2p.core> @consumed_pointer(%pointer: reg<aie2p.e
   %stale = lda %pointer, 0
   return %stale
 }
+
+// ====
+
+// Pointer recurrence keeps both vector load lanes observable at every width.
+// Stores and modifier updates use the returned pointer, not a repeated index.
+// RUN: with-low-asm pass low-cse,low-dce
+
+low.func.def target<amd.xdna.aie2p.core> @vector_pointer_recurrence(%pointer: reg<aie2p.ep>, %modifier: reg<aie2p.em>) -> (reg<aie2p.ep>) asm {
+  %unused128, %pointer1 = vlda.128.i8x16.post %pointer, 16
+  %unused256, %pointer2 = vldb.256.i16x16.post.modifier %pointer1, %modifier
+  %wide, %pointer3 = vlda.512.f32x16.post %pointer2, -64
+  %pointer4 = vst.512.f32x16.post.modifier %wide, %pointer3, %modifier
+  return %pointer4
+}
+
+// ====
+
+// Post-increment loads consume the old pointer even when their data is unused.
+// RUN: verify
+
+low.func.def target<amd.xdna.aie2p.core> @consumed_vector_pointer(%pointer: reg<aie2p.ep>) asm {
+  %value, %next = vldb.128.bf16x8.post %pointer, 16
+  // ERROR@+1: DOMINANCE/002
+  %stale = vldb.128.bf16x8 %pointer, 0
+  return
+}

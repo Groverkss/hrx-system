@@ -593,3 +593,57 @@ def test_dimension_updates_retain_real_read_dependencies() -> None:
         assert result.ready_stage == source.read_stage == 1
         assert OperandFlag.STORAGE_CONTINUATION not in source.flags
         assert Constraint(ConstraintKind.TIED, 2, 4) in descriptor.constraints
+
+
+def test_vector_address_updates_preserve_pointer_and_dimension_ownership() -> None:
+    descriptors = {row.key: row for row in AIE2P_CORE_DESCRIPTOR_SET.descriptors}
+    for width in (128, 256, 512):
+        for element_type, element_bits in AIE2P_VECTOR_MEMORY_ELEMENT_TYPES:
+            shape = f"{element_type}x{width // element_bits}"
+            for family in ("load.a", "load.b", "store"):
+                for addressing in (
+                    "postincrement.immediate",
+                    "postincrement.register",
+                    "2d",
+                    "3d",
+                ):
+                    descriptor = descriptors[
+                        f"amd.xdna.aie2p.{family}.{shape}.{addressing}"
+                    ]
+                    operands = {
+                        operand.field_name: operand for operand in descriptor.operands
+                    }
+                    tied_names = {
+                        (
+                            descriptor.operands[tie.lhs_operand_index].field_name,
+                            descriptor.operands[tie.rhs_operand_index].field_name,
+                        )
+                        for tie in descriptor.constraints
+                        if tie.kind is ConstraintKind.TIED
+                    }
+                    expected_ties = {("ptr_out", "ptr")}
+                    if addressing in ("2d", "3d"):
+                        count = "dc" if addressing == "2d" else "dcl"
+                        expected_ties.add((count, "mod"))
+                        assert operands[count].reg_alts == operands["mod"].reg_alts
+                        assert operands[count].encoding_field_id == 0
+                        assert (
+                            operands[count].ready_stage
+                            == operands["mod"].read_stage
+                            == 1
+                        )
+                        assert (
+                            OperandFlag.STORAGE_CONTINUATION
+                            not in operands["mod"].flags
+                        )
+                        assert "dch" not in operands
+                    assert tied_names == expected_ties
+                    assert "storage" not in operands
+                    if family != "store":
+                        assert operands["dst"].register_part is None
+                    assert descriptor.effects[0].width_bits == width
+                    assert descriptor.schedule_alternatives == (
+                        (f"amd.xdna.aie2p.load.b.{shape}.{addressing}",)
+                        if family == "load.a"
+                        else ()
+                    )
