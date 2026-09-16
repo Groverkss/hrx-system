@@ -287,6 +287,53 @@ def _dense_integer_matrix_descriptor_specs() -> tuple[_DescriptorSpec, ...]:
     )
 
 
+def _dense_floating_matrix_descriptor_specs() -> tuple[_DescriptorSpec, ...]:
+    """Selects native floating matrix variants with explicit datapath controls."""
+
+    result = []
+    for kind, native_kind, left, right, storage in (
+        ("bf16", "bf", "X", "X", "VEC256"),
+        ("bf16", "bf", "Y", "Y", "VEC256"),
+        ("bfp", "bfp", "EX", "EX", "mEXa"),
+        ("bfp", "bfp", "EX", "EY", "mEXa"),
+    ):
+        shape = f"{left.lower()}-{right.lower()}"
+        for operation, opcode, unit, mnemonic, accumulator_count in (
+            ("multiply", "VMUL", "vmul", "mmul", 0),
+            ("negative-multiply", "VNEGMUL", "vmul", "mnegmul", 0),
+            ("accumulate", "VMAC", "vmac", "mma", 1),
+            ("subtract-product", "VMSC", "vmac", "mms", 1),
+            ("add-accumulate", "VADDMAC", "vaddmac", "maddmac", 2),
+            ("add-subtract-product", "VADDMSC", "vaddmac", "maddmsc", 2),
+        ):
+            # Shaped BF16 and BFP aliases own the other multiply/accumulate forms.
+            if operation in ("multiply", "accumulate") and right != "EY":
+                continue
+            native = f"{opcode}_f_{unit}_{native_kind}"
+            if accumulator_count == 2:
+                native += "_vmac_cm2_add_reg"
+            native += f"_vmul_{native_kind}_core_{left}_{right}"
+            result.append(
+                _DescriptorSpec(
+                    native,
+                    f"{_TARGET_KEY}.matrix.{operation}.{kind}.{shape}.configured",
+                    f"matrix.{operation}.{kind}.{shape}.configured",
+                    f"II_{native}",
+                    storage_overrides=(
+                        ("dst", "mBMs"),
+                        *(
+                            (f"acc{index + 1}", "mBMs")
+                            for index in range(accumulator_count)
+                        ),
+                        ("s1", storage),
+                        ("s2", storage),
+                    ),
+                    asm_mnemonic=f"{mnemonic}.{kind}.{shape}",
+                )
+            )
+    return tuple(result)
+
+
 def _packed_i4_unpack_descriptor_specs() -> tuple[_DescriptorSpec, ...]:
     """Selects native signed and unsigned 4-to-8-bit unpack forms."""
 
@@ -1020,6 +1067,14 @@ _BASE_DESCRIPTOR_SPECS = (
         asm_mnemonic="vsub.f32x64",
     ),
     _DescriptorSpec(
+        "VNEG_f",
+        f"{_TARGET_KEY}.neg.f32x64.configured",
+        "floating.neg.f32x64.configured",
+        "II_VNEG_f",
+        storage_overrides=(("dst", "mBMs"), ("acc1", "mBMs")),
+        asm_mnemonic="vneg.f32x64",
+    ),
+    _DescriptorSpec(
         "VFLOOR_s32_bf16_mv_float_to_int_w",
         f"{_TARGET_KEY}.convert.floor.bf16x16.to.i32x16",
         "convert.floor.bf16x16.to.i32x16",
@@ -1093,6 +1148,7 @@ _BASE_DESCRIPTOR_SPECS = (
     ),
     *_integer_matrix_descriptor_specs(),
     *_dense_integer_matrix_descriptor_specs(),
+    *_dense_floating_matrix_descriptor_specs(),
     *(
         _DescriptorSpec(
             native,

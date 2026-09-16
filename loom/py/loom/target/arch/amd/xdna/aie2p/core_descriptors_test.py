@@ -149,6 +149,13 @@ def test_core_descriptor_closure_is_complete() -> None:
             for index in range(5)
         },
         **{
+            (f"ey{index}", "aie2p.mexa"): (
+                f"ex{index * 2}",
+                f"ex{index * 2 + 1}",
+            )
+            for index in range(6)
+        },
+        **{
             (f"y{index}", "aie2p.vec256"): (
                 f"wl{index * 2}",
                 f"wh{index * 2}",

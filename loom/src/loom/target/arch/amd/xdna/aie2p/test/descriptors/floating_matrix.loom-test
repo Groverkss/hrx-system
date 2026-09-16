@@ -1,0 +1,46 @@
+// Native fused arithmetic consumes its first accumulator. Copies preserve
+// source values needed by the next fused operation.
+// RUN: with-low-asm pass low-cse,low-dce
+
+low.func.def target<amd.xdna.aie2p.core> @packed_reduction(%left: reg<aie2p.mexa>, %right: reg<aie2p.mexa x2>, %first_accumulator: reg<aie2p.mbms x4>, %second_accumulator: reg<aie2p.mbms x4>, %mode: reg<aie2p.er>) -> (reg<aie2p.mbms x4>, reg<aie2p.mbms x4>) asm {
+  %working = copy %first_accumulator : reg<aie2p.mbms x4> -> reg<aie2p.mbms x4>
+  %first = maddmac.bfp.ex-ey %working, %second_accumulator, %left, %right, %mode
+  %next = copy %first : reg<aie2p.mbms x4> -> reg<aie2p.mbms x4>
+  %second = maddmsc.bfp.ex-ey %next, %first_accumulator, %left, %right, %mode
+  return %first, %second
+}
+
+// ====
+
+// RUN: verify
+
+low.func.def target<amd.xdna.aie2p.core> @consumed_accumulator(%left: reg<aie2p.vec256 x2>, %right: reg<aie2p.vec256 x2>, %accumulator: reg<aie2p.mbms x4>, %addend: reg<aie2p.mbms x4>, %mode: reg<aie2p.er>) -> (reg<aie2p.mbms x4>, reg<aie2p.mbms x4>) asm {
+  %result = maddmsc.bf16.x-x %accumulator, %addend, %left, %right, %mode
+  // ERROR@+1: DOMINANCE/002 {value_name="accumulator"}
+  return %accumulator, %result
+}
+
+// ====
+
+// Native floating operations write architectural exception state. CSE retains
+// repeated operations as well as different controls and operation kinds.
+// RUN: with-low-asm pass low-cse,low-dce
+
+low.func.def target<amd.xdna.aie2p.core> @native_controls(%left: reg<aie2p.vec256 x4>, %right: reg<aie2p.vec256 x4>, %accumulator: reg<aie2p.mbms x4>, %mode0: reg<aie2p.er>, %mode1: reg<aie2p.er>) -> (reg<aie2p.mbms x4>, reg<aie2p.mbms x4>, reg<aie2p.mbms x4>, reg<aie2p.mbms x4>, reg<aie2p.mbms x4>) asm {
+  %product = mnegmul.bf16.y-y %left, %right, %mode0
+  %repeated = mnegmul.bf16.y-y %left, %right, %mode0
+  %other_mode = mnegmul.bf16.y-y %left, %right, %mode1
+  %difference = mms.bf16.y-y %accumulator, %left, %right, %mode0
+  %negative = vneg.f32x64 %accumulator, %mode0
+  return %product, %repeated, %other_mode, %difference, %negative
+}
+
+// ----
+low.func.def target<amd.xdna.aie2p.core> @native_controls(%left: reg<aie2p.vec256 x4>, %right: reg<aie2p.vec256 x4>, %accumulator: reg<aie2p.mbms x4>, %mode0: reg<aie2p.er>, %mode1: reg<aie2p.er>) -> (reg<aie2p.mbms x4>, reg<aie2p.mbms x4>, reg<aie2p.mbms x4>, reg<aie2p.mbms x4>, reg<aie2p.mbms x4>) asm {
+  %product = mnegmul.bf16.y-y %left, %right, %mode0
+  %repeated = mnegmul.bf16.y-y %left, %right, %mode0
+  %other_mode = mnegmul.bf16.y-y %left, %right, %mode1
+  %difference = mms.bf16.y-y %accumulator, %left, %right, %mode0
+  %negative = vneg.f32x64 %accumulator, %mode0
+  return %product, %repeated, %other_mode, %difference, %negative
+}
