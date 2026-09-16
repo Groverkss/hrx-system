@@ -377,7 +377,10 @@ static iree_host_size_t loom_verify_collect_related_locations(
 // for caret output and machine JSON.
 void loom_verify_emit_diagnostic(loom_verify_state_t* state,
                                  const loom_diagnostic_emission_t* emission) {
-  if (!iree_status_is_ok(state->diagnostic_status)) return;
+  if (!iree_status_is_ok(state->diagnostic_status) ||
+      loom_verify_at_error_limit(state)) {
+    return;
+  }
 
   if (loom_error_def_severity(emission->error) == LOOM_DIAGNOSTIC_ERROR) {
     ++state->result->error_count;

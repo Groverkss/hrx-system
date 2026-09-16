@@ -235,7 +235,10 @@ typedef struct loom_verify_options_t {
 
   // Maximum number of errors before aborting the walk. The verifier
   // attempts to report as many errors as possible per pass, but stops
-  // after this many to avoid flooding output on badly malformed IR.
+  // after this many to avoid flooding output on badly malformed IR. The limit
+  // also bounds diagnostics and source rendering within one operation, even
+  // when no sink is installed. No further diagnostics are counted or emitted
+  // after reaching the error limit.
   // 0 = unlimited (report all errors).
   uint32_t max_errors;
 
