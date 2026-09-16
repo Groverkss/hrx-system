@@ -712,6 +712,31 @@ def _scalar_memory_descriptor_specs() -> tuple[_DescriptorSpec, ...]:
     return tuple(result)
 
 
+def _scalar_nonlinear_descriptor_specs() -> tuple[_DescriptorSpec, ...]:
+    """Selects native nonlinear math and fused fixed-point conversions."""
+
+    return tuple(
+        _DescriptorSpec(
+            f"{stem}_{form}",
+            f"{_TARGET_KEY}.{operation}.{conversion}",
+            f"floating.{operation}.{conversion}",
+            f"II_{stem}_{form}",
+            asm_mnemonic=f"{mnemonic}.{conversion}",
+        )
+        for stem, operation, mnemonic in (
+            ("INV", "reciprocal", "inv"),
+            ("INVSQRT", "reciprocal-sqrt", "invsqrt"),
+            ("SQRT", "sqrt", "sqrt"),
+        )
+        for conversion, form in (
+            ("f32", "mRx"),
+            ("fx2flt", "mRx_mOptConv"),
+            ("flt2fx", "mOptConvDel_mRx"),
+            ("fx2flt.flt2fx", "mOptConvDel_mRx_mOptConv"),
+        )
+    )
+
+
 _BASE_DESCRIPTOR_SPECS = (
     *_address_descriptor_specs(),
     _DescriptorSpec(
@@ -734,27 +759,7 @@ _BASE_DESCRIPTOR_SPECS = (
         "II_MOV_alu_mv_alu_flt2fx",
         asm_mnemonic="convert.round-nearest.f32.to.signed.i32",
     ),
-    _DescriptorSpec(
-        "INV_mRx",
-        f"{_TARGET_KEY}.reciprocal.f32",
-        "floating.reciprocal.f32",
-        "II_INV_mRx",
-        asm_mnemonic="inv.f32",
-    ),
-    _DescriptorSpec(
-        "INVSQRT_mRx",
-        f"{_TARGET_KEY}.reciprocal-sqrt.f32",
-        "floating.reciprocal-sqrt.f32",
-        "II_INVSQRT_mRx",
-        asm_mnemonic="invsqrt.f32",
-    ),
-    _DescriptorSpec(
-        "SQRT_mRx",
-        f"{_TARGET_KEY}.sqrt.f32",
-        "floating.sqrt.f32",
-        "II_SQRT_mRx",
-        asm_mnemonic="sqrt.f32",
-    ),
+    *_scalar_nonlinear_descriptor_specs(),
     _DescriptorSpec(
         "ADD_add_r_ri",
         f"{_TARGET_KEY}.select.mask.i32",

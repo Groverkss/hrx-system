@@ -1,0 +1,33 @@
+// Native conversion scales remain explicit fixed-register inputs. Each
+// operation writes conversion or nonlinear exception state, so CSE preserves
+// repeated operations even when their data and scales are identical.
+// RUN: with-low-asm pass low-cse,low-dce
+
+low.func.def target<amd.xdna.aie2p.core> @native_conversions(%value: reg<aie2p.er>, %input_scale: reg<aie2p.ms2>, %output_scale: reg<aie2p.ms3>) -> (reg<aie2p.er>, reg<aie2p.er>, reg<aie2p.er>, reg<aie2p.er>, reg<aie2p.er>, reg<aie2p.er>, reg<aie2p.er>, reg<aie2p.er>, reg<aie2p.er>, reg<aie2p.er>) asm {
+  %inverse_input = inv.fx2flt %value, %input_scale
+  %inverse_output = inv.flt2fx %output_scale, %value
+  %inverse_both = inv.fx2flt.flt2fx %output_scale, %value, %input_scale
+  %inverse_root_input = invsqrt.fx2flt %value, %input_scale
+  %inverse_root_output = invsqrt.flt2fx %output_scale, %value
+  %inverse_root_both = invsqrt.fx2flt.flt2fx %output_scale, %value, %input_scale
+  %root_input = sqrt.fx2flt %value, %input_scale
+  %root_output = sqrt.flt2fx %output_scale, %value
+  %root_both = sqrt.fx2flt.flt2fx %output_scale, %value, %input_scale
+  %repeated = sqrt.fx2flt.flt2fx %output_scale, %value, %input_scale
+  return %inverse_input, %inverse_output, %inverse_both, %inverse_root_input, %inverse_root_output, %inverse_root_both, %root_input, %root_output, %root_both, %repeated
+}
+
+// ----
+low.func.def target<amd.xdna.aie2p.core> @native_conversions(%value: reg<aie2p.er>, %input_scale: reg<aie2p.ms2>, %output_scale: reg<aie2p.ms3>) -> (reg<aie2p.er>, reg<aie2p.er>, reg<aie2p.er>, reg<aie2p.er>, reg<aie2p.er>, reg<aie2p.er>, reg<aie2p.er>, reg<aie2p.er>, reg<aie2p.er>, reg<aie2p.er>) asm {
+  %inverse_input = inv.fx2flt %value, %input_scale
+  %inverse_output = inv.flt2fx %output_scale, %value
+  %inverse_both = inv.fx2flt.flt2fx %output_scale, %value, %input_scale
+  %inverse_root_input = invsqrt.fx2flt %value, %input_scale
+  %inverse_root_output = invsqrt.flt2fx %output_scale, %value
+  %inverse_root_both = invsqrt.fx2flt.flt2fx %output_scale, %value, %input_scale
+  %root_input = sqrt.fx2flt %value, %input_scale
+  %root_output = sqrt.flt2fx %output_scale, %value
+  %root_both = sqrt.fx2flt.flt2fx %output_scale, %value, %input_scale
+  %repeated = sqrt.fx2flt.flt2fx %output_scale, %value, %input_scale
+  return %inverse_input, %inverse_output, %inverse_both, %inverse_root_input, %inverse_root_output, %inverse_root_both, %root_input, %root_output, %root_both, %repeated
+}
