@@ -9,6 +9,7 @@
 #include <string.h>
 
 #include "iree/base/api.h"
+#include "iree/base/internal/arena.h"
 #include "loom/error/emitter.h"
 #include "loom/target/arch/amdgpu/amdhsa_target_id.h"
 #include "loom/target/arch/amdgpu/artifact_key.h"
@@ -281,6 +282,10 @@ static iree_status_t loomc_amdgpu_emit_module_artifact(
       LOOM_AMDGPU_RUNTIME_GLOBAL_NONE;
   IREE_RETURN_IF_ERROR(loomc_amdgpu_emit_resolve_runtime_globals(
       request->option_chain, &runtime_globals));
+  if (request->compile_report != NULL) {
+    request->compile_report->target_family_name =
+        loom_amdgpu_target_profile_type.name;
+  }
   iree_diagnostic_emitter_t diagnostic_emitter = request->diagnostic_emitter;
   const loom_amdgpu_hal_kernel_library_options_t library_options = {
       .function_versions = request->function_versions,
@@ -308,6 +313,18 @@ static iree_status_t loomc_amdgpu_emit_module_artifact(
     status =
         iree_make_status(IREE_STATUS_FAILED_PRECONDITION,
                          "AMDGPU HSACO emission produced no executable bytes");
+  }
+  if (iree_status_is_ok(status) && request->compile_report != NULL) {
+    // The library owns its exact artifact key. Report serialization happens
+    // after library release but before the caller resets invocation scratch.
+    char* target_key = NULL;
+    status = iree_arena_allocate(request->scratch_arena,
+                                 library.target_key.size, (void**)&target_key);
+    if (iree_status_is_ok(status)) {
+      memcpy(target_key, library.target_key.data, library.target_key.size);
+      request->compile_report->target_key =
+          iree_make_string_view(target_key, library.target_key.size);
+    }
   }
   if (iree_status_is_ok(status) && library.artifact_manifest.contents == NULL) {
     out_artifact->target_artifact_format = LOOM_TARGET_ARTIFACT_FORMAT_ELF;
