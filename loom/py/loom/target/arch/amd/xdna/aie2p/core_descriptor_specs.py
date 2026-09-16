@@ -18,6 +18,12 @@ from loom.target.arch.amd.xdna.aie2p.core_address_descriptors import (
     _address_descriptor_specs,
     _dimension_update,
 )
+from loom.target.arch.amd.xdna.aie2p.core_comparison_descriptors import (
+    BF16_COMPARISON_DESCRIPTOR_SPECS,
+    INTEGER_EXTREMA_DESCRIPTOR_SPECS,
+    PREDICATE_DESCRIPTOR_SPECS,
+    PREDICATE_REGISTER_PARTS,
+)
 from loom.target.arch.amd.xdna.aie2p.core_descriptor_spec import _DescriptorSpec
 from loom.target.arch.amd.xdna.aie2p.core_fifo_descriptors import (
     FIFO_REGISTER_PARTS,
@@ -47,14 +53,11 @@ _LOCK_EFFECT = Effect(
     producer_event=f"{_TARGET_KEY}.lock.resume.c{_LOCK_CORE_RESUME_CYCLE}",
     consumer_event=f"{_TARGET_KEY}.lock.stall.c{_LOCK_CORE_STALL_CYCLE}",
 )
-_EL_LOW32_PART = "aie2p.elpredicate.low32"
-_EL_HIGH32_PART = "aie2p.elpredicate.high32"
 _VEC256_LOW128_PART = "aie2p.vec256.low128"
 _VEC256_HIGH128_PART = "aie2p.vec256.high128"
 _EWL_LOW128_PART = "aie2p.ewl.low128"
 _REGISTER_PARTS = (
-    RegisterPart(_EL_LOW32_PART, "aie2p.elpredicate", 0x1),
-    RegisterPart(_EL_HIGH32_PART, "aie2p.elpredicate", 0x2),
+    *PREDICATE_REGISTER_PARTS,
     RegisterPart(_VEC256_LOW128_PART, "aie2p.vec256", 0x1),
     RegisterPart(_VEC256_HIGH128_PART, "aie2p.vec256", 0x2),
     RegisterPart(_EWL_LOW128_PART, "aie2p.ewl", 0x1),
@@ -842,22 +845,7 @@ _BASE_DESCRIPTOR_SPECS = (
         "integer.sub.i32x16",
         "II_VSUB_32",
     ),
-    *(
-        _DescriptorSpec(
-            f"V{operation.upper()}_{comparison}_{width}_vaddSign{sign_bit}",
-            f"{_TARGET_KEY}.{operation}.{signedness}.i{width}x{512 // width}",
-            f"integer.{operation}.{signedness}.i{width}x{512 // width}",
-            f"II_V{operation.upper()}_{comparison}_{width}_vaddSign{sign_bit}",
-            implicit_outputs=("cmp",),
-            asm_mnemonic=(
-                f"{operation}.{'s' if signedness == 'signed' else 'u'}"
-                f"{width}x{512 // width}"
-            ),
-        )
-        for width in (8, 16, 32)
-        for operation, comparison in (("min", "GE"), ("max", "LT"))
-        for signedness, sign_bit in (("signed", 1), ("unsigned", 0))
-    ),
+    *INTEGER_EXTREMA_DESCRIPTOR_SPECS,
     _DescriptorSpec(
         "VMUL_vmul_cm_core_X_X",
         f"{_TARGET_KEY}.multiply.i16x32.configured",
@@ -1177,143 +1165,8 @@ _BASE_DESCRIPTOR_SPECS = (
         "integer.splat.i64x8",
         "II_VBCST_64",
     ),
-    _DescriptorSpec(
-        "VEQZ_8",
-        f"{_TARGET_KEY}.cmp.eqz.i8x64",
-        "integer.cmp.eq.i8x64",
-        "II_VEQZ_8",
-        storage_overrides=(("cmp", "eLPredicate"),),
-    ),
-    *(
-        _DescriptorSpec(
-            f"VEQZ_{width}",
-            f"{_TARGET_KEY}.cmp.eqz.i{width}x{512 // width}.el.low32",
-            f"integer.cmp.eq.i{width}x{512 // width}.low32",
-            f"II_VEQZ_{width}",
-            storage_overrides=(("cmp", "eLPredicate"),),
-            asm_mnemonic=f"veqz.{width}.el.low32",
-            operand_register_parts=(("cmp", _EL_LOW32_PART),),
-            encoding_adapter_overrides=(("cmp", "LOOM_eL_low32"),),
-        )
-        for width in (16, 32)
-    ),
-    *(
-        _DescriptorSpec(
-            f"V{relation.upper()}_{width}_vaddSign{sign_bit}",
-            (
-                f"{_TARGET_KEY}.cmp.{relation}.{signedness}."
-                f"i{width}x{512 // width}"
-                f"{'.el.low32' if width != 8 else ''}"
-            ),
-            (
-                f"integer.cmp.{relation}.{signedness}."
-                f"i{width}x{512 // width}"
-                f"{'.low32' if width != 8 else ''}"
-            ),
-            f"II_V{relation.upper()}_{width}_vaddSign{sign_bit}",
-            storage_overrides=(("cmp", "eLPredicate"),),
-            asm_mnemonic=(
-                f"v{relation}.{'s' if signedness == 'signed' else 'u'}"
-                f"{width}x{512 // width}"
-                f"{'.el.low32' if width != 8 else ''}"
-            ),
-            operand_register_parts=((("cmp", _EL_LOW32_PART),) if width != 8 else ()),
-            encoding_adapter_overrides=(
-                (("cmp", "LOOM_eL_low32"),) if width != 8 else ()
-            ),
-        )
-        for width in (8, 16, 32)
-        for relation in ("lt", "ge")
-        for signedness, sign_bit in (("signed", 1), ("unsigned", 0))
-    ),
-    _DescriptorSpec(
-        "VSEL_8",
-        f"{_TARGET_KEY}.select.i8x64",
-        "integer.select.i8x64",
-        "II_VSEL_8",
-        storage_overrides=(("sel", "eLPredicate"),),
-    ),
-    _DescriptorSpec(
-        "VSEL_32",
-        f"{_TARGET_KEY}.select.i32x16",
-        "integer.select.i32x16",
-        "II_VSEL_32",
-    ),
-    *(
-        _DescriptorSpec(
-            f"VSEL_{width}",
-            f"{_TARGET_KEY}.select.i{width}x{512 // width}.mask64",
-            f"integer.select.i{width}x{512 // width}.mask64",
-            f"II_VSEL_{width}",
-            storage_overrides=(("sel", "eLPredicate"),),
-            asm_mnemonic=f"vsel.{width}.mask64",
-            operand_register_parts=(("sel", _EL_LOW32_PART),),
-            encoding_adapter_overrides=(("sel", "LOOM_eL_low32"),),
-        )
-        for width in (16, 32)
-    ),
-    *(
-        _DescriptorSpec(
-            operation.upper(),
-            f"{_TARGET_KEY}.predicate.{operation}.low32",
-            f"integer.predicate.{operation}.low32",
-            f"II_{operation.upper()}",
-            storage_overrides=(
-                ("d0", "eLPredicate"),
-                ("s0", "eLPredicate"),
-                ("s1", "eLPredicate"),
-            ),
-            asm_mnemonic=f"predicate.{operation}.low32",
-            operand_register_parts=(
-                ("d0", _EL_LOW32_PART),
-                ("s0", _EL_LOW32_PART),
-                ("s1", _EL_LOW32_PART),
-            ),
-            encoding_adapter_overrides=(
-                ("d0", "LOOM_eL_low32"),
-                ("s0", "LOOM_eL_low32"),
-                ("s1", "LOOM_eL_low32"),
-            ),
-        )
-        for operation in ("and", "or", "xor")
-    ),
-    *(
-        _DescriptorSpec(
-            operation.upper(),
-            f"{_TARGET_KEY}.predicate.{operation}.high32",
-            f"integer.predicate.{operation}.high32",
-            f"II_{operation.upper()}",
-            storage_overrides=(
-                ("d0", "eLPredicate"),
-                ("s0", "eLPredicate"),
-                ("s1", "eLPredicate"),
-            ),
-            asm_mnemonic=f"predicate.{operation}.high32",
-            operand_register_parts=(
-                ("d0", _EL_HIGH32_PART),
-                ("s0", _EL_HIGH32_PART),
-                ("s1", _EL_HIGH32_PART),
-            ),
-            encoding_adapter_overrides=(
-                ("d0", "LOOM_eL_high32"),
-                ("s0", "LOOM_eL_high32"),
-                ("s1", "LOOM_eL_high32"),
-            ),
-            storage_continuation_part=_EL_LOW32_PART,
-        )
-        for operation in ("and", "or", "xor")
-    ),
-    _DescriptorSpec(
-        "MOVA",
-        f"{_TARGET_KEY}.predicate.complete.zero.high32",
-        "integer.predicate.complete.zero.high32",
-        "II_MOVA_eR",
-        storage_overrides=(("dst", "eLPredicate"),),
-        asm_mnemonic="predicate.complete.zero.high32",
-        operand_register_parts=(("dst", _EL_HIGH32_PART),),
-        encoding_adapter_overrides=(("dst", "LOOM_eL_high32_OP_mLdaCg"),),
-        storage_continuation_part=_EL_LOW32_PART,
-    ),
+    *PREDICATE_DESCRIPTOR_SPECS,
+    *BF16_COMPARISON_DESCRIPTOR_SPECS,
     _DescriptorSpec(
         "VEXTBCST_8_vec_extract_broadcast_imm",
         f"{_TARGET_KEY}.broadcast.i8x64.from-vector",

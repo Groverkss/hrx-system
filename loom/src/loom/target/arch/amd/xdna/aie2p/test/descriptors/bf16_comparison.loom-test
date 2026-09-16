@@ -1,0 +1,43 @@
+// Native LT and GE stay distinct while repeated identical comparisons share
+// their complete 32-bit masks, without inventing defined 64-bit predicate bits.
+// RUN: with-low-asm pass low-cse,low-dce
+
+low.func.def target<amd.xdna.aie2p.core> @bf16_masks(%left: reg<aie2p.vec256 x2>, %right: reg<aie2p.vec256 x2>) -> (reg<aie2p.ers16>, reg<aie2p.ers16>, reg<aie2p.ers16>) asm {
+  %less = vlt.bf16 %left, %right
+  %greater_equal = vge.bf16 %left, %right
+  %repeated = vlt.bf16 %left, %right
+  return %less, %greater_equal, %repeated
+}
+
+// ----
+low.func.def target<amd.xdna.aie2p.core> @bf16_masks(%left: reg<aie2p.vec256 x2>, %right: reg<aie2p.vec256 x2>) -> (reg<aie2p.ers16>, reg<aie2p.ers16>, reg<aie2p.ers16>) asm {
+  %less = vlt.bf16 %left, %right
+  %greater_equal = vge.bf16 %left, %right
+  return %less, %greater_equal, %less
+}
+
+// ====
+
+// CSE forwards both results of a fused operation. Copying the fixed mask to
+// general scalar storage preserves its identity across later fused extrema.
+// RUN: with-low-asm pass low-cse,low-dce
+
+low.func.def target<amd.xdna.aie2p.core> @bf16_extrema(%left: reg<aie2p.vec256 x2>, %right: reg<aie2p.vec256 x2>) -> (reg<aie2p.vec256 x2>, reg<aie2p.er>, reg<aie2p.vec256 x2>, reg<aie2p.er>, reg<aie2p.vec256 x2>, reg<aie2p.er>) asm {
+  %minimum, %ge = vmin_ge.bf16 %left, %right
+  %minimum_mask = copy %ge : reg<aie2p.mr16_vcompare> -> reg<aie2p.er>
+  %maximum, %lt = vmax_lt.bf16 %left, %right
+  %maximum_mask = copy %lt : reg<aie2p.mr16_vcompare> -> reg<aie2p.er>
+  %repeated_minimum, %repeated_ge = vmin_ge.bf16 %left, %right
+  %repeated_mask = copy %repeated_ge : reg<aie2p.mr16_vcompare> -> reg<aie2p.er>
+  return %minimum, %minimum_mask, %maximum, %maximum_mask, %repeated_minimum, %repeated_mask
+}
+
+// ----
+low.func.def target<amd.xdna.aie2p.core> @bf16_extrema(%left: reg<aie2p.vec256 x2>, %right: reg<aie2p.vec256 x2>) -> (reg<aie2p.vec256 x2>, reg<aie2p.er>, reg<aie2p.vec256 x2>, reg<aie2p.er>, reg<aie2p.vec256 x2>, reg<aie2p.er>) asm {
+  %minimum, %ge = vmin_ge.bf16 %left, %right
+  %minimum_mask = copy %ge : reg<aie2p.mr16_vcompare> -> reg<aie2p.er>
+  %maximum, %lt = vmax_lt.bf16 %left, %right
+  %maximum_mask = copy %lt : reg<aie2p.mr16_vcompare> -> reg<aie2p.er>
+  %repeated_mask = copy %ge : reg<aie2p.mr16_vcompare> -> reg<aie2p.er>
+  return %minimum, %minimum_mask, %maximum, %maximum_mask, %minimum, %repeated_mask
+}
