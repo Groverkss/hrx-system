@@ -182,18 +182,24 @@ TEST_F(ModuleTest, RegisterSourceRejectsInvalidSentinelId) {
   IREE_ASSERT_OK(loom_module_allocate(&context_, IREE_SV("test"), &block_pool_,
                                       NULL, iree_allocator_system(), &module));
 
-  iree_string_view_t* entries = NULL;
-  IREE_ASSERT_OK(iree_arena_allocate_array(&module->arena,
-                                           LOOM_SOURCE_ID_INVALID,
-                                           sizeof(*entries), (void**)&entries));
-  module->sources.entries = entries;
-  module->sources.capacity = LOOM_SOURCE_ID_INVALID;
-  module->sources.count = LOOM_SOURCE_ID_INVALID;
+  // Append permits repeated source names without a deduplication scan. Fill
+  // the table with real entries so registration can safely probe every name.
+  loom_source_id_t source_id = LOOM_SOURCE_ID_INVALID;
+  for (iree_host_size_t i = 0; i < LOOM_SOURCE_ID_INVALID; ++i) {
+    IREE_ASSERT_OK(
+        loom_module_append_source(module, IREE_SV("present"), &source_id));
+  }
+  EXPECT_EQ(source_id, LOOM_SOURCE_ID_INVALID - 1);
+  EXPECT_EQ(module->sources.count, LOOM_SOURCE_ID_INVALID);
 
-  loom_source_id_t source_id = 0;
+  // An existing source remains resolvable even when no new ID is available.
+  IREE_ASSERT_OK(
+      loom_module_register_source(module, IREE_SV("present"), &source_id));
+  EXPECT_EQ(source_id, 0u);
   IREE_EXPECT_STATUS_IS(
       IREE_STATUS_RESOURCE_EXHAUSTED,
       loom_module_register_source(module, IREE_SV("overflow"), &source_id));
+  EXPECT_EQ(source_id, LOOM_SOURCE_ID_INVALID);
   loom_module_free(module);
 }
 
