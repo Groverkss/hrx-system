@@ -2454,7 +2454,9 @@ typedef uint16_t loom_module_flags_t;
 typedef struct loom_module_t {
   // Flags (accessed frequently, placed first for cache locality).
   loom_module_flags_t flags;
-  uint16_t reserved;
+  // Scalar elements retained for shaped-type serializer closure. Entries are
+  // never removed from the module type table, so established bits stay valid.
+  loom_scalar_type_set_t shaped_element_types;
 
   // Module name. Every module is named (required for linking).
   loom_string_id_t name_id;

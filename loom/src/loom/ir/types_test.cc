@@ -257,6 +257,50 @@ TEST_F(ModuleTypesTest, TopologicalShapedTypesRetainScalarDependencies) {
   }
 }
 
+TEST_F(ModuleTypesTest, ShapedScalarDependenciesSurviveTypeTableGrowth) {
+  const loom_type_kind_t kinds[] = {LOOM_TYPE_TILE, LOOM_TYPE_TENSOR,
+                                    LOOM_TYPE_VECTOR, LOOM_TYPE_VIEW};
+  for (uint32_t i = 0; i < 1024; ++i) {
+    const loom_scalar_type_t element = 1 + i % (LOOM_SCALAR_TYPE_COUNT_ - 1);
+    const auto type =
+        loom_type_shaped_1d(kinds[i % IREE_ARRAYSIZE(kinds)], element,
+                            loom_dim_pack_static(i + 1), 0);
+    loom_type_id_t type_id = LOOM_TYPE_ID_INVALID;
+    if (i % 2 == 0) {
+      IREE_ASSERT_OK(loom_module_intern_topological_type_id(
+          module_, type, nullptr, 0, &type_id));
+    } else {
+      IREE_ASSERT_OK(loom_module_intern_type_id(module_, type, &type_id));
+    }
+    const auto count = module_->types.count;
+    loom_type_id_t scalar_id = LOOM_TYPE_ID_INVALID;
+    IREE_ASSERT_OK(loom_module_intern_type_id(
+        module_, loom_type_scalar(element), &scalar_id));
+    EXPECT_LT(scalar_id, type_id);
+    EXPECT_EQ(module_->types.count, count);
+  }
+  EXPECT_EQ(module_->types.count, 1024 + LOOM_SCALAR_TYPE_COUNT_ - 1);
+}
+
+TEST_F(ModuleTypesTest, InvalidShapedElementsRemainDistinctForVerification) {
+  const loom_scalar_type_t elements[] = {LOOM_SCALAR_TYPE_NONE,
+                                         LOOM_SCALAR_TYPE_COUNT_, UINT8_MAX,
+                                         LOOM_SCALAR_TYPE_F32};
+  for (const auto element : elements) {
+    const auto type = loom_type_shaped_1d(LOOM_TYPE_VECTOR, element,
+                                          loom_dim_pack_static(4), 0);
+    loom_type_id_t type_id = LOOM_TYPE_ID_INVALID;
+    IREE_ASSERT_OK(loom_module_intern_type_id(module_, type, &type_id));
+    EXPECT_EQ(loom_type_element_type(module_->types.entries[type_id]), element);
+    const auto count = module_->types.count;
+    loom_type_id_t scalar_id = LOOM_TYPE_ID_INVALID;
+    IREE_ASSERT_OK(loom_module_intern_type_id(
+        module_, loom_type_scalar(element), &scalar_id));
+    EXPECT_LT(scalar_id, type_id);
+    EXPECT_EQ(module_->types.count, count);
+  }
+}
+
 TEST_F(ModuleTypesTest, FunctionTypeReferencesPreserveCombinedArity) {
   const auto index_type = loom_type_scalar(LOOM_SCALAR_TYPE_INDEX);
   loom_value_id_t source_dimension = LOOM_VALUE_ID_INVALID;
