@@ -56,10 +56,6 @@ typedef struct loom_aie2p_xdna_entry_layout_t {
   uint32_t control_program_header_ordinal;
   // First product-global binding ordinal owned by the entry.
   uint32_t first_binding_ordinal;
-  // Candidate section index for the ARRAY payload.
-  iree_host_size_t array_payload_index;
-  // Candidate section index for the CONTROL payload when present.
-  iree_host_size_t control_payload_index;
 } loom_aie2p_xdna_entry_layout_t;
 
 static void loom_aie2p_xdna_store_u16(uint8_t* target, uint16_t value) {
@@ -606,6 +602,8 @@ static iree_status_t loom_aie2p_xdna_inventory_product(
   iree_host_size_t tile_program_header_ordinal = metadata_segment_count;
   iree_host_size_t array_program_header_ordinal =
       metadata_segment_count + tile_segment_count;
+  iree_host_size_t control_program_header_ordinal =
+      array_program_header_ordinal + product->entry_count;
   for (iree_host_size_t i = 0; i < product->entry_count; ++i) {
     loom_aie2p_xdna_entry_layout_t* layout = &layouts[i];
     layout->first_tile_program_header_ordinal =
@@ -615,14 +613,14 @@ static iree_status_t loom_aie2p_xdna_inventory_product(
         (uint32_t)array_program_header_ordinal++;
     if (layout->entry->array_program->control_record_count != 0) {
       layout->control_program_header_ordinal =
-          (uint32_t)array_program_header_ordinal++;
+          (uint32_t)control_program_header_ordinal++;
     } else {
       layout->control_program_header_ordinal = UINT32_MAX;
     }
   }
   IREE_ASSERT_EQ(tile_program_header_ordinal,
                  metadata_segment_count + tile_segment_count);
-  IREE_ASSERT_EQ(array_program_header_ordinal, program_header_count);
+  IREE_ASSERT_EQ(control_program_header_ordinal, program_header_count);
 
   *out_inventory = (loom_aie2p_xdna_inventory_t){
       .layouts = layouts,
@@ -803,63 +801,10 @@ iree_status_t loom_aie2p_xdna_product_write(
       product, inventory.layouts, inventory.binding_count,
       inventory.relocation_count, scratch_arena, &payloads));
 
-  loom_native_elf_section_t* program_payload_sections = NULL;
-  IREE_RETURN_IF_ERROR(iree_arena_allocate_array(
-      scratch_arena, inventory.program_segment_count,
-      sizeof(*program_payload_sections), (void**)&program_payload_sections));
-  const loom_native_elf_section_t** unique_program_payload_sections = NULL;
-  IREE_RETURN_IF_ERROR(
-      iree_arena_allocate_array(scratch_arena, inventory.program_segment_count,
-                                sizeof(*unique_program_payload_sections),
-                                (void**)&unique_program_payload_sections));
-  iree_host_size_t* program_payload_section_indices = NULL;
-  IREE_RETURN_IF_ERROR(
-      iree_arena_allocate_array(scratch_arena, inventory.program_segment_count,
-                                sizeof(*program_payload_section_indices),
-                                (void**)&program_payload_section_indices));
-  iree_host_size_t program_payload_index = 0;
-  iree_host_size_t unique_program_payload_section_count = 0;
-  for (iree_host_size_t i = 0; i < product->entry_count; ++i) {
-    loom_aie2p_xdna_entry_layout_t* layout = &inventory.layouts[i];
-    layout->array_payload_index = program_payload_index;
-    program_payload_sections[program_payload_index] =
-        (loom_native_elf_section_t){
-            .name = IREE_SV(".xdna.array"),
-            .type = LOOM_NATIVE_ELF_SECTION_TYPE_PROGBITS,
-            .flags = LOOM_NATIVE_ELF_SECTION_FLAG_ALLOC,
-            .alignment = 4,
-            .contents = layout->encoded_program.array_payload,
-        };
-    program_payload_section_indices[program_payload_index] =
-        loom_aie2p_xdna_intern_linked_section(
-            &program_payload_sections[program_payload_index],
-            unique_program_payload_sections,
-            &unique_program_payload_section_count);
-    ++program_payload_index;
-    if (layout->control_program_header_ordinal != UINT32_MAX) {
-      layout->control_payload_index = program_payload_index;
-      program_payload_sections[program_payload_index] =
-          (loom_native_elf_section_t){
-              .name = IREE_SV(".xdna.control"),
-              .type = LOOM_NATIVE_ELF_SECTION_TYPE_PROGBITS,
-              .flags = LOOM_NATIVE_ELF_SECTION_FLAG_ALLOC,
-              .alignment = 4,
-              .contents = layout->encoded_program.control_payload,
-          };
-      program_payload_section_indices[program_payload_index] =
-          loom_aie2p_xdna_intern_linked_section(
-              &program_payload_sections[program_payload_index],
-              unique_program_payload_sections,
-              &unique_program_payload_section_count);
-      ++program_payload_index;
-    }
-  }
-  IREE_ASSERT_EQ(program_payload_index, inventory.program_segment_count);
-
   const iree_host_size_t metadata_segment_count = 3u + payloads.has_relocations;
-  const iree_host_size_t section_count =
-      metadata_segment_count + unique_linked_section_count +
-      unique_program_payload_section_count + 2u;
+  const iree_host_size_t section_count = metadata_segment_count +
+                                         unique_linked_section_count +
+                                         inventory.program_segment_count + 2u;
   loom_native_elf_section_t* sections = NULL;
   IREE_RETURN_IF_ERROR(iree_arena_allocate_array(
       scratch_arena, section_count, sizeof(*sections), (void**)&sections));
@@ -910,9 +855,36 @@ iree_status_t loom_aie2p_xdna_product_write(
                                                      tile->entry_section_index];
   }
   const iree_host_size_t program_payload_section_base = section_index;
-  for (iree_host_size_t i = 0; i < unique_program_payload_section_count; ++i) {
-    sections[section_index++] = *unique_program_payload_sections[i];
+  const iree_host_size_t program_segment_base =
+      metadata_segment_count + inventory.tile_segment_count;
+  // Payload sections follow the same ARRAY-then-CONTROL order as their
+  // program headers. Entry-owned programs have distinct file ranges.
+  for (iree_host_size_t i = 0; i < product->entry_count; ++i) {
+    const loom_aie2p_xdna_entry_layout_t* layout = &inventory.layouts[i];
+    const iree_host_size_t array_section_index =
+        program_payload_section_base + layout->array_program_header_ordinal -
+        program_segment_base;
+    sections[array_section_index] = (loom_native_elf_section_t){
+        .name = IREE_SV(".xdna.array"),
+        .type = LOOM_NATIVE_ELF_SECTION_TYPE_PROGBITS,
+        .flags = LOOM_NATIVE_ELF_SECTION_FLAG_ALLOC,
+        .alignment = 4,
+        .contents = layout->encoded_program.array_payload,
+    };
+    if (layout->control_program_header_ordinal != UINT32_MAX) {
+      const iree_host_size_t control_section_index =
+          program_payload_section_base +
+          layout->control_program_header_ordinal - program_segment_base;
+      sections[control_section_index] = (loom_native_elf_section_t){
+          .name = IREE_SV(".xdna.control"),
+          .type = LOOM_NATIVE_ELF_SECTION_TYPE_PROGBITS,
+          .flags = LOOM_NATIVE_ELF_SECTION_FLAG_ALLOC,
+          .alignment = 4,
+          .contents = layout->encoded_program.control_payload,
+      };
+    }
   }
+  section_index += inventory.program_segment_count;
   IREE_RETURN_IF_ERROR(loom_aie2p_xdna_encode_symbol_tables(
       inventory.tiles, inventory.tile_count, code_section_indices,
       scratch_arena, &payloads.symbols, &payloads.strings));
@@ -973,23 +945,24 @@ iree_status_t loom_aie2p_xdna_product_write(
   }
   for (iree_host_size_t i = 0; i < product->entry_count; ++i) {
     const loom_aie2p_xdna_entry_layout_t* layout = &inventory.layouts[i];
-    IREE_ASSERT_EQ(segment_index, layout->array_program_header_ordinal);
     const iree_host_size_t array_section_index =
-        program_payload_section_base +
-        program_payload_section_indices[layout->array_payload_index];
-    segments[segment_index++] = loom_aie2p_xdna_metadata_segment(
-        LOOM_XDNA_ELF_PROGRAM_TYPE_ARRAY, array_section_index,
-        layout->encoded_program.array_payload.data_length, 4);
+        program_payload_section_base + layout->array_program_header_ordinal -
+        program_segment_base;
+    segments[layout->array_program_header_ordinal] =
+        loom_aie2p_xdna_metadata_segment(
+            LOOM_XDNA_ELF_PROGRAM_TYPE_ARRAY, array_section_index,
+            layout->encoded_program.array_payload.data_length, 4);
     if (layout->control_program_header_ordinal != UINT32_MAX) {
-      IREE_ASSERT_EQ(segment_index, layout->control_program_header_ordinal);
       const iree_host_size_t control_section_index =
           program_payload_section_base +
-          program_payload_section_indices[layout->control_payload_index];
-      segments[segment_index++] = loom_aie2p_xdna_metadata_segment(
-          LOOM_XDNA_ELF_PROGRAM_TYPE_CONTROL, control_section_index,
-          layout->encoded_program.control_payload.data_length, 4);
+          layout->control_program_header_ordinal - program_segment_base;
+      segments[layout->control_program_header_ordinal] =
+          loom_aie2p_xdna_metadata_segment(
+              LOOM_XDNA_ELF_PROGRAM_TYPE_CONTROL, control_section_index,
+              layout->encoded_program.control_payload.data_length, 4);
     }
   }
+  segment_index += inventory.program_segment_count;
   IREE_ASSERT_EQ(segment_index, segment_count);
 
   const loom_native_elf32le_file_t file = {

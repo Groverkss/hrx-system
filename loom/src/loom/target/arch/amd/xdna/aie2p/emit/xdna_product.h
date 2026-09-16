@@ -64,8 +64,9 @@ typedef struct loom_aie2p_xdna_product_t {
 // produced. Each entry owns a consecutive TILE program-header range containing
 // its executable core programs. Placed uninitialized function storage retains
 // its section addresses and symbols without a load or zero-fill segment.
-// Identical section payloads share one file range even when multiple
-// entry-specific program headers refer to them. Metadata tables, symbols,
+// Identical linked tile payloads share one file range even when multiple
+// entry-specific program headers refer to them. ARRAY and CONTROL programs
+// retain distinct file ranges in program-role order. Metadata tables, symbols,
 // section names, and final ELF layout use |scratch_arena| and remain live only
 // for the call.
 iree_status_t loom_aie2p_xdna_product_write(
