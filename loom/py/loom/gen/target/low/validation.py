@@ -57,8 +57,8 @@ class _PhysicalDescriptorLimits:
     aggregate_resource_capacity: int = 2304
     # Maximum number of physical operand rows in one descriptor.
     maximum_physical_binding_count: int = 15
-    # Maximum number of untied components competing for one namespace.
-    maximum_resource_component_count: int = 8
+    # Maximum untied components admitted to one linear bank's order proof.
+    maximum_linear_resource_component_count: int = 8
     # Maximum pairings of complete pre- and post-phase spatial orders.
     maximum_phase_order_pair_count: int = 1440
     # Maximum allocation-unit width of one physical operand.
@@ -605,17 +605,17 @@ def validate_physical_descriptor_set(
             resource_components = [component for component in components if resource_key in component.resource_keys]
             if not resource_components:
                 continue
-            _validate_physical_metric(
-                descriptor_set.key,
-                f"resource '{resource_key}' component count",
-                len(resource_components),
-                limits.maximum_resource_component_count,
-                descriptor_key=descriptor.key,
-            )
             # Exact physical domains were proved against their atomic storage
             # above. They are not interchangeable positions in a linear bank.
             if resource_key == "explicit-physical-registers":
                 continue
+            _validate_physical_metric(
+                descriptor_set.key,
+                f"resource '{resource_key}' component count",
+                len(resource_components),
+                limits.maximum_linear_resource_component_count,
+                descriptor_key=descriptor.key,
+            )
             pre_component_count = sum(component.pre_width != 0 for component in resource_components)
             post_component_count = sum(component.post_width != 0 for component in resource_components)
             phase_order_pair_count = math.factorial(pre_component_count) * math.factorial(post_component_count)

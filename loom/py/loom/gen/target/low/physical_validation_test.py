@@ -765,8 +765,9 @@ def test_physical_descriptor_set_rejects_phase_order_work_overflow() -> None:
 
 
 @pytest.mark.parametrize("overlap", [False, True])
-def test_explicit_state_placement_uses_atomic_storage(overlap: bool) -> None:
-    # Five independently fixed read/write states need no spatial-order search.
+@pytest.mark.parametrize("component_count", [5, 9, 15, 16])
+def test_explicit_state_placement_uses_atomic_storage(component_count: int, overlap: bool) -> None:
+    # Independently fixed read/write states need no spatial-order search.
     # Distinct register names can still alias the same physical storage.
     register_classes = tuple(
         RegClass(
@@ -776,7 +777,7 @@ def test_explicit_state_placement_uses_atomic_storage(overlap: bool) -> None:
             flags=(RegClassFlag.PHYSICAL, RegClassFlag.EXPLICIT_PHYSICAL_REGISTERS),
             physical_registers=(f"fixed{index}",),
         )
-        for index in range(5)
+        for index in range(component_count)
     )
     operands = tuple(
         _physical_operand(
@@ -789,9 +790,12 @@ def test_explicit_state_placement_uses_atomic_storage(overlap: bool) -> None:
     )
     descriptor_set = replace(
         _descriptor_set(_descriptor("test.fixed.states", operands), register_classes=register_classes),
-        physical_registers=tuple(PhysicalRegister(f"fixed{index}", (0 if overlap and index == 4 else index,)) for index in range(5)),
+        physical_registers=tuple(PhysicalRegister(f"fixed{index}", (0 if overlap and index == component_count - 1 else index,)) for index in range(component_count)),
     )
-    if overlap:
+    if component_count == 16:
+        with pytest.raises(ValueError, match="binding count 16 exceeds generation bound 15"):
+            validation.validate_physical_descriptor_set(descriptor_set)
+    elif overlap:
         with pytest.raises(ValueError, match="explicit physical register components do not admit a legal pre/post placement"):
             validation.validate_physical_descriptor_set(descriptor_set)
     else:
