@@ -395,6 +395,31 @@ def test_physical_descriptor_set_rejects_implicit_row_without_phase() -> None:
         compiler.compile_descriptor_set(_descriptor_set(descriptor))
 
 
+@pytest.mark.parametrize(("location_count", "unit_count"), [(2, 1), (1, 2)])
+def test_implicit_physical_write_requires_fixed_storage(location_count: int, unit_count: int) -> None:
+    register_class = RegClass(
+        "test.state",
+        32,
+        SpillSlotSpace.PRIVATE,
+        flags=(RegClassFlag.PHYSICAL, RegClassFlag.UNSPILLABLE),
+        allocatable_count=location_count,
+    )
+    descriptor = _descriptor(
+        "test.implicit.write",
+        (
+            _physical_operand(
+                "state",
+                OperandRole.IMPLICIT,
+                register_class.name,
+                flags=(OperandFlag.IMPLICIT, OperandFlag.STATE_WRITE),
+                unit_count=unit_count,
+            ),
+        ),
+    )
+    with pytest.raises(ValueError, match="implicit physical write 'state' must name one fixed register"):
+        compiler.compile_descriptor_set(_descriptor_set(descriptor, register_classes=(register_class,)))
+
+
 def test_physical_descriptor_set_accepts_native_implicit_packet_operand() -> None:
     descriptor = _descriptor(
         "test.assembly.implicit",

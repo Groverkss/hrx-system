@@ -321,7 +321,7 @@ static iree_status_t loom_low_allocation_interval_assignment_record_failure(
       }
     }
 
-    if (loom_low_allocation_target_constraints_fixed_value_conflicts(
+    if (loom_low_allocation_target_constraints_fixed_storage_conflicts(
             state->context->target_constraints, state->context->liveness,
             state->context->unit_liveness, state->context->placement,
             &candidate,

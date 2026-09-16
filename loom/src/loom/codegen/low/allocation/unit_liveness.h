@@ -13,6 +13,7 @@
 #include "iree/base/bitmap.h"
 #include "iree/base/internal/arena.h"
 #include "loom/analysis/liveness.h"
+#include "loom/codegen/low/allocation/assignment.h"
 #include "loom/codegen/low/placement.h"
 #include "loom/codegen/low/target_binding.h"
 #include "loom/ir/ir.h"
@@ -21,6 +22,9 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+// Indexed physical write point retained by the unit-liveness producer.
+typedef struct loom_low_allocation_clobber_t loom_low_allocation_clobber_t;
 
 // Mutable unit-liveness state indexed by liveness value ordinal.
 typedef struct loom_low_allocation_unit_liveness_t {
@@ -36,6 +40,20 @@ typedef struct loom_low_allocation_unit_liveness_t {
   // Values whose concrete storage lifetime is not fully represented by their
   // semantic sparse segments.
   iree_bitmap_t values_with_incomplete_storage_segments;
+  // Implicit physical writes, sorted by storage identity and program point
+  // after construction. These occupy storage without defining SSA values.
+  struct {
+    // Arena-owned atomic-unit write points.
+    loom_low_allocation_clobber_t* entries;
+    // Number of initialized write points.
+    iree_host_size_t count;
+    // Allocated entry capacity used during construction.
+    iree_host_size_t capacity;
+    // Smallest explicit atomic unit written when atomic_unit_end is nonzero.
+    uint32_t atomic_unit_begin;
+    // One past the largest explicit atomic unit written; zero for none.
+    uint32_t atomic_unit_end;
+  } clobbers;
 } loom_low_allocation_unit_liveness_t;
 
 // Initializes |out_unit_liveness| from value-granular liveness and IR use
@@ -48,6 +66,15 @@ iree_status_t loom_low_allocation_unit_liveness_initialize(
     const loom_local_value_domain_t* value_domain,
     const loom_liveness_analysis_t* liveness, iree_arena_allocator_t* arena,
     loom_low_allocation_unit_liveness_t* out_unit_liveness);
+
+// Returns true when an implicit physical write overlaps |candidate|'s refined
+// per-unit storage lifetime and sparse live segments. Write points remain
+// reusable before and after the instruction; no register is globally reserved.
+bool loom_low_allocation_unit_liveness_clobber_conflicts(
+    const loom_low_allocation_unit_liveness_t* unit_liveness,
+    const loom_low_descriptor_set_t* descriptor_set,
+    const loom_liveness_analysis_t* liveness,
+    const loom_low_allocation_assignment_t* candidate);
 
 // Returns the first unit-lifetime record for |value_ordinal|, or UINT32_MAX
 // when the value has no allocatable unit-liveness records.

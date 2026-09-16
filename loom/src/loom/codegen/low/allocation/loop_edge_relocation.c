@@ -400,7 +400,7 @@ static bool loom_low_allocation_loop_edge_relocation_candidate_target_conflicts(
     const loom_low_allocation_assignment_t assignment =
         loom_low_allocation_loop_edge_relocation_member_assignment(
             state, candidate, member_index);
-    if (loom_low_allocation_target_constraints_fixed_value_conflicts(
+    if (loom_low_allocation_target_constraints_fixed_storage_conflicts(
             context->target_constraints, context->liveness,
             context->unit_liveness, context->placement, &assignment,
             &source_value_id,
@@ -607,7 +607,7 @@ static bool loom_low_allocation_loop_edge_relocation_eviction_location_is_legal(
       return false;
     }
   }
-  if (loom_low_allocation_target_constraints_fixed_value_conflicts(
+  if (loom_low_allocation_target_constraints_fixed_storage_conflicts(
           context->target_constraints, context->liveness,
           context->unit_liveness, context->placement, &assignment,
           /*ignored_value_ids=*/NULL, /*ignored_value_count=*/0) ||

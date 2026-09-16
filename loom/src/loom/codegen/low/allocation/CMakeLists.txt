@@ -670,7 +670,9 @@ loom_cc_library(
   SRCS
     "unit_liveness.c"
   DEPS
+    ::assignment
     ::live_range
+    ::storage
     iree::base
     iree::base::internal::arena
     loom::analysis::liveness
@@ -679,6 +681,7 @@ loom_cc_library(
     loom::codegen::low::target_binding
     loom::ir
     loom::ops::low
+    loom::util::adaptive_sort
   PUBLIC
 )
 

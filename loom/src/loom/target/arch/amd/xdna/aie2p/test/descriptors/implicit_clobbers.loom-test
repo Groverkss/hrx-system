@@ -1,0 +1,89 @@
+// RUN: emit low-allocation-json @predicate_across_max
+
+// A predicate live across the fused maximum occupies storage outside its fixed
+// comparison output, including aliases through the scalar register file.
+aie2p.target<core> @target
+
+low.func.def target<amd.xdna.aie2p.core>(@target) @predicate_across_max(%left: reg<aie2p.vec256 x2>, %right: reg<aie2p.vec256 x2>) -> (reg<aie2p.vec256 x2>) asm {
+  %predicate = vlt.s8x64 %left, %right
+  %maximum = max.s8x64 %left, %right
+  %selected = vsel.8 %maximum, %right, %predicate
+  return %selected
+}
+
+// ----
+{"format":"loom.low.allocation.v0","function":"predicate_across_max","target":"target","descriptor_set":"amd.xdna.aie2p.core","allocation_mode":"virtual","assignment_count":5,"remark_count":0,"copy_decision_count":0,"spill_count":0,"spill_plan_count":0,"coalesced_copy_count":0,"materialized_copy_count":0,"assignments":[{"index":0,"value":{"id":0,"name":"left","type":"reg<aie2p.vec256 x2>"},"class":{"type_kind":12,"type_kind_name":"register","element_type":0,"element_type_name":null,"register_class":"aie2p.vec256"},"start_point":0,"end_point":2,"unit_count":2,"location":{"kind":"physical_register","base":341,"count":2}},{"index":1,"value":{"id":1,"name":"right","type":"reg<aie2p.vec256 x2>"},"class":{"type_kind":12,"type_kind_name":"register","element_type":0,"element_type_name":null,"register_class":"aie2p.vec256"},"start_point":0,"end_point":3,"unit_count":2,"location":{"kind":"physical_register","base":342,"count":2}},{"index":2,"value":{"id":3,"name":"predicate","type":"reg<aie2p.elpredicate>"},"class":{"type_kind":12,"type_kind_name":"register","element_type":0,"element_type_name":null,"register_class":"aie2p.elpredicate"},"start_point":1,"end_point":3,"unit_count":1,"location":{"kind":"physical_register","base":180,"count":1}},{"index":3,"value":{"id":4,"name":"maximum","type":"reg<aie2p.vec256 x2>"},"class":{"type_kind":12,"type_kind_name":"register","element_type":0,"element_type_name":null,"register_class":"aie2p.vec256"},"start_point":2,"end_point":3,"unit_count":2,"location":{"kind":"physical_register","base":341,"count":2}},{"index":4,"value":{"id":5,"name":"selected","type":"reg<aie2p.vec256 x2>"},"class":{"type_kind":12,"type_kind_name":"register","element_type":0,"element_type_name":null,"register_class":"aie2p.vec256"},"start_point":3,"end_point":4,"unit_count":2,"location":{"kind":"physical_register","base":341,"count":2}}],"spill_plans":[],"copy_decisions":[],"remarks":[]}
+
+// ====
+
+// RUN: emit low-allocation-json @predicate_before_max
+
+// The predicate dies at the select, so the following maximum may overwrite its
+// physical register without reducing the available predicate inventory.
+aie2p.target<core> @target
+
+low.func.def target<amd.xdna.aie2p.core>(@target) @predicate_before_max(%left: reg<aie2p.vec256 x2>, %right: reg<aie2p.vec256 x2>) -> (reg<aie2p.vec256 x2>) asm {
+  %predicate = vlt.s8x64 %left, %right
+  %selected = vsel.8 %left, %right, %predicate
+  %maximum = max.s8x64 %selected, %right
+  return %maximum
+}
+
+// ----
+{"format":"loom.low.allocation.v0","function":"predicate_before_max","target":"target","descriptor_set":"amd.xdna.aie2p.core","allocation_mode":"virtual","assignment_count":5,"remark_count":0,"copy_decision_count":0,"spill_count":0,"spill_plan_count":0,"coalesced_copy_count":0,"materialized_copy_count":0,"assignments":[{"index":0,"value":{"id":0,"name":"left","type":"reg<aie2p.vec256 x2>"},"class":{"type_kind":12,"type_kind_name":"register","element_type":0,"element_type_name":null,"register_class":"aie2p.vec256"},"start_point":0,"end_point":2,"unit_count":2,"location":{"kind":"physical_register","base":341,"count":2}},{"index":1,"value":{"id":1,"name":"right","type":"reg<aie2p.vec256 x2>"},"class":{"type_kind":12,"type_kind_name":"register","element_type":0,"element_type_name":null,"register_class":"aie2p.vec256"},"start_point":0,"end_point":3,"unit_count":2,"location":{"kind":"physical_register","base":342,"count":2}},{"index":2,"value":{"id":3,"name":"predicate","type":"reg<aie2p.elpredicate>"},"class":{"type_kind":12,"type_kind_name":"register","element_type":0,"element_type_name":null,"register_class":"aie2p.elpredicate"},"start_point":1,"end_point":2,"unit_count":1,"location":{"kind":"physical_register","base":179,"count":1}},{"index":3,"value":{"id":4,"name":"selected","type":"reg<aie2p.vec256 x2>"},"class":{"type_kind":12,"type_kind_name":"register","element_type":0,"element_type_name":null,"register_class":"aie2p.vec256"},"start_point":2,"end_point":3,"unit_count":2,"location":{"kind":"physical_register","base":341,"count":2}},{"index":4,"value":{"id":5,"name":"maximum","type":"reg<aie2p.vec256 x2>"},"class":{"type_kind":12,"type_kind_name":"register","element_type":0,"element_type_name":null,"register_class":"aie2p.vec256"},"start_point":3,"end_point":4,"unit_count":2,"location":{"kind":"physical_register","base":341,"count":2}}],"spill_plans":[],"copy_decisions":[],"remarks":[]}
+
+// ====
+
+// RUN: emit low-allocation-json @predicate_after_max
+
+// Predicate storage is reusable after the fixed comparison write.
+aie2p.target<core> @target
+
+low.func.def target<amd.xdna.aie2p.core>(@target) @predicate_after_max(%left: reg<aie2p.vec256 x2>, %right: reg<aie2p.vec256 x2>) -> (reg<aie2p.vec256 x2>) asm {
+  %maximum = max.s8x64 %left, %right
+  %predicate = vlt.s8x64 %maximum, %right
+  %selected = vsel.8 %maximum, %right, %predicate
+  return %selected
+}
+
+// ----
+{"format":"loom.low.allocation.v0","function":"predicate_after_max","target":"target","descriptor_set":"amd.xdna.aie2p.core","allocation_mode":"virtual","assignment_count":5,"remark_count":0,"copy_decision_count":0,"spill_count":0,"spill_plan_count":0,"coalesced_copy_count":0,"materialized_copy_count":0,"assignments":[{"index":0,"value":{"id":0,"name":"left","type":"reg<aie2p.vec256 x2>"},"class":{"type_kind":12,"type_kind_name":"register","element_type":0,"element_type_name":null,"register_class":"aie2p.vec256"},"start_point":0,"end_point":1,"unit_count":2,"location":{"kind":"physical_register","base":341,"count":2}},{"index":1,"value":{"id":1,"name":"right","type":"reg<aie2p.vec256 x2>"},"class":{"type_kind":12,"type_kind_name":"register","element_type":0,"element_type_name":null,"register_class":"aie2p.vec256"},"start_point":0,"end_point":3,"unit_count":2,"location":{"kind":"physical_register","base":342,"count":2}},{"index":2,"value":{"id":3,"name":"maximum","type":"reg<aie2p.vec256 x2>"},"class":{"type_kind":12,"type_kind_name":"register","element_type":0,"element_type_name":null,"register_class":"aie2p.vec256"},"start_point":1,"end_point":3,"unit_count":2,"location":{"kind":"physical_register","base":341,"count":2}},{"index":3,"value":{"id":4,"name":"predicate","type":"reg<aie2p.elpredicate>"},"class":{"type_kind":12,"type_kind_name":"register","element_type":0,"element_type_name":null,"register_class":"aie2p.elpredicate"},"start_point":2,"end_point":3,"unit_count":1,"location":{"kind":"physical_register","base":179,"count":1}},{"index":4,"value":{"id":5,"name":"selected","type":"reg<aie2p.vec256 x2>"},"class":{"type_kind":12,"type_kind_name":"register","element_type":0,"element_type_name":null,"register_class":"aie2p.vec256"},"start_point":3,"end_point":4,"unit_count":2,"location":{"kind":"physical_register","base":341,"count":2}}],"spill_plans":[],"copy_decisions":[],"remarks":[]}
+
+// ====
+
+// RUN: emit low-allocation-json @partial_predicate_clobber
+
+// A 32-bit implicit comparison output also conflicts with its 64-bit predicate
+// alias while that predicate remains live.
+aie2p.target<core> @target
+
+low.func.def target<amd.xdna.aie2p.core>(@target) @partial_predicate_clobber(%predicate: reg<aie2p.elpredicate>, %left: reg<aie2p.vec256 x2>, %right: reg<aie2p.vec256 x2>) -> (reg<aie2p.vec256 x2>) asm {
+  %maximum = max.s16x32 %left, %right
+  %selected = vsel.8 %maximum, %right, %predicate
+  return %selected
+}
+
+// ----
+{"format":"loom.low.allocation.v0","function":"partial_predicate_clobber","target":"target","descriptor_set":"amd.xdna.aie2p.core","allocation_mode":"virtual","assignment_count":5,"remark_count":0,"copy_decision_count":0,"spill_count":0,"spill_plan_count":0,"coalesced_copy_count":0,"materialized_copy_count":0,"assignments":[{"index":0,"value":{"id":1,"name":"left","type":"reg<aie2p.vec256 x2>"},"class":{"type_kind":12,"type_kind_name":"register","element_type":0,"element_type_name":null,"register_class":"aie2p.vec256"},"start_point":0,"end_point":1,"unit_count":2,"location":{"kind":"physical_register","base":341,"count":2}},{"index":1,"value":{"id":0,"name":"predicate","type":"reg<aie2p.elpredicate>"},"class":{"type_kind":12,"type_kind_name":"register","element_type":0,"element_type_name":null,"register_class":"aie2p.elpredicate"},"start_point":0,"end_point":2,"unit_count":1,"location":{"kind":"physical_register","base":180,"count":1}},{"index":2,"value":{"id":2,"name":"right","type":"reg<aie2p.vec256 x2>"},"class":{"type_kind":12,"type_kind_name":"register","element_type":0,"element_type_name":null,"register_class":"aie2p.vec256"},"start_point":0,"end_point":2,"unit_count":2,"location":{"kind":"physical_register","base":342,"count":2}},{"index":3,"value":{"id":4,"name":"maximum","type":"reg<aie2p.vec256 x2>"},"class":{"type_kind":12,"type_kind_name":"register","element_type":0,"element_type_name":null,"register_class":"aie2p.vec256"},"start_point":1,"end_point":2,"unit_count":2,"location":{"kind":"physical_register","base":341,"count":2}},{"index":4,"value":{"id":5,"name":"selected","type":"reg<aie2p.vec256 x2>"},"class":{"type_kind":12,"type_kind_name":"register","element_type":0,"element_type_name":null,"register_class":"aie2p.vec256"},"start_point":2,"end_point":3,"unit_count":2,"location":{"kind":"physical_register","base":341,"count":2}}],"spill_plans":[],"copy_decisions":[],"remarks":[]}
+
+// ====
+
+// RUN: emit low-allocation-json @predicate_in_disjoint_branch
+
+// A write in a mutually exclusive branch does not occupy storage in the live
+// predicate branch; sparse liveness permits the fixed register to be reused.
+aie2p.target<core> @target
+
+low.func.def target<amd.xdna.aie2p.core>(@target) @predicate_in_disjoint_branch(%condition: reg<aie2p.er>, %left: reg<aie2p.vec256 x2>, %right: reg<aie2p.vec256 x2>) -> (reg<aie2p.vec256 x2>) asm {
+  %predicate = vlt.s8x64 %left, %right
+  low.cond_br %condition, ^maximum_path, ^selection_path : reg<aie2p.er>
+^maximum_path:
+  %maximum = max.s8x64 %left, %right
+  return %maximum
+^selection_path:
+  %selected = vsel.8 %left, %right, %predicate
+  return %selected
+}
+
+// ----
+{"format":"loom.low.allocation.v0","function":"predicate_in_disjoint_branch","target":"target","descriptor_set":"amd.xdna.aie2p.core","allocation_mode":"virtual","assignment_count":6,"remark_count":0,"copy_decision_count":0,"spill_count":0,"spill_plan_count":0,"coalesced_copy_count":0,"materialized_copy_count":0,"assignments":[{"index":0,"value":{"id":0,"name":"condition","type":"reg<aie2p.er>"},"class":{"type_kind":12,"type_kind_name":"register","element_type":0,"element_type_name":null,"register_class":"aie2p.er"},"start_point":0,"end_point":2,"unit_count":1,"location":{"kind":"physical_register","base":253,"count":1}},{"index":1,"value":{"id":1,"name":"left","type":"reg<aie2p.vec256 x2>"},"class":{"type_kind":12,"type_kind_name":"register","element_type":0,"element_type_name":null,"register_class":"aie2p.vec256"},"start_point":0,"end_point":7,"unit_count":2,"location":{"kind":"physical_register","base":341,"count":2}},{"index":2,"value":{"id":2,"name":"right","type":"reg<aie2p.vec256 x2>"},"class":{"type_kind":12,"type_kind_name":"register","element_type":0,"element_type_name":null,"register_class":"aie2p.vec256"},"start_point":0,"end_point":7,"unit_count":2,"location":{"kind":"physical_register","base":342,"count":2}},{"index":3,"value":{"id":4,"name":"predicate","type":"reg<aie2p.elpredicate>"},"class":{"type_kind":12,"type_kind_name":"register","element_type":0,"element_type_name":null,"register_class":"aie2p.elpredicate"},"start_point":1,"end_point":7,"unit_count":1,"location":{"kind":"physical_register","base":179,"count":1}},{"index":4,"value":{"id":5,"name":"maximum","type":"reg<aie2p.vec256 x2>"},"class":{"type_kind":12,"type_kind_name":"register","element_type":0,"element_type_name":null,"register_class":"aie2p.vec256"},"start_point":4,"end_point":5,"unit_count":2,"location":{"kind":"physical_register","base":341,"count":2}},{"index":5,"value":{"id":6,"name":"selected","type":"reg<aie2p.vec256 x2>"},"class":{"type_kind":12,"type_kind_name":"register","element_type":0,"element_type_name":null,"register_class":"aie2p.vec256"},"start_point":7,"end_point":8,"unit_count":2,"location":{"kind":"physical_register","base":341,"count":2}}],"spill_plans":[],"copy_decisions":[],"remarks":[]}

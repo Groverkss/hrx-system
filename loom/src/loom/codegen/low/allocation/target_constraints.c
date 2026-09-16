@@ -1429,13 +1429,18 @@ static bool loom_low_allocation_fixed_interval_conflicts(
   return false;
 }
 
-bool loom_low_allocation_target_constraints_fixed_value_conflicts(
+bool loom_low_allocation_target_constraints_fixed_storage_conflicts(
     const loom_low_allocation_target_constraints_t* constraints,
     const loom_liveness_analysis_t* liveness,
     const loom_low_allocation_unit_liveness_t* unit_liveness,
     const loom_low_placement_table_t* placement,
     const loom_low_allocation_assignment_t* candidate,
     const loom_value_id_t* ignored_value_ids, uint16_t ignored_value_count) {
+  if (loom_low_allocation_unit_liveness_clobber_conflicts(
+          unit_liveness, constraints->target->descriptor_set, liveness,
+          candidate)) {
+    return true;
+  }
   return loom_low_allocation_fixed_interval_conflicts(
       constraints, liveness, unit_liveness, placement, candidate,
       ignored_value_ids, ignored_value_count, 0,

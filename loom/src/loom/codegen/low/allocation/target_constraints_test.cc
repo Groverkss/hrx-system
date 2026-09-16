@@ -469,7 +469,7 @@ TEST_F(LowAllocationTargetConstraintsTest,
                         ranges[i][0] < start + length && start < ranges[i][1];
           }
           EXPECT_EQ(
-              loom_low_allocation_target_constraints_fixed_value_conflicts(
+              loom_low_allocation_target_constraints_fixed_storage_conflicts(
                   &constraints, &liveness, &unit_liveness, &placement,
                   &candidate, values, ignored_count),
               expected)

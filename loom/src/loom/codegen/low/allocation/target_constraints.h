@@ -341,9 +341,10 @@ uint32_t loom_low_allocation_target_constraints_assigned_location_search_limit(
     const loom_low_allocation_target_constraints_t* constraints,
     uint16_t reg_class_id, loom_low_allocation_location_kind_t location_kind);
 
-// Returns true when |candidate| conflicts with a fixed value. Whole-value hard
-// ties in |placement| share storage even before either interval is assigned.
-bool loom_low_allocation_target_constraints_fixed_value_conflicts(
+// Returns true when |candidate| conflicts with a fixed value or implicit
+// physical write. Whole-value hard ties in |placement| share fixed-value
+// storage even before either interval is assigned; they never excuse clobbers.
+bool loom_low_allocation_target_constraints_fixed_storage_conflicts(
     const loom_low_allocation_target_constraints_t* constraints,
     const loom_liveness_analysis_t* liveness,
     const loom_low_allocation_unit_liveness_t* unit_liveness,

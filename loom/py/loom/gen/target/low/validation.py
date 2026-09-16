@@ -513,6 +513,11 @@ def validate_physical_descriptor_set(
                 continue
             if operand.role is OperandRole.IMPLICIT and OperandFlag.STATE_READ not in operand.flags and OperandFlag.STATE_WRITE not in operand.flags:
                 raise ValueError(f"descriptor set '{descriptor_set.key}' descriptor '{descriptor.key}' physical implicit operand '{operand.field_name}' has no state read or write phase")
+            if operand.role is OperandRole.IMPLICIT and OperandFlag.STATE_WRITE in operand.flags:
+                register_class = physical_classes[0]
+                location_count = len(register_class.physical_registers) or register_class.allocatable_count
+                if location_count != 1 or operand.unit_count != 1:
+                    raise ValueError(f"descriptor '{descriptor.key}' implicit physical write '{operand.field_name}' must name one fixed register")
             _validate_physical_metric(
                 descriptor_set.key,
                 f"operand '{operand.field_name}' unit count",
