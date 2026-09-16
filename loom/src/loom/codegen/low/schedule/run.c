@@ -447,7 +447,12 @@ static iree_status_t loom_low_schedule_initialize_pressure_limits(
           .representative_reg_class_id = (uint16_t)reg_class_id;
     }
     const uint32_t allocatable_count = reg_class->allocatable_count;
-    if (allocatable_count == 0) {
+    // Architectural state lifetimes are serialized by state dependencies.
+    // Occupying a fixed state register needs no allocation headroom. State
+    // sharing an alias namespace still contributes to that storage pool.
+    if (allocatable_count == 0 ||
+        (alias_set_id == 0 &&
+         state->reg_class_state_flags[reg_class_id] != 0)) {
       continue;
     }
     if (alias_set_id != 0) {
@@ -701,7 +706,6 @@ static iree_status_t loom_low_schedule_initialize_descriptor_tables(
         state->scratch_arena, reg_class_count, sizeof(*state->state_read_heads),
         (void**)&state->state_read_heads));
   }
-  IREE_RETURN_IF_ERROR(loom_low_schedule_initialize_pressure_limits(state));
   for (uint32_t operand_index = 0;
        operand_index < descriptor_set->operand_count; ++operand_index) {
     const loom_low_operand_t* operand =
@@ -732,6 +736,7 @@ static iree_status_t loom_low_schedule_initialize_descriptor_tables(
     }
     state->reg_class_state_flags[alt->reg_class_id] |= access_flags;
   }
+  IREE_RETURN_IF_ERROR(loom_low_schedule_initialize_pressure_limits(state));
   IREE_RETURN_IF_ERROR(loom_low_schedule_verify_structural_state_reads(state));
   if (state->call_node_count) {
     IREE_RETURN_IF_ERROR(iree_arena_allocate_array(

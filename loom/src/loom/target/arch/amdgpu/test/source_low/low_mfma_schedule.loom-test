@@ -46,9 +46,9 @@ low.func.def target<amdgpu.cdna4.core>(@target) @gfx950_fp8_materialized_bf16_tw
 // matrix packet.
 // ----
   v_mov_b32 v4, 0
+  s_mov_b32 m0, 0
   v_and_b32 v2, 15, v0
   v_lshlrev_b32 v0, 2, v0
-  s_mov_b32 m0, 0
   v_lshlrev_b32 v3, 6, v2
   global_load_dwordx4 v[8:11], v3, s[0:1] offset:0
   v_lshlrev_b32 v2, 5, v2
@@ -171,9 +171,9 @@ low.func.def target<amdgpu.cdna3.core>(@target) @gfx942_fp8_materialized_bf16_tw
 // even when the RHS needs native FP8-to-F32 conversion and manual BF16 packing.
 // ----
   v_mov_b32 v4, 0
+  s_mov_b32 m0, 0
   v_and_b32 v1, 15, v0
   v_lshlrev_b32 v0, 2, v0
-  s_mov_b32 m0, 0
   v_lshlrev_b32 v2, 5, v1
   global_load_dwordx2 v[8:9], v2, s[0:1] offset:0
   v_lshlrev_b32 v1, 4, v1
@@ -302,9 +302,9 @@ low.func.def target<amdgpu.cdna3.core>(@target) @gfx942_bf16_two_k_block_loads_s
 // well as CDNA4, preserving VMEM latency hiding for BF16 GEMM schedules.
 // ----
   v_mov_b32 v4, 0
+  s_mov_b32 m0, 0
   v_and_b32 v1, 15, v0
   v_lshlrev_b32 v0, 2, v0
-  s_mov_b32 m0, 0
   v_lshlrev_b32 v1, 5, v1
   global_load_dwordx2 v[2:3], v1, s[0:1] offset:0
   global_load_dwordx2 v[8:9], v1, s[2:3] offset:0
