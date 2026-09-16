@@ -8,11 +8,23 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 from loom.target.arch.amd.xdna.aie2p.core_descriptor_spec import _DescriptorSpec
 from loom.target.arch.amd.xdna.aie2p.core_machine_data import DIMENSION_FIELDS
 from loom.target.low_descriptors import DescriptorOpKind, RegisterPart
 
 _TARGET_KEY = "amd.xdna.aie2p"
+_SCALAR_MEMORY_FORMS = (
+    ("load", "LDA", "dms_lda", "i32", 32),
+    ("load", "LDA", "s8", "s8", 8),
+    ("load", "LDA", "u8", "u8", 8),
+    ("load", "LDA", "s16", "s16", 16),
+    ("load", "LDA", "u16", "u16", 16),
+    ("store", "ST", "dms_sts", "i32", 32),
+    ("store", "ST", "s8", "i8", 8),
+    ("store", "ST", "s16", "i16", 16),
+)
 DIMENSION_REGISTER_PARTS = tuple(
     part
     for register_class, fields in DIMENSION_FIELDS.items()
@@ -40,6 +52,28 @@ DIMENSION_REGISTER_PARTS = tuple(
         ),
     )
 )
+
+
+def _dimension_update(spec: _DescriptorSpec, dimension: int) -> _DescriptorSpec:
+    """Ties native count writes to the owning modifier's next aggregate value."""
+
+    register_class = "eD" if dimension == 2 else "eDS"
+    prefix = f"aie2p.{register_class.lower()}"
+    outputs = ("dc",) if dimension == 2 else ("dcl", "dch")
+    return replace(
+        spec,
+        storage_overrides=(*spec.storage_overrides, (outputs[0], register_class)),
+        operand_register_parts=(
+            *spec.operand_register_parts,
+            (outputs[0], f"{prefix}.counts"),
+            ("mod", f"{prefix}.state"),
+        ),
+        encoding_adapter_overrides=(
+            *spec.encoding_adapter_overrides,
+            ("mod", f"LOOM_{register_class}"),
+        ),
+        aggregate_updates=(("mod", outputs),),
+    )
 
 
 def _dimension_descriptor_specs() -> tuple[_DescriptorSpec, ...]:
@@ -98,24 +132,37 @@ def _dimension_descriptor_specs() -> tuple[_DescriptorSpec, ...]:
                     asm_mnemonic=f"mov.{dimension}d.{component}-to-scalar",
                 )
             )
-        count_outputs = ("dc",) if dimension == 2 else ("dcl", "dch")
-        result.append(
-            _DescriptorSpec(
-                f"LDA_{dimension}D_dms_lda",
-                f"{_TARGET_KEY}.load.scalar.i32.{dimension}d",
-                f"memory.load.{dimension}d.i32",
-                f"II_LDA_{dimension}D_dms_lda_eR",
-                storage_overrides=(("dst", "eR"), (count_outputs[0], register_class)),
-                operand_register_parts=(
-                    (count_outputs[0], f"{part_prefix}.counts"),
-                    ("mod", f"{part_prefix}.state"),
-                ),
-                encoding_adapter_overrides=(("mod", f"LOOM_{register_class}"),),
-                aggregate_updates=(("mod", count_outputs),),
-                asm_mnemonic=f"lda.i32.{dimension}d",
-                memory_width_bits=32,
+        for operation, prefix, suffix, shape, width in _SCALAR_MEMORY_FORMS:
+            form = f"{prefix}_{dimension}D_{suffix}"
+            mnemonic, operand = ("lda", "dst") if operation == "load" else ("st", "src")
+            result.append(
+                _dimension_update(
+                    _DescriptorSpec(
+                        form,
+                        f"{_TARGET_KEY}.{operation}.scalar.{shape}.{dimension}d",
+                        f"memory.{operation}.{dimension}d.{shape}",
+                        f"II_{form}{'_eR' if width == 32 else ''}",
+                        storage_overrides=((operand, "eR"),),
+                        asm_mnemonic=f"{mnemonic}.{shape}.{dimension}d",
+                        memory_width_bits=width,
+                    ),
+                    dimension,
+                )
             )
-        )
+        for lane in ("a", "b", "s"):
+            form = f"PADD{lane.upper()}_{dimension}D"
+            result.append(
+                _dimension_update(
+                    _DescriptorSpec(
+                        form,
+                        f"{_TARGET_KEY}.address.add.{lane}.{dimension}d",
+                        f"address.add.{dimension}d.i20",
+                        f"II_{form}",
+                        asm_mnemonic=f"padd{lane}.{dimension}d",
+                    ),
+                    dimension,
+                )
+            )
     return tuple(result)
 
 
@@ -157,17 +204,8 @@ def _address_descriptor_specs() -> tuple[_DescriptorSpec, ...]:
     for immediate, suffix in ((False, ""), (True, "_imm")):
         addressing = "immediate" if immediate else "register"
         mnemonic_suffix = "" if immediate else ".modifier"
-        for operation, form_prefix, shape, width in (
-            ("load", "LDA_dms_lda", "i32", 32),
-            ("load", "LDA_s8", "s8", 8),
-            ("load", "LDA_u8", "u8", 8),
-            ("load", "LDA_s16", "s16", 16),
-            ("load", "LDA_u16", "u16", 16),
-            ("store", "ST_dms_sts", "i32", 32),
-            ("store", "ST_s8", "i8", 8),
-            ("store", "ST_s16", "i16", 16),
-        ):
-            form = f"{form_prefix}_pstm_nrm{suffix}"
+        for operation, prefix, form_suffix, shape, width in _SCALAR_MEMORY_FORMS:
+            form = f"{prefix}_{form_suffix}_pstm_nrm{suffix}"
             mnemonic, operand = ("lda", "dst") if operation == "load" else ("st", "src")
             result.append(
                 _DescriptorSpec(

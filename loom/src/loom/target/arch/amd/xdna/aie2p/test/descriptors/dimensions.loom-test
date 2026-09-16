@@ -97,3 +97,51 @@ low.func.def target<amd.xdna.aie2p.core> @incomplete_3d() asm {
   %outer = mov.3d.outer.count-to-scalar %wrap
   return
 }
+
+// ====
+
+// A narrow store invalidates earlier loads and advances both counters together.
+// RUN: with-low-asm pass low-cse,low-dce
+
+low.func.def target<amd.xdna.aie2p.core> @store_recurrence(%value: reg<aie2p.er>, %observed: reg<aie2p.ep>, %destination: reg<aie2p.ep>, %dimension: reg<aie2p.eds>) -> (reg<aie2p.er>, reg<aie2p.er>, reg<aie2p.ep>, reg<aie2p.er>, reg<aie2p.er>) asm {
+  %before = lda %observed, 0
+  %next_pointer, %next_dimension = st.i16.3d %value, %destination, %dimension
+  %after = lda %observed, 0
+  %inner = mov.3d.inner.count-to-scalar %next_dimension
+  %outer = mov.3d.outer.count-to-scalar %next_dimension
+  return %before, %after, %next_pointer, %inner, %outer
+}
+
+// ====
+
+// Pure address updates disappear when their pointer and count results are dead.
+// A live count preserves its update even when the new pointer is unused.
+// RUN: with-low-asm pass low-cse,low-dce
+
+low.func.def target<amd.xdna.aie2p.core> @address_recurrence(%pointer: reg<aie2p.ep>, %dimension: reg<aie2p.ed>, %other_pointer: reg<aie2p.ep>, %other_dimension: reg<aie2p.ed>) -> (reg<aie2p.er>) asm {
+  %unused_pointer, %unused_dimension = paddb.2d %other_pointer, %other_dimension
+  %first_pointer, %first_dimension = padda.2d %pointer, %dimension
+  %next_pointer, %next_dimension = padds.2d %first_pointer, %first_dimension
+  %count = mov.2d.count-to-scalar %next_dimension
+  return %count
+}
+
+// ----
+low.func.def target<amd.xdna.aie2p.core> @address_recurrence(%pointer: reg<aie2p.ep>, %dimension: reg<aie2p.ed>, %other_pointer: reg<aie2p.ep>, %other_dimension: reg<aie2p.ed>) -> (reg<aie2p.er>) asm {
+  %first_pointer, %first_dimension = padda.2d %pointer, %dimension
+  %next_pointer, %next_dimension = padds.2d %first_pointer, %first_dimension
+  %count = mov.2d.count-to-scalar %next_dimension
+  return %count
+}
+
+// ====
+
+// A standalone address update consumes the state just like a memory operation.
+// RUN: verify
+
+low.func.def target<amd.xdna.aie2p.core> @consumed_address_state(%pointer: reg<aie2p.ep>, %dimension: reg<aie2p.eds>) asm {
+  %next_pointer, %next_dimension = paddb.3d %pointer, %dimension
+  // ERROR@+1: DOMINANCE/002
+  %stale = mov.3d.outer.count-to-scalar %dimension
+  return
+}
