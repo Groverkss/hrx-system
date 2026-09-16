@@ -12,6 +12,7 @@
 #include "iree/base/api.h"
 #include "iree/base/internal/arena.h"
 #include "loom/format/bytecode/format.h"
+#include "loom/format/bytecode/writer/type_index.h"
 #include "loom/format/low_repr.h"
 #include "loom/ir/context.h"
 #include "loom/ir/ir.h"
@@ -37,14 +38,6 @@ typedef struct loom_bytecode_op_entry_t {
   // Bytecode string-table ID naming |kind|.
   uint32_t string_writer_id;
 } loom_bytecode_op_entry_t;
-
-// Structural type lookup entry used while assigning bytecode type IDs.
-typedef struct loom_bytecode_type_index_entry_t {
-  // Structural hash of the module type.
-  uint32_t hash;
-  // Module type-table index or UINT32_MAX for an empty slot.
-  uint32_t module_index;
-} loom_bytecode_type_index_entry_t;
 
 // First-use-ordered bytecode catalogs derived while streaming one module.
 typedef struct loom_bytecode_numbering_t {
@@ -95,10 +88,9 @@ typedef struct loom_bytecode_numbering_t {
   struct {
     // Bytecode type IDs indexed by module type-table index.
     uint32_t* writer_ids_by_module_index;
-    // Structural reverse lookup from wire type to module type-table index.
-    loom_bytecode_type_index_entry_t* index_entries;
-    // Power-of-two capacity of |index_entries|.
-    iree_host_size_t index_capacity;
+    // Retained projection from type storage to its wire-equivalent module
+    // entry.
+    loom_bytecode_type_index_t index;
     // Module type-table indices indexed by bytecode type ID.
     iree_host_size_t* module_indices_by_writer_id;
     // Number of assigned bytecode type IDs.

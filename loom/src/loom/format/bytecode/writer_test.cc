@@ -1002,6 +1002,78 @@ TEST_F(WriterTest, CanonicalAttrDictInputOrderDoesNotAffectBytes) {
   loom_module_free(module_b);
 }
 
+TEST_F(WriterTest, TypeCatalogBytesDoNotDependOnNestedPayloadSharing) {
+  std::vector<uint8_t> canonical_bytes;
+  for (int variant = 0; variant < 2; ++variant) {
+    loom_module_t* module = CreateModule("type_catalog");
+    loom_type_id_t child = LOOM_TYPE_ID_INVALID;
+    IREE_ASSERT_OK(loom_module_intern_type_id(
+        module, loom_type_scalar(LOOM_SCALAR_TYPE_F32), &child));
+    for (int level = 0; level < 8; ++level) {
+      alignas(loom_func_type_data_t) unsigned char
+          storage[sizeof(loom_func_type_data_t) + 2 * sizeof(loom_type_t)] = {};
+      auto* data = reinterpret_cast<loom_func_type_data_t*>(storage);
+      data->arg_count = 2;
+      data->types[0] = data->types[1] = module->types.entries[child];
+      const loom_type_id_t dependencies[] = {child, child};
+      IREE_ASSERT_OK(loom_module_intern_topological_type_id(
+          module, loom_type_function(data), dependencies, 2, &child));
+    }
+
+    // The two public construction paths retain identical types with different
+    // payload sharing. Both must number the same structural dependencies.
+    loom_type_id_t result = LOOM_TYPE_ID_INVALID;
+    IREE_ASSERT_OK(loom_module_intern_type_id(
+        module, loom_type_scalar(LOOM_SCALAR_TYPE_I32), &result));
+    loom_type_id_t parent = LOOM_TYPE_ID_INVALID;
+    if (variant == 0) {
+      alignas(loom_func_type_data_t) unsigned char
+          storage[sizeof(loom_func_type_data_t) + 2 * sizeof(loom_type_t)] = {};
+      auto* data = reinterpret_cast<loom_func_type_data_t*>(storage);
+      data->arg_count = data->result_count = 1;
+      data->types[0] = module->types.entries[child];
+      data->types[1] = module->types.entries[result];
+      const loom_type_id_t dependencies[] = {child, result};
+      IREE_ASSERT_OK(loom_module_intern_topological_type_id(
+          module, loom_type_function(data), dependencies, 2, &parent));
+    } else {
+      loom_type_t argument_type = module->types.entries[child];
+      loom_type_t result_type = module->types.entries[result];
+      loom_type_t parent_type;
+      IREE_ASSERT_OK(loom_module_intern_function_type(
+          module, &argument_type, 1, &result_type, 1, &parent_type));
+      IREE_ASSERT_OK(loom_module_intern_type_id(module, parent_type, &parent));
+    }
+
+    loom_string_id_t name = LOOM_STRING_ID_INVALID;
+    loom_string_id_t key = LOOM_STRING_ID_INVALID;
+    IREE_ASSERT_OK(
+        loom_module_intern_string(module, IREE_SV("catalog"), &name));
+    IREE_ASSERT_OK(loom_module_intern_string(module, IREE_SV("type"), &key));
+    loom_symbol_id_t symbol = LOOM_SYMBOL_ID_INVALID;
+    IREE_ASSERT_OK(loom_module_add_symbol(module, name, &symbol));
+    loom_builder_t builder;
+    loom_builder_initialize(module, &module->arena, loom_module_block(module),
+                            &builder);
+    const loom_named_attr_t entry = {key, {}, loom_attr_type(parent)};
+    loom_op_t* record = nullptr;
+    IREE_ASSERT_OK(loom_test_record_build(
+        &builder, LOOM_TEST_RECORD_BUILD_FLAG_HAS_DICT, 0, {0, symbol},
+        loom_make_named_attr_slice(&entry, 1), LOOM_LOCATION_NONE, &record));
+
+    auto bytes = WriteModule(module);
+    size_t offset = SectionPayloadOffset(bytes, LOOM_BYTECODE_SECTION_TYPES);
+    ASSERT_NE(offset, 0u);
+    EXPECT_EQ(ReadUVarint(bytes, &offset), 11u);
+    if (variant == 0) {
+      canonical_bytes = bytes;
+    } else {
+      EXPECT_EQ(bytes, canonical_bytes);
+    }
+    loom_module_free(module);
+  }
+}
+
 TEST_F(WriterTest, OptionalAbsentBodyAttrWrites) {
   loom_module_t* module = CreateModule("optional_absent_attr");
 

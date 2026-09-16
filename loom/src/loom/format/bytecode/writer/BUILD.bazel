@@ -4,7 +4,7 @@
 # See https://llvm.org/LICENSE.txt for license information.
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
-load("//loom/build_tools/bazel:build_defs.bzl", "loom_cc_library")
+load("//loom/build_tools/bazel:build_defs.bzl", "loom_cc_library", "loom_cc_test")
 
 package(
     default_visibility = ["//visibility:private"],
@@ -42,8 +42,14 @@ loom_cc_library(
 
 loom_cc_library(
     name = "catalog",
-    srcs = ["catalog.c"],
-    hdrs = ["catalog.h"],
+    srcs = [
+        "catalog.c",
+        "type_index.c",
+    ],
+    hdrs = [
+        "catalog.h",
+        "type_index.h",
+    ],
     visibility = ["//loom/src/loom/format/bytecode:__pkg__"],
     deps = [
         "//loom/src/loom/format:low_repr",
@@ -66,6 +72,19 @@ loom_cc_library(
         "//loom/src/loom/ir",
         "//runtime/src/iree/base",
         "//runtime/src/iree/io:stream",
+    ],
+)
+
+loom_cc_test(
+    name = "type_index_test",
+    srcs = ["type_index_test.cc"],
+    deps = [
+        ":catalog",
+        "//loom/src/loom/ir",
+        "//runtime/src/iree/base",
+        "//runtime/src/iree/base/internal:arena",
+        "//runtime/src/iree/testing:gtest",
+        "//runtime/src/iree/testing:gtest_main",
     ],
 )
 

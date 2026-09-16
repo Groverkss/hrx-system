@@ -46,8 +46,10 @@ loom_cc_library(
     catalog
   HDRS
     "catalog.h"
+    "type_index.h"
   SRCS
     "catalog.c"
+    "type_index.c"
   DEPS
     iree::base
     iree::base::internal::arena
@@ -72,6 +74,20 @@ loom_cc_library(
     loom::format::bytecode::varint
     loom::ir
   PUBLIC
+)
+
+loom_cc_test(
+  NAME
+    type_index_test
+  SRCS
+    "type_index_test.cc"
+  DEPS
+    ::catalog
+    iree::base
+    iree::base::internal::arena
+    iree::testing::gtest
+    iree::testing::gtest_main
+    loom::ir
 )
 
 loom_cc_library(
