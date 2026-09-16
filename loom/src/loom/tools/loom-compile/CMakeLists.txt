@@ -139,6 +139,7 @@ loom_cc_test(
     iree::testing::gtest_main
     loom::format::text::parser
     loom::ir
+    loom::ops::low
     loom::ops::target
     loom::testing::context
     loom::testing::module_ptr

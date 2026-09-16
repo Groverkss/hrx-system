@@ -56,6 +56,14 @@ static iree_status_t loom_compile_request_lookup_root(
   return iree_ok_status();
 }
 
+static bool loom_compile_request_is_array_program(const loom_module_t* module,
+                                                  const loom_symbol_t* symbol) {
+  const loom_func_like_t function =
+      loom_func_like_const_cast(module, symbol->defining_op);
+  return loom_func_like_isa(function) &&
+         loom_func_like_abi(function) == LOOM_TARGET_ABI_ARRAY_PROGRAM;
+}
+
 static iree_status_t loom_compile_request_classify_symbol(
     const loom_module_t* module, const loom_symbol_t* symbol,
     loom_compile_product_t* out_product) {
@@ -88,7 +96,9 @@ static iree_status_t loom_compile_request_classify_symbol(
     *out_product = LOOM_COMPILE_PRODUCT_COMMAND;
     return iree_ok_status();
   }
-  if (loom_symbol_implements(symbol, LOOM_SYMBOL_INTERFACE_KERNEL)) {
+  if (loom_symbol_implements(symbol, LOOM_SYMBOL_INTERFACE_KERNEL) ||
+      loom_symbol_implements(symbol, LOOM_SYMBOL_INTERFACE_KERNEL_ENTRY) ||
+      loom_compile_request_is_array_program(module, symbol)) {
     *out_product = LOOM_COMPILE_PRODUCT_KERNEL;
     return iree_ok_status();
   }
@@ -221,21 +231,27 @@ static bool loom_compile_request_is_concrete_scoped_pipeline(
 }
 
 static bool loom_compile_request_is_concrete_kernel_entry(
-    const loom_symbol_t* symbol) {
-  return symbol->defining_op != NULL &&
-         loom_symbol_implements(symbol, LOOM_SYMBOL_INTERFACE_KERNEL_ENTRY) &&
-         !loom_symbol_definition_is_declaration(symbol->definition);
+    const loom_module_t* module, const loom_symbol_t* symbol) {
+  if (symbol->defining_op == NULL ||
+      loom_symbol_definition_is_declaration(symbol->definition)) {
+    return false;
+  }
+  return loom_symbol_implements(symbol, LOOM_SYMBOL_INTERFACE_KERNEL_ENTRY) ||
+         (iree_any_bit_set(symbol->flags,
+                           LOOM_SYMBOL_FLAG_PUBLIC | LOOM_SYMBOL_FLAG_RETAIN) &&
+          loom_compile_request_is_array_program(module, symbol));
 }
 
 bool loom_compile_request_symbol_is_implicit_root(
-    loom_compile_product_t product, const loom_symbol_t* symbol) {
+    const loom_module_t* module, loom_compile_product_t product,
+    const loom_symbol_t* symbol) {
   switch (product) {
     case LOOM_COMPILE_PRODUCT_COMMAND:
       return loom_compile_request_is_concrete_public_command(symbol) ||
              loom_compile_request_is_concrete_scoped_pipeline(
                  symbol, LOOM_PIPELINE_DEF_SCOPE_COMMAND);
     case LOOM_COMPILE_PRODUCT_KERNEL:
-      return loom_compile_request_is_concrete_kernel_entry(symbol) ||
+      return loom_compile_request_is_concrete_kernel_entry(module, symbol) ||
              loom_compile_request_is_concrete_scoped_pipeline(
                  symbol, LOOM_PIPELINE_DEF_SCOPE_KERNEL);
     case LOOM_COMPILE_PRODUCT_INVALID:
@@ -251,7 +267,7 @@ static void loom_compile_request_collect_implicit_commands(
   for (iree_host_size_t i = 0; i < module->symbols.count; ++i) {
     const loom_symbol_t* symbol = &module->symbols.entries[i];
     if (loom_compile_request_symbol_is_implicit_root(
-            LOOM_COMPILE_PRODUCT_COMMAND, symbol)) {
+            module, LOOM_COMPILE_PRODUCT_COMMAND, symbol)) {
       ++summary->root_count;
     }
   }
@@ -263,7 +279,7 @@ static iree_status_t loom_compile_request_collect_implicit_kernels(
   for (iree_host_size_t i = 0; i < module->symbols.count; ++i) {
     const loom_symbol_t* symbol = &module->symbols.entries[i];
     if (!loom_compile_request_symbol_is_implicit_root(
-            LOOM_COMPILE_PRODUCT_KERNEL, symbol)) {
+            module, LOOM_COMPILE_PRODUCT_KERNEL, symbol)) {
       continue;
     }
     ++summary->root_count;
@@ -330,7 +346,7 @@ static iree_status_t loom_compile_request_select_roots(
       return iree_make_status(
           IREE_STATUS_INVALID_ARGUMENT,
           "product 'kernel' requires a kernel entry or a public or retained "
-          "kernel-scoped pipeline root");
+          "kernel-scoped pipeline or array program root");
     }
     return iree_ok_status();
   }

@@ -107,7 +107,7 @@ IREE_FLAG_LIST(string, root,
                "When omitted, --product selects its canonical roots; without "
                "either, public or retained command programs take precedence, "
                "then kernel entries and public or retained kernel-scoped "
-               "pipelines, then the whole module.");
+               "pipelines or array programs, then the whole module.");
 IREE_FLAG(string, pipeline, "default",
           "Pass pipeline to run before artifact emission. Use 'default' or "
           "empty for the selected format's default compile pipeline. 'none' "
@@ -316,8 +316,8 @@ static iree_status_t loom_compile_select_roots(
   if (roots.count == 0 && request->product == LOOM_COMPILE_PRODUCT_KERNEL) {
     for (iree_host_size_t i = 0; i < run_module->module->symbols.count; ++i) {
       const loom_symbol_t* symbol = &run_module->module->symbols.entries[i];
-      if (loom_compile_request_symbol_is_implicit_root(request->product,
-                                                       symbol)) {
+      if (loom_compile_request_symbol_is_implicit_root(
+              run_module->module, request->product, symbol)) {
         ++roots.count;
       }
     }
@@ -325,7 +325,7 @@ static iree_status_t loom_compile_select_roots(
       return iree_make_status(
           IREE_STATUS_INVALID_ARGUMENT,
           "kernel product requires a kernel entry or a public or retained "
-          "kernel-scoped pipeline root");
+          "kernel-scoped pipeline or array program root");
     }
     IREE_RETURN_IF_ERROR(iree_allocator_malloc_array(
         allocator, roots.count, sizeof(*implicit_root_values),
@@ -333,8 +333,8 @@ static iree_status_t loom_compile_select_roots(
     iree_host_size_t root_ordinal = 0;
     for (iree_host_size_t i = 0; i < run_module->module->symbols.count; ++i) {
       const loom_symbol_t* symbol = &run_module->module->symbols.entries[i];
-      if (!loom_compile_request_symbol_is_implicit_root(request->product,
-                                                        symbol)) {
+      if (!loom_compile_request_symbol_is_implicit_root(
+              run_module->module, request->product, symbol)) {
         continue;
       }
       implicit_root_values[root_ordinal++] =

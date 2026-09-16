@@ -31,9 +31,11 @@ iree_string_view_t loom_compile_product_name(loom_compile_product_t product);
 // Returns true when |symbol| is selected by |product|'s implicit-root policy.
 // Module products operate on the whole module and therefore have no symbol
 // roots. Explicit roots are classified independently and need not satisfy this
-// policy.
+// policy. Kernel roots include Low kernel entries and public or retained array
+// programs as well as source kernels and kernel-scoped pipelines.
 bool loom_compile_request_symbol_is_implicit_root(
-    loom_compile_product_t product, const loom_symbol_t* symbol);
+    const loom_module_t* module, loom_compile_product_t product,
+    const loom_symbol_t* symbol);
 
 // Concrete producer selected for one compile request.
 typedef enum loom_compile_producer_kind_e {
