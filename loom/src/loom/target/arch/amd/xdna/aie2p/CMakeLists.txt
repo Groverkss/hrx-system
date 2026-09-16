@@ -466,6 +466,7 @@ loom_check_test_suite(
     "test/descriptors/dimensions.loom-test"
     "test/descriptors/fifo.loom-test"
     "test/descriptors/fused_vector_memory.loom-test"
+    "test/descriptors/integer_narrowing.loom-test"
     "test/descriptors/lookup_memory.loom-test"
     "test/descriptors/memory_immediates.loom-test"
     "test/descriptors/postincrement.loom-test"

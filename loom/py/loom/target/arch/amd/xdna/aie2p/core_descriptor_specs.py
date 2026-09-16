@@ -268,7 +268,7 @@ def _packed_i4_unpack_descriptor_specs() -> tuple[_DescriptorSpec, ...]:
 
 
 def _integer_conversion_descriptor_specs() -> tuple[_DescriptorSpec, ...]:
-    """Selects exact native integer widening and truncating pack forms."""
+    """Selects exact native integer widening and configured pack forms."""
 
     widen_specs = tuple(
         _DescriptorSpec(
@@ -305,17 +305,18 @@ def _integer_conversion_descriptor_specs() -> tuple[_DescriptorSpec, ...]:
     )
     pack_specs = tuple(
         _DescriptorSpec(
-            f"VPACK_mv_pack_{width}_packSign0",
-            f"{_TARGET_KEY}.pack.{width}.trunc.configured",
-            f"convert.integer.pack.{width}.trunc.configured",
-            f"II_VPACK_mv_pack_{width}_packSign0",
+            f"VPACK_mv_pack_{width}_packSign{sign_bit}",
+            f"{_TARGET_KEY}.pack.{width}.{signedness}.configured",
+            f"convert.integer.pack.{width}.{signedness}.configured",
+            f"II_VPACK_mv_pack_{width}_packSign{sign_bit}",
             storage_overrides=storage_overrides,
-            asm_mnemonic=f"vpack.{width}.trunc",
+            asm_mnemonic=f"vpack.{width}.{signedness}",
         )
         for width, storage_overrides in (
             ("w", ()),
             ("x", (("src", "VEC256"),)),
         )
+        for signedness, sign_bit in (("trunc", 0), ("signed", 1))
     )
     return (*widen_specs, *pack_specs)
 
@@ -350,6 +351,46 @@ def _fused_memory_descriptor_family(
             memory_width_bits=width,
         )
         result.append(_dimension_update(spec, dimension) if dimension else spec)
+    return tuple(result)
+
+
+def _integer_narrowing_descriptor_specs() -> tuple[_DescriptorSpec, ...]:
+    """Selects native SRS conversion to registers or exact-width memory."""
+
+    result = []
+    for factor, accumulator, vector, width, memory_stem in (
+        (2, "b", "w", 256, "SRS_2x_dmw_sts_srs_bm"),
+        (2, "c", "x", 512, "SRS_2x_dm_sts_srs_cm"),
+        (4, "c", "w", 256, "SRS_4x_dm_sts_srs_cm"),
+        (4, "d", "x", 512, "SRS_4x_dmx_sts_srs_dm"),
+    ):
+        shape = f"{factor}x.{accumulator}-to-{vector}"
+        for signedness, sign_bit in (("unsigned", 0), ("signed", 1)):
+            form = f"VSRS_{factor}x_mv_{vector}_srs_{accumulator}m_srsSign{sign_bit}"
+            key = f"narrow.{shape}.{signedness}.configured"
+            tag = f"convert.integer.{key}"
+            result.append(
+                _DescriptorSpec(
+                    form,
+                    f"{_TARGET_KEY}.{key}",
+                    tag,
+                    f"II_{form}",
+                    storage_overrides=(("src", "mBMs"),),
+                    asm_mnemonic=f"vsrs.{shape}.{signedness}",
+                )
+            )
+            result.extend(
+                _fused_memory_descriptor_family(
+                    prefix="VST",
+                    stem=memory_stem,
+                    suffix=f"_srsSign{sign_bit}",
+                    key=f"store.{key}",
+                    tag=f"{tag}.memory.store",
+                    mnemonic=f"vst.srs.{shape}.{signedness}",
+                    width=width,
+                    storage=(("src", "mBMs"),),
+                )
+            )
     return tuple(result)
 
 
@@ -437,14 +478,15 @@ def _fused_vector_memory_descriptor_specs() -> tuple[_DescriptorSpec, ...]:
             ("w", 256, "PACK_dmw_sts_pack", ()),
             ("x", 512, "PACK_dmx_sts_pack", (("src", "VEC256"),)),
         )
+        for signedness, sign_bit in (("trunc", 0), ("signed", 1))
         for spec in _fused_memory_descriptor_family(
             prefix="VST",
             stem=form_stem,
-            suffix="_packSign0",
-            key=f"store.pack.{width}.trunc.configured",
-            tag=f"convert.integer.pack.{width}.trunc.configured.memory.store",
+            suffix=f"_packSign{sign_bit}",
+            key=f"store.pack.{width}.{signedness}.configured",
+            tag=f"convert.integer.pack.{width}.{signedness}.configured.memory.store",
             storage=storage,
-            mnemonic=f"vst.pack.{width}.trunc",
+            mnemonic=f"vst.pack.{width}.{signedness}",
             width=memory_width_bits,
         )
     )
@@ -1059,6 +1101,7 @@ _BASE_DESCRIPTOR_SPECS = (
     *_packed_dot_descriptor_specs(),
     *_packed_i4_unpack_descriptor_specs(),
     *_integer_conversion_descriptor_specs(),
+    *_integer_narrowing_descriptor_specs(),
     *_fused_vector_memory_descriptor_specs(),
     *_accumulator_memory_descriptor_specs(),
     _DescriptorSpec(

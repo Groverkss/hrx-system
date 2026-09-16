@@ -387,6 +387,7 @@ def test_fused_vector_memory_descriptors_preserve_conversion_and_memory_contract
                 "amd.xdna.aie2p.load.unpack.",
                 "amd.xdna.aie2p.load.widen.",
                 "amd.xdna.aie2p.store.convert.",
+                "amd.xdna.aie2p.store.narrow.",
                 "amd.xdna.aie2p.store.pack.",
             )
         ) or key.endswith(".volatile"):
@@ -679,6 +680,7 @@ def test_fused_address_updates_preserve_numeric_storage_and_state() -> None:
                 "amd.xdna.aie2p.load.unpack.",
                 "amd.xdna.aie2p.load.widen.",
                 "amd.xdna.aie2p.store.convert.",
+                "amd.xdna.aie2p.store.narrow.",
                 "amd.xdna.aie2p.store.pack.",
             )
         ):

@@ -1,0 +1,72 @@
+// SRS observes rounding, saturation and accumulator width independently.
+// Repeating the data operand across a control write cannot reuse a result.
+// RUN: with-low-asm pass low-cse,low-dce
+
+low.func.def target<amd.xdna.aie2p.core> @narrow_controls(%value: reg<aie2p.mbms>, %shift: reg<aie2p.es>) -> (reg<aie2p.vec256>, reg<aie2p.vec256>, reg<aie2p.vec256>, reg<aie2p.vec256>) asm {
+  set.srs-mode 0
+  set.saturation 0
+  set.rounding 0
+  %floor = vsrs.2x.b-to-w.signed %value, %shift
+  set.rounding 12
+  %nearest = vsrs.2x.b-to-w.signed %value, %shift
+  set.saturation 1
+  %saturated = vsrs.2x.b-to-w.signed %value, %shift
+  set.srs-mode 1
+  %wide = vsrs.2x.b-to-w.signed %value, %shift
+  return %floor, %nearest, %saturated, %wide
+}
+
+// ====
+
+// Signed packing observes both packed lane width and saturation mode.
+// RUN: with-low-asm pass low-cse,low-dce
+
+low.func.def target<amd.xdna.aie2p.core> @pack_controls(%value: reg<aie2p.vec256 x4>) -> (reg<aie2p.vec256 x2>, reg<aie2p.vec256 x2>, reg<aie2p.vec256 x2>) asm {
+  set.pack-size 0
+  set.saturation 0
+  %nibbles = vpack.x.signed %value
+  set.pack-size 1
+  %bytes = vpack.x.signed %value
+  set.saturation 1
+  %saturated = vpack.x.signed %value
+  return %nibbles, %bytes, %saturated
+}
+
+// ====
+
+// Fused narrowing stores consume the full accumulator and retain each address
+// recurrence even when only the final dimension state is observed.
+// RUN: with-low-asm pass low-cse,low-dce
+
+low.func.def target<amd.xdna.aie2p.core> @narrow_dimensions(%value: reg<aie2p.mbms x4>, %pointer: reg<aie2p.ep>, %dimension: reg<aie2p.eds>, %shift: reg<aie2p.es>) -> (reg<aie2p.eds>) asm {
+  set.srs-mode 1
+  set.saturation 1
+  set.rounding 12
+  %pointer1, %dimension1 = vst.srs.4x.d-to-x.signed.3d %value, %shift, %pointer, %dimension
+  %pointer2, %dimension2 = vst.srs.4x.d-to-x.unsigned.3d %value, %shift, %pointer1, %dimension1
+  return %dimension2
+}
+
+// ====
+
+// Packing preserves the full vector source and the owning dimension update.
+// RUN: with-low-asm pass low-cse,low-dce
+
+low.func.def target<amd.xdna.aie2p.core> @pack_dimensions(%value: reg<aie2p.vec256 x2>, %pointer: reg<aie2p.ep>, %dimension: reg<aie2p.ed>) -> (reg<aie2p.ed>) asm {
+  set.pack-size 0
+  set.saturation 1
+  %pointer1, %dimension1 = vst.pack.w.signed.2d %value, %pointer, %dimension
+  return %dimension1
+}
+
+// ====
+
+// A fused narrowing store consumes the old dimension just like a raw store.
+// RUN: verify
+
+low.func.def target<amd.xdna.aie2p.core> @consumed_dimension(%value: reg<aie2p.mbms x2>, %pointer: reg<aie2p.ep>, %dimension: reg<aie2p.eds>, %shift: reg<aie2p.es>) asm {
+  %pointer1, %dimension1 = vst.srs.2x.c-to-x.unsigned.3d %value, %shift, %pointer, %dimension
+  // ERROR@+1: DOMINANCE/002
+  %stale = mov.3d.outer.count-to-scalar %dimension
+  return
+}
