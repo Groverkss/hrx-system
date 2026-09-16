@@ -91,26 +91,26 @@ low.func.def target<amdgpu.cdna3.core>(@target) abi(hal_kernel) @bf16_score_gath
   %28 = slice %key_cache_view[0] : reg<amdgpu.sgpr x2> -> reg<amdgpu.sgpr>
   %29 = slice %key_cache_view[1] : reg<amdgpu.sgpr x2> -> reg<amdgpu.sgpr>
   %30 = s_mov_b32 0
-  %31 = s_add_u32 %28, %27
-  %32 = s_addc_u32 %29, %30
-  %33 = concat(%31, %32) : (reg<amdgpu.sgpr>, reg<amdgpu.sgpr>) -> reg<amdgpu.sgpr x2>
-  %34 = s_mov_b32_m0_imm 0
-  %35 = global_load_d16_b16_saddr %26, %33, %34
-  %37 = s_lshl_b32_rhs_inline %token_offset, 1
-  %41 = s_add_u32 %28, %37
-  %42 = s_addc_u32 %29, %30
-  %43 = concat(%41, %42) : (reg<amdgpu.sgpr>, reg<amdgpu.sgpr>) -> reg<amdgpu.sgpr x2>
-  %44 = s_mov_b32_m0_imm 0
-  %45 = global_load_d16_b16_saddr %26, %43, %44 {offset = 14}
-  %46 = v_bfe_u32_offset_0_width_16_low16 %35
-  %47 = v_lshlrev_b32_src0_16_low16 %45
-  %key_pair = v_or_b32 %46, %47
-  %49 = v_lshlrev_b32_lit %query, 16
-  %50 = v_lshlrev_b32_lit %key_pair, 16
-  %51 = v_and_b32_lit %query, 4294901760
-  %52 = v_and_b32_lit %key_pair, 4294901760
-  %53 = v_fma_f32 %49, %50, %acc
-  %score = v_fma_f32 %51, %52, %53
+  %31, %32 = s_add_co_u32 %28, %27
+  %33, %34 = s_addc_u32 %29, %30, %32
+  %35 = concat(%31, %33) : (reg<amdgpu.sgpr>, reg<amdgpu.sgpr>) -> reg<amdgpu.sgpr x2>
+  %36 = s_mov_b32_m0_imm 0
+  %37 = global_load_d16_b16_saddr %26, %35, %36
+  %39 = s_lshl_b32_rhs_inline %token_offset, 1
+  %43, %44 = s_add_co_u32 %28, %39
+  %45, %46 = s_addc_u32 %29, %30, %44
+  %47 = concat(%43, %45) : (reg<amdgpu.sgpr>, reg<amdgpu.sgpr>) -> reg<amdgpu.sgpr x2>
+  %48 = s_mov_b32_m0_imm 0
+  %49 = global_load_d16_b16_saddr %26, %47, %48 {offset = 14}
+  %50 = v_bfe_u32_offset_0_width_16_low16 %37
+  %51 = v_lshlrev_b32_src0_16_low16 %49
+  %key_pair = v_or_b32 %50, %51
+  %53 = v_lshlrev_b32_lit %query, 16
+  %54 = v_lshlrev_b32_lit %key_pair, 16
+  %55 = v_and_b32_lit %query, 4294901760
+  %56 = v_and_b32_lit %key_pair, 4294901760
+  %57 = v_fma_f32 %53, %54, %acc
+  %score = v_fma_f32 %55, %56, %57
   return %score
 }
 

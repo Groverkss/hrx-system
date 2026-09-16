@@ -361,8 +361,9 @@ def _validate_rel32_descriptor_contract(
     descriptor = _descriptor_by_key(descriptor_set, descriptor_key)
     if descriptor.encoding_format_id != AMDGPU_ENCODING_FORMAT_SOP2_LITERAL:
         raise ValueError(f"AMDGPU descriptor set '{descriptor_set.key}' rel32 descriptor '{descriptor_key}' must use SOP2 literal encoding")
-    if len(descriptor.operands) < 2 or descriptor.operands[0].role is not OperandRole.RESULT or descriptor.operands[1].role is not OperandRole.OPERAND:
-        raise ValueError(f"AMDGPU descriptor set '{descriptor_set.key}' rel32 descriptor '{descriptor_key}' must begin with one result and the PC lhs operand")
+    result_count = sum(operand.role is OperandRole.RESULT for operand in descriptor.operands)
+    if result_count == 0 or result_count >= len(descriptor.operands) or descriptor.operands[result_count].role is not OperandRole.OPERAND or descriptor.operands[result_count].field_name != "lhs":
+        raise ValueError(f"AMDGPU descriptor set '{descriptor_set.key}' rel32 descriptor '{descriptor_key}' must place the PC lhs operand after its results")
     if len(descriptor.immediates) != 2:
         raise ValueError(f"AMDGPU descriptor set '{descriptor_set.key}' rel32 descriptor '{descriptor_key}' must have symbol and byte_offset immediates")
     symbol = descriptor.immediates[_REL32_SYMBOL_IMMEDIATE_SLOT]

@@ -26,12 +26,12 @@ low.func.def target<amdgpu.rdna3_5.core>(@target) @carried_loads_reuse_address_p
   %used1 = v_add_u32 %used0, %carried2
   %updated = v_add_u32 %used1, %sum
   %next0 = global_load_b32_saddr %offset, %base {offset = 12}
-  %lo1 = s_add_u32 %base_lo, %increment
-  %hi1 = s_addc_u32 %base_hi, %zero
+  %lo1, %lo1_carry = s_add_co_u32 %base_lo, %increment
+  %hi1, %hi1_carry = s_addc_u32 %base_hi, %zero, %lo1_carry
   %address1 = concat(%lo1, %hi1) : (reg<amdgpu.sgpr>, reg<amdgpu.sgpr>) -> reg<amdgpu.sgpr x2>
   %next1 = global_load_b32_saddr %offset, %address1
-  %lo2 = s_add_u32 %base_lo, %increment
-  %hi2 = s_addc_u32 %base_hi, %increment
+  %lo2, %lo2_carry = s_add_co_u32 %base_lo, %increment
+  %hi2, %hi2_carry = s_addc_u32 %base_hi, %increment, %lo2_carry
   %address2 = concat(%lo2, %hi2) : (reg<amdgpu.sgpr>, reg<amdgpu.sgpr>) -> reg<amdgpu.sgpr x2>
   %next2 = global_load_b32_saddr %offset, %address2
   %next_index = s_add_u32 %index, %increment
@@ -109,12 +109,12 @@ low.func.def target<amdgpu.rdna3_5.core>(@target) @carried_loads_release_at_firs
   %used1 = v_add_u32 %used0, %carried2
   %updated = v_add_u32 %used1, %sum
   %next0 = global_load_b32_saddr %offset, %base {offset = 12}
-  %lo1 = s_add_u32 %base_lo, %increment
-  %hi1 = s_addc_u32 %base_hi, %zero
+  %lo1, %lo1_carry = s_add_co_u32 %base_lo, %increment
+  %hi1, %hi1_carry = s_addc_u32 %base_hi, %zero, %lo1_carry
   %address1 = concat(%lo1, %hi1) : (reg<amdgpu.sgpr>, reg<amdgpu.sgpr>) -> reg<amdgpu.sgpr x2>
   %next1 = global_load_b32_saddr %offset, %address1
-  %lo2 = s_add_u32 %base_lo, %increment
-  %hi2 = s_addc_u32 %base_hi, %increment
+  %lo2, %lo2_carry = s_add_co_u32 %base_lo, %increment
+  %hi2, %hi2_carry = s_addc_u32 %base_hi, %increment, %lo2_carry
   %address2 = concat(%lo2, %hi2) : (reg<amdgpu.sgpr>, reg<amdgpu.sgpr>) -> reg<amdgpu.sgpr x2>
   %next2 = global_load_b32_saddr %offset, %address2
   %next_index = s_add_u32 %index, %increment

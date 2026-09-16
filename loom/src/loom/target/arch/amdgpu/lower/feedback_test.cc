@@ -387,8 +387,8 @@ class AmdgpuFeedbackTest : public ::testing::Test {
     ASSERT_NE(add_op, nullptr);
     ExpectLowOpDescriptorRef(add_op, descriptor_ref);
     loom_value_slice_t add_operands = loom_low_op_operands(add_op);
-    ASSERT_EQ(add_operands.count, 2u);
-    ASSERT_EQ(loom_low_op_results(add_op).count, 1u);
+    ASSERT_EQ(add_operands.count, expected_base_slice_offset == 0 ? 2u : 3u);
+    ASSERT_EQ(loom_low_op_results(add_op).count, 2u);
     EXPECT_EQ(loom_value_slice_get(loom_low_op_results(add_op), 0),
               actual_part);
 
@@ -419,12 +419,16 @@ class AmdgpuFeedbackTest : public ::testing::Test {
     ASSERT_EQ(address_parts.count, 2u);
     ExpectSgprByteOffsetPart(address_parts.values[0], expected_base,
                              /*expected_base_slice_offset=*/0,
-                             LOOM_AMDGPU_DESCRIPTOR_REF_S_ADD_U32,
+                             LOOM_AMDGPU_DESCRIPTOR_REF_S_ADD_CO_U32,
                              expected_byte_offset);
     ExpectSgprByteOffsetPart(address_parts.values[1], expected_base,
                              /*expected_base_slice_offset=*/1,
                              LOOM_AMDGPU_DESCRIPTOR_REF_S_ADDC_U32,
                              /*expected_addend=*/0);
+    const loom_op_t* low_op = DefiningOp(address_parts.values[0]);
+    const loom_op_t* high_op = DefiningOp(address_parts.values[1]);
+    EXPECT_EQ(loom_low_op_operands(high_op).values[2],
+              loom_value_slice_get(loom_low_op_results(low_op), 1));
   }
 
   void ExpectRel32Attrs(const loom_op_t* op, loom_symbol_ref_t expected_symbol,

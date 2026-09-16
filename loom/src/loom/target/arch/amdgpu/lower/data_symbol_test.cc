@@ -176,7 +176,10 @@ TEST_F(AmdgpuDataSymbolTest, BuildsRel32AddressMaterializationSequence) {
   ExpectRel32Attrs(ops[3], site_table, 24);
   ExpectLowOpDescriptorRef(
       ops[4], LOOM_AMDGPU_DESCRIPTOR_REF_S_ADDC_U32_RHS_SYMBOL_REL32_HI);
-  ASSERT_EQ(loom_low_op_operands(ops[4]).count, 1u);
+  ASSERT_EQ(loom_low_op_operands(ops[4]).count, 2u);
+  ASSERT_EQ(loom_low_op_results(ops[3]).count, 2u);
+  EXPECT_EQ(loom_low_op_operands(ops[4]).values[1],
+            loom_value_slice_get(loom_low_op_results(ops[3]), 1));
   EXPECT_EQ(loom_low_op_operands(ops[4]).values[0],
             loom_low_slice_result(ops[2]));
   ExpectRel32Attrs(ops[4], site_table, 24);

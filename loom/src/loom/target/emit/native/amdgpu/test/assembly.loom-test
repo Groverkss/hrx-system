@@ -185,8 +185,8 @@ low.func.def target<amdgpu.rdna3.core>(@gfx11_target) @gfx11_rel32_pc_copy() asm
   %pc_copy = copy %pc : reg<amdgpu.sgpr x2> -> reg<amdgpu.sgpr x2>
   %pc_lo = slice %pc_copy[0] : reg<amdgpu.sgpr x2> -> reg<amdgpu.sgpr>
   %pc_hi = slice %pc_copy[1] : reg<amdgpu.sgpr x2> -> reg<amdgpu.sgpr>
-  %config_lo = s_add_u32_rhs_symbol_rel32_lo %pc_lo {symbol = @iree_asan_config}
-  %config_hi = s_addc_u32_rhs_symbol_rel32_hi %pc_hi {symbol = @iree_asan_config}
+  %config_lo, %config_carry = s_add_u32_rhs_symbol_rel32_lo %pc_lo {symbol = @iree_asan_config}
+  %config_hi, %config_carry_out = s_addc_u32_rhs_symbol_rel32_hi %pc_hi, %config_carry {symbol = @iree_asan_config}
   %config = concat(%config_lo, %config_hi) : (reg<amdgpu.sgpr>, reg<amdgpu.sgpr>) -> reg<amdgpu.sgpr x2>
   %shadow_base = s_load_dwordx2_offset_only %config {offset = 16}
   return
@@ -1895,8 +1895,8 @@ low.func.def target<amdgpu.rdna3.core>(@gfx11_target) @gfx11_concat_source_exist
   %lookup_hi = slice %lookup[1] : reg<amdgpu.sgpr x2> -> reg<amdgpu.sgpr>
   %row_bytes_lo = slice %row_bytes[0] : reg<amdgpu.sgpr x2> -> reg<amdgpu.sgpr>
   %row_bytes_hi = slice %row_bytes[1] : reg<amdgpu.sgpr x2> -> reg<amdgpu.sgpr>
-  %address_lo = s_add_u32 %lookup_lo, %row_bytes_lo
-  %address_hi = s_addc_u32 %lookup_hi, %row_bytes_hi
+  %address_lo, %address_carry = s_add_co_u32 %lookup_lo, %row_bytes_lo
+  %address_hi, %address_carry_out = s_addc_u32 %lookup_hi, %row_bytes_hi, %address_carry
   %address = concat(%address_lo, %address_hi) : (reg<amdgpu.sgpr>, reg<amdgpu.sgpr>) -> reg<amdgpu.sgpr x2>
   %loaded = global_load_b32_saddr %zero_v, %address
   %cmp = v_cmp_lt_i32 %loaded, %thread
@@ -3432,8 +3432,8 @@ low.func.def target<amdgpu.cdna3.core>(@gfx942_target) @gfx942_valu_sgpr_read_wa
 amdgpu.target<gfx942> @gfx942_target
 
 low.func.def target<amdgpu.cdna3.core>(@gfx942_target) @gfx942_state_read_precedes_ssa_consumers(%resource: reg<amdgpu.sgpr x4>, %vaddr: reg<amdgpu.vgpr>, %base_lo: reg<amdgpu.sgpr>, %base_hi: reg<amdgpu.sgpr>, %static_lo: reg<amdgpu.sgpr>, %static_hi: reg<amdgpu.sgpr>, %offset_lo: reg<amdgpu.vgpr>, %offset_hi: reg<amdgpu.vgpr>) asm {
-  %scalar_lo = s_add_u32 %base_lo, %static_lo
-  %scalar_hi = s_addc_u32 %base_hi, %static_hi
+  %scalar_lo, %scalar_carry = s_add_co_u32 %base_lo, %static_lo
+  %scalar_hi, %scalar_carry_out = s_addc_u32 %base_hi, %static_hi, %scalar_carry
   %sum_lo, %carry = v_add_co_u32 %scalar_lo, %offset_lo
   %scalar_hi_vgpr = v_mov_b32_copy %scalar_hi
   %sum_hi, %unused_carry = v_addc_co_u32 %scalar_hi_vgpr, %offset_hi, %carry

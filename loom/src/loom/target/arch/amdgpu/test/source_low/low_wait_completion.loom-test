@@ -15,8 +15,8 @@ low.func.def target<amdgpu.rdna3_5.core>(@target) @copied_backedge_completes_add
   %base_high = slice %base[1] : reg<amdgpu.sgpr x2> -> reg<amdgpu.sgpr>
   low.br ^loop(%seed: reg<amdgpu.vgpr>)
 ^loop(%carried: reg<amdgpu.vgpr>):
-  %low = s_add_u32 %base_low, %increment
-  %high = s_addc_u32 %base_high, %zero
+  %low, %low_carry = s_add_co_u32 %base_low, %increment
+  %high, %high_carry = s_addc_u32 %base_high, %zero, %low_carry
   %address = concat(%low, %high) : (reg<amdgpu.sgpr>, reg<amdgpu.sgpr>) -> reg<amdgpu.sgpr x2>
   %future = global_load_b32_saddr %offset, %address
   %used = v_add_u32 %carried, %offset
@@ -49,8 +49,8 @@ low.func.def target<amdgpu.rdna3_5.core>(@target) @younger_backedge_load_retains
   %base_high = slice %base[1] : reg<amdgpu.sgpr x2> -> reg<amdgpu.sgpr>
   low.br ^loop(%seed: reg<amdgpu.vgpr>, %initial_pending: reg<amdgpu.vgpr>)
 ^loop(%carried: reg<amdgpu.vgpr>, %pending: reg<amdgpu.vgpr>):
-  %low = s_add_u32 %base_low, %increment
-  %high = s_addc_u32 %base_high, %zero
+  %low, %low_carry = s_add_co_u32 %base_low, %increment
+  %high, %high_carry = s_addc_u32 %base_high, %zero, %low_carry
   %address = concat(%low, %high) : (reg<amdgpu.sgpr>, reg<amdgpu.sgpr>) -> reg<amdgpu.sgpr x2>
   %used = v_add_u32 %carried, %pending
   %future = global_load_b32_saddr %offset, %address
@@ -177,8 +177,8 @@ low.func.def target<amdgpu.rdna4.gfx125x.core>(@target) @translation_and_result_
   %base_high = slice %base[1] : reg<amdgpu.sgpr x2> -> reg<amdgpu.sgpr>
   low.br ^loop(%seed: reg<amdgpu.vgpr>)
 ^loop(%carried: reg<amdgpu.vgpr>):
-  %low = s_add_u32 %base_low, %increment
-  %high = s_addc_u32 %base_high, %zero
+  %low, %low_carry = s_add_co_u32 %base_low, %increment
+  %high, %high_carry = s_addc_u32 %base_high, %zero, %low_carry
   %address = concat(%low, %high) : (reg<amdgpu.sgpr>, reg<amdgpu.sgpr>) -> reg<amdgpu.sgpr x2>
   %future = global_load_b32_saddr %offset, %address
   %used = v_add_u32 %carried, %offset
@@ -211,8 +211,8 @@ low.func.def target<amdgpu.rdna4.gfx125x.core>(@target) @translation_release_kee
   %base_high = slice %base[1] : reg<amdgpu.sgpr x2> -> reg<amdgpu.sgpr>
   low.br ^loop(%seed: reg<amdgpu.vgpr>, %initial_pending: reg<amdgpu.vgpr>)
 ^loop(%carried: reg<amdgpu.vgpr>, %pending: reg<amdgpu.vgpr>):
-  %low = s_add_u32 %base_low, %increment
-  %high = s_addc_u32 %base_high, %zero
+  %low, %low_carry = s_add_co_u32 %base_low, %increment
+  %high, %high_carry = s_addc_u32 %base_high, %zero, %low_carry
   %address = concat(%low, %high) : (reg<amdgpu.sgpr>, reg<amdgpu.sgpr>) -> reg<amdgpu.sgpr x2>
   %used = v_add_u32 %carried, %pending
   %future = global_load_b32_saddr %offset, %address

@@ -41,6 +41,7 @@ from .rdna3 import *
 from .rdna4 import *
 from .rdna4m import *
 from .rdna35 import *
+from .scalar_carry import *
 from .scalar_float import *
 from .workgroup import *
 
@@ -339,6 +340,8 @@ def _cdna_core_overlays(
 ) -> tuple[AmdgpuDescriptorOverlay, ...]:
     return (
         _s_add_u32_overlay(),
+        _s_add_co_u32_overlay(),
+        _s_add_co_u32_rhs_inline_overlay(),
         _s_add_u32_rhs_inline_overlay(),
         _s_addk_i32_overlay(),
         _s_add_u32_rhs_symbol_rel32_lo_overlay(),
@@ -972,6 +975,8 @@ def _gfx9_4_generic_core_overlay_descriptors(
 def _gfx11_core_overlays() -> tuple[AmdgpuDescriptorOverlay, ...]:
     return (
         _s_add_u32_overlay(),
+        _s_add_co_u32_overlay(),
+        _s_add_co_u32_rhs_inline_overlay(),
         _s_add_u32_rhs_inline_overlay(),
         _s_addk_i32_overlay(),
         _s_add_u32_rhs_symbol_rel32_lo_overlay(),
@@ -1782,6 +1787,8 @@ def _rdna4m_core_overlay_descriptors(
 def _rdna4_core_overlays() -> tuple[AmdgpuDescriptorOverlay, ...]:
     return (
         _s_add_u32_overlay(),
+        _s_add_co_u32_overlay(),
+        _s_add_co_u32_rhs_inline_overlay(),
         _s_add_u32_rhs_inline_overlay(),
         _s_addk_i32_overlay(instruction_name="S_ADDK_CO_I32", mnemonic="s_addk_co_i32"),
         _s_add_u32_rhs_symbol_rel32_lo_overlay(),

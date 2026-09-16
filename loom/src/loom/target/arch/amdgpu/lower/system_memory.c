@@ -99,33 +99,6 @@ static iree_status_t loom_amdgpu_system_memory_build_sgpr_u32_const(
       sgpr_type, location, out_value);
 }
 
-static iree_status_t loom_amdgpu_system_memory_build_sgpr_u32_binary(
-    loom_builder_t* builder, const loom_low_descriptor_set_t* descriptor_set,
-    loom_amdgpu_descriptor_ref_t descriptor_ref, loom_value_id_t lhs,
-    loom_value_id_t rhs, loom_location_id_t location,
-    loom_value_id_t* out_value) {
-  *out_value = LOOM_VALUE_ID_INVALID;
-  loom_amdgpu_system_memory_require_register_class(
-      builder, descriptor_set, lhs, LOOM_AMDGPU_REG_CLASS_ID_SGPR, 1);
-  loom_amdgpu_system_memory_require_register_class(
-      builder, descriptor_set, rhs, LOOM_AMDGPU_REG_CLASS_ID_SGPR, 1);
-
-  loom_type_t sgpr_type = loom_type_none();
-  IREE_RETURN_IF_ERROR(loom_low_build_register_type(
-      descriptor_set, LOOM_AMDGPU_REG_CLASS_ID_SGPR, 1, &sgpr_type));
-  const loom_value_id_t operands[] = {lhs, rhs};
-  const loom_low_descriptor_t* descriptor =
-      loom_amdgpu_lookup_descriptor_ref(descriptor_set, descriptor_ref);
-  loom_op_t* op = NULL;
-  IREE_RETURN_IF_ERROR(loom_low_build_resolved_descriptor_op(
-      builder, descriptor_set, descriptor, operands, IREE_ARRAYSIZE(operands),
-      loom_make_named_attr_slice(NULL, 0), &sgpr_type,
-      /*result_count=*/1, /*tied_results=*/NULL,
-      /*tied_result_count=*/0, location, &op));
-  *out_value = loom_value_slice_get(loom_low_op_results(op), 0);
-  return iree_ok_status();
-}
-
 static iree_status_t loom_amdgpu_system_memory_build_m0_const_u32(
     loom_builder_t* builder, const loom_low_descriptor_set_t* descriptor_set,
     const loom_low_descriptor_t* consumer_descriptor, uint32_t value,
@@ -172,19 +145,39 @@ iree_status_t loom_amdgpu_system_memory_build_saddr_byte_offset(
   IREE_RETURN_IF_ERROR(loom_amdgpu_system_memory_build_sgpr_u32_const(
       builder, descriptor_set, 0, location, &zero));
 
-  loom_value_id_t sum_lo = LOOM_VALUE_ID_INVALID;
-  IREE_RETURN_IF_ERROR(loom_amdgpu_system_memory_build_sgpr_u32_binary(
-      builder, descriptor_set, LOOM_AMDGPU_DESCRIPTOR_REF_S_ADD_U32, base_lo,
-      offset_lo, location, &sum_lo));
-  loom_value_id_t sum_hi = LOOM_VALUE_ID_INVALID;
-  IREE_RETURN_IF_ERROR(loom_amdgpu_system_memory_build_sgpr_u32_binary(
-      builder, descriptor_set, LOOM_AMDGPU_DESCRIPTOR_REF_S_ADDC_U32, base_hi,
-      zero, location, &sum_hi));
+  loom_type_t scc_type = loom_type_none();
+  IREE_RETURN_IF_ERROR(loom_low_build_register_type(
+      descriptor_set, LOOM_AMDGPU_REG_CLASS_ID_SCC, 1, &scc_type));
+  const loom_type_t result_types[] = {sgpr_type, scc_type};
+  const loom_value_id_t low_operands[] = {base_lo, offset_lo};
+  const loom_low_descriptor_t* low_descriptor =
+      loom_amdgpu_lookup_descriptor_ref(
+          descriptor_set, LOOM_AMDGPU_DESCRIPTOR_REF_S_ADD_CO_U32);
+  loom_op_t* low_op = NULL;
+  IREE_RETURN_IF_ERROR(loom_low_build_resolved_descriptor_op(
+      builder, descriptor_set, low_descriptor, low_operands,
+      IREE_ARRAYSIZE(low_operands), loom_named_attr_slice_empty(), result_types,
+      IREE_ARRAYSIZE(result_types), /*tied_results=*/NULL,
+      /*tied_result_count=*/0, location, &low_op));
+  const loom_value_id_t high_operands[] = {
+      base_hi, zero, loom_value_slice_get(loom_low_op_results(low_op), 1)};
+  const loom_low_descriptor_t* high_descriptor =
+      loom_amdgpu_lookup_descriptor_ref(descriptor_set,
+                                        LOOM_AMDGPU_DESCRIPTOR_REF_S_ADDC_U32);
+  loom_op_t* high_op = NULL;
+  IREE_RETURN_IF_ERROR(loom_low_build_resolved_descriptor_op(
+      builder, descriptor_set, high_descriptor, high_operands,
+      IREE_ARRAYSIZE(high_operands), loom_named_attr_slice_empty(),
+      result_types, IREE_ARRAYSIZE(result_types), /*tied_results=*/NULL,
+      /*tied_result_count=*/0, location, &high_op));
 
   loom_type_t sgpr_x2_type = loom_type_none();
   IREE_RETURN_IF_ERROR(loom_low_build_register_type(
       descriptor_set, LOOM_AMDGPU_REG_CLASS_ID_SGPR, 2, &sgpr_x2_type));
-  const loom_value_id_t parts[] = {sum_lo, sum_hi};
+  const loom_value_id_t parts[] = {
+      loom_value_slice_get(loom_low_op_results(low_op), 0),
+      loom_value_slice_get(loom_low_op_results(high_op), 0),
+  };
   loom_op_t* concat_op = NULL;
   IREE_RETURN_IF_ERROR(
       loom_low_concat_build(builder, parts, IREE_ARRAYSIZE(parts), sgpr_x2_type,

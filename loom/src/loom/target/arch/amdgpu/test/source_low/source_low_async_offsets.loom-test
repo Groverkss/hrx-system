@@ -34,11 +34,11 @@ low.kernel.def target<amdgpu.cdna3.core>(@target) workgroup_size(64, 1, 1) workg
   %20 = slice %global[0] : reg<amdgpu.sgpr x2> -> reg<amdgpu.sgpr>
   %21 = slice %global[1] : reg<amdgpu.sgpr x2> -> reg<amdgpu.sgpr>
   %22 = s_mov_b32 0
-  %23 = s_add_u32 %20, %19
-  %24 = s_addc_u32 %21, %22
-  %25 = concat(%23, %24) : (reg<amdgpu.sgpr>, reg<amdgpu.sgpr>) -> reg<amdgpu.sgpr x2>
-  %26 = s_mov_b32_m0_imm 128
-  global_load_lds_dword_saddr %18, %25, %26
+  %23, %24 = s_add_co_u32 %20, %19
+  %25, %26 = s_addc_u32 %21, %22, %24
+  %27 = concat(%23, %25) : (reg<amdgpu.sgpr>, reg<amdgpu.sgpr>) -> reg<amdgpu.sgpr x2>
+  %28 = s_mov_b32_m0_imm 128
+  global_load_lds_dword_saddr %18, %27, %28
   s_waitcnt {vmcnt = 0}
   return
 }
@@ -78,11 +78,11 @@ low.kernel.def target<amdgpu.cdna3.core>(@target) workgroup_size(64, 1, 1) workg
   %20 = slice %global[0] : reg<amdgpu.sgpr x2> -> reg<amdgpu.sgpr>
   %21 = slice %global[1] : reg<amdgpu.sgpr x2> -> reg<amdgpu.sgpr>
   %22 = s_mov_b32 0
-  %23 = s_add_u32 %20, %19
-  %24 = s_addc_u32 %21, %22
-  %25 = concat(%23, %24) : (reg<amdgpu.sgpr>, reg<amdgpu.sgpr>) -> reg<amdgpu.sgpr x2>
-  %26 = s_mov_b32_m0_imm 0
-  global_load_lds_dword_saddr %18, %25, %26
+  %23, %24 = s_add_co_u32 %20, %19
+  %25, %26 = s_addc_u32 %21, %22, %24
+  %27 = concat(%23, %25) : (reg<amdgpu.sgpr>, reg<amdgpu.sgpr>) -> reg<amdgpu.sgpr x2>
+  %28 = s_mov_b32_m0_imm 0
+  global_load_lds_dword_saddr %18, %27, %28
   s_waitcnt {vmcnt = 0}
   return
 }
@@ -123,11 +123,11 @@ low.kernel.def target<amdgpu.cdna4.core>(@target) workgroup_size(64, 1, 1) workg
   %20 = s_mov_b32 1
   %22 = slice %global[0] : reg<amdgpu.sgpr x2> -> reg<amdgpu.sgpr>
   %23 = slice %global[1] : reg<amdgpu.sgpr x2> -> reg<amdgpu.sgpr>
-  %26 = s_add_u32 %22, %19
-  %27 = s_addc_u32 %23, %20
-  %28 = concat(%26, %27) : (reg<amdgpu.sgpr>, reg<amdgpu.sgpr>) -> reg<amdgpu.sgpr x2>
-  %29 = s_mov_b32_m0_imm 64
-  global_load_lds_dwordx4_saddr %18, %28, %29
+  %26, %27 = s_add_co_u32 %22, %19
+  %28, %29 = s_addc_u32 %23, %20, %27
+  %30 = concat(%26, %28) : (reg<amdgpu.sgpr>, reg<amdgpu.sgpr>) -> reg<amdgpu.sgpr x2>
+  %31 = s_mov_b32_m0_imm 64
+  global_load_lds_dwordx4_saddr %18, %30, %31
   s_waitcnt {vmcnt = 0}
   return
 }

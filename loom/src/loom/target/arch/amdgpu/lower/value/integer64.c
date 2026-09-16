@@ -101,8 +101,8 @@ static const loom_amdgpu_descriptor_requirement_t
             .descriptor_ref = LOOM_AMDGPU_DESCRIPTOR_REF_S_MOV_B32,
         },
         {
-            .constraint_key = IREE_SVL("descriptor.s_add_u32"),
-            .descriptor_ref = LOOM_AMDGPU_DESCRIPTOR_REF_S_ADD_U32,
+            .constraint_key = IREE_SVL("descriptor.s_add_co_u32"),
+            .descriptor_ref = LOOM_AMDGPU_DESCRIPTOR_REF_S_ADD_CO_U32,
         },
         {
             .constraint_key = IREE_SVL("descriptor.s_addc_u32"),

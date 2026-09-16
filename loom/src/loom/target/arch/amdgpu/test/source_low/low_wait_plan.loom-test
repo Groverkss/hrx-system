@@ -201,8 +201,8 @@ low.func.def target<amdgpu.rdna3.core>(@target) @global_load_saddr_source_reuse_
   %base_lo = slice %base[0] : reg<amdgpu.sgpr x2> -> reg<amdgpu.sgpr>
   %base_hi = slice %base[1] : reg<amdgpu.sgpr x2> -> reg<amdgpu.sgpr>
   %zero = s_mov_b32 0
-  %lo = s_add_u32 %base_lo, %offset
-  %hi = s_addc_u32 %base_hi, %zero
+  %lo, %lo_carry = s_add_co_u32 %base_lo, %offset
+  %hi, %hi_carry = s_addc_u32 %base_hi, %zero, %lo_carry
   %load_base = concat(%lo, %hi) : (reg<amdgpu.sgpr>, reg<amdgpu.sgpr>) -> reg<amdgpu.sgpr x2>
   %loaded = global_load_b32_saddr %addr, %load_base
   %branch_mask = v_cmp_lt_i32 %lhs, %rhs

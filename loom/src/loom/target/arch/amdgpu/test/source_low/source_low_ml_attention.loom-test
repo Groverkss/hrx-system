@@ -429,14 +429,14 @@ low.func.def target<amdgpu.gfx11.generic.core>(@target) abi(hal_kernel) @paged_k
   %46 = slice %page_entry_view[0] : reg<amdgpu.sgpr x2> -> reg<amdgpu.sgpr>
   %47 = slice %page_entry_view[1] : reg<amdgpu.sgpr x2> -> reg<amdgpu.sgpr>
   %48 = s_mov_b32 0
-  %49 = s_add_u32 %46, %45
-  %50 = s_addc_u32 %47, %48
-  %51 = concat(%49, %50) : (reg<amdgpu.sgpr>, reg<amdgpu.sgpr>) -> reg<amdgpu.sgpr x2>
-  %page = global_load_b32_saddr %42, %51
-  %58 = v_mov_b32_copy %lane
-  %59 = v_lshl_add_u32_shift_imm %page, %58, 9
-  %60 = v_lshlrev_b32_src0_inline %59, 3
-  %key_values = global_load_b64_saddr %60, %kv_view
+  %49, %50 = s_add_co_u32 %46, %45
+  %51, %52 = s_addc_u32 %47, %48, %50
+  %53 = concat(%49, %51) : (reg<amdgpu.sgpr>, reg<amdgpu.sgpr>) -> reg<amdgpu.sgpr x2>
+  %page = global_load_b32_saddr %42, %53
+  %60 = v_mov_b32_copy %lane
+  %61 = v_lshl_add_u32_shift_imm %page, %60, 9
+  %62 = v_lshlrev_b32_src0_inline %61, 3
+  %key_values = global_load_b64_saddr %62, %kv_view
   return %page, %key_values
 }
 

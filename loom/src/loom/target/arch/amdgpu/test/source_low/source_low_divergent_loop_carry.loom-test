@@ -51,16 +51,16 @@ low.kernel.def target<amdgpu.gfx11.generic.core>(@target) workgroup_size(64, 1, 
   %49 = slice %value_view[0] : reg<amdgpu.sgpr x2> -> reg<amdgpu.sgpr>
   %50 = slice %value_view[1] : reg<amdgpu.sgpr x2> -> reg<amdgpu.sgpr>
   %51 = s_mov_b32 0
-  %52 = s_add_u32 %49, %48
-  %53 = s_addc_u32 %50, %51
-  %54 = concat(%52, %53) : (reg<amdgpu.sgpr>, reg<amdgpu.sgpr>) -> reg<amdgpu.sgpr x2>
-  %value = global_load_b32_saddr %47, %54
+  %52, %53 = s_add_co_u32 %49, %48
+  %54, %55 = s_addc_u32 %50, %51, %53
+  %56 = concat(%52, %54) : (reg<amdgpu.sgpr>, reg<amdgpu.sgpr>) -> reg<amdgpu.sgpr x2>
+  %value = global_load_b32_saddr %47, %56
   %next_count = v_add_u32 %running_count, %value
-  %57 = s_add_u32 %bounded_position, %loop_step
-  low.br ^_bb1(%57: reg<amdgpu.sgpr>, %next_count: reg<amdgpu.vgpr>)
+  %59 = s_add_u32 %bounded_position, %loop_step
+  low.br ^_bb1(%59: reg<amdgpu.sgpr>, %next_count: reg<amdgpu.vgpr>)
 ^_bb3:
-  %58 = v_lshlrev_b32_src0_inline %lane, 2
-  global_store_b32_saddr %58, %running_count, %output_view
+  %60 = v_lshlrev_b32_src0_inline %lane, 2
+  global_store_b32_saddr %60, %running_count, %output_view
   return
 ^_bb4:
   %44 = s_mov_b64_exec_read

@@ -215,6 +215,7 @@ def _valid_spill_lowering_descriptors() -> tuple[Descriptor, ...]:
 def _valid_contract_descriptors() -> tuple[Descriptor, ...]:
     rel32_operands = (
         Operand("dst", OperandRole.RESULT, ()),
+        Operand("carry", OperandRole.RESULT, ()),
         Operand("lhs", OperandRole.OPERAND, ()),
     )
     rel32_immediates = (

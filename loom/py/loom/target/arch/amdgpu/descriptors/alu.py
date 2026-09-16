@@ -35,31 +35,12 @@ _SOPK_I16_IMMEDIATE = Immediate(
     unsigned_max=(2**15) - 1,
 )
 
-_SYMBOL_BYTE_OFFSET_IMMEDIATE = Immediate(
-    "byte_offset",
-    ImmediateKind.UNSIGNED,
-    flags=(ImmediateFlag.DEFAULT_VALUE,),
-    bit_width=64,
-    unsigned_max=(2**63) - 1,
-    default_value=0,
-)
 
 _REMATERIALIZABLE_RESULT_CONSTRAINTS = (Constraint(ConstraintKind.REMATERIALIZABLE, 0),)
 _REMATERIALIZABLE_COMMUTABLE_BINARY_CONSTRAINTS = (
     *_REMATERIALIZABLE_RESULT_CONSTRAINTS,
     Constraint(ConstraintKind.COMMUTABLE, 1, 2),
 )
-
-
-def _symbol_rel32_immediate(field_name: str = "symbol") -> Immediate:
-    return Immediate(
-        field_name,
-        ImmediateKind.ORDINAL,
-        flags=(ImmediateFlag.SYMBOLIC, ImmediateFlag.RELATIVE),
-        bit_width=32,
-        unsigned_max=(2**32) - 1,
-        encoding_field_id=amdgpu_encoding_field_id("LITERAL"),
-    )
 
 
 def _sdwa_selector_immediate(field_name: str) -> Immediate:
@@ -85,8 +66,7 @@ def _s_add_u32_overlay() -> AmdgpuDescriptorOverlay:
             AmdgpuOperandOverlay("SSRC1", _sgpr_operand("rhs")),
         ),
         implicit_operands=(_SCC_CLOBBER_OUTPUT,),
-        # S_ADDK_I32 sets signed overflow in SCC, not the unsigned carry
-        # consumed by S_ADDC_U32. Literal folding must retain S_ADD_U32.
+        # Preserve S_ADD_U32's unsigned SCC clobber when folding a literal.
         operand_forms=(
             _literal_operand_form(
                 replacement_descriptor="amdgpu.s_add_u32.rhs_inline",
@@ -117,93 +97,6 @@ def _s_addk_i32_overlay(
         mnemonic=mnemonic,
         semantic_tag="integer.add.u32",
         implicit_operands=(_SCC_CLOBBER_OUTPUT,),
-    )
-
-
-def _s_add_u32_rhs_symbol_rel32_lo_overlay() -> AmdgpuDescriptorOverlay:
-    return AmdgpuDescriptorOverlay(
-        descriptor_key="amdgpu.s_add_u32.rhs_symbol_rel32_lo",
-        instruction_name="S_ADD_U32",
-        mnemonic="s_add_u32",
-        encoding_name="ENC_SOP2",
-        encoding_format_id=AMDGPU_ENCODING_FORMAT_SOP2_LITERAL,
-        semantic_tag="address.add.pc_relative.lo.u32",
-        schedule_class=_SCHEDULE_SALU,
-        operands=(
-            AmdgpuOperandOverlay("SDST", _sgpr_result()),
-            AmdgpuOperandOverlay("SSRC0", _sgpr_operand("lhs")),
-        ),
-        implicit_operands=(_SCC_CLOBBER_OUTPUT,),
-        immediates=(
-            _symbol_rel32_immediate(),
-            _SYMBOL_BYTE_OFFSET_IMMEDIATE,
-        ),
-        effects=(_PC_RELATIVE_EFFECT,),
-        fixed_encoding_fields=(("SSRC1", _predefined("SRC_LITERAL", "OPR_SSRC")),),
-        asm_forms=_asm(
-            mnemonic="s_add_u32_rhs_symbol_rel32_lo",
-            results=("dst",),
-            operands=("lhs",),
-            immediates=("symbol", "byte_offset"),
-            named_immediates=True,
-        ),
-        flags=(DescriptorFlag.DEAD_REMOVABLE,),
-    )
-
-
-def _s_addc_u32_overlay() -> AmdgpuDescriptorOverlay:
-    return AmdgpuDescriptorOverlay(
-        descriptor_key="amdgpu.s_addc_u32",
-        instruction_name="S_ADDC_U32",
-        mnemonic="s_addc_u32",
-        encoding_name="ENC_SOP2",
-        semantic_tag="integer.add.carry_in_out.u32",
-        schedule_class=_SCHEDULE_SALU,
-        operands=(
-            AmdgpuOperandOverlay("SDST", _sgpr_result("sum")),
-            AmdgpuOperandOverlay("SSRC0", _sgpr_operand("lhs")),
-            AmdgpuOperandOverlay("SSRC1", _sgpr_operand("rhs")),
-        ),
-        implicit_operands=(
-            _scc_output(_scc_clobber("carry")),
-            _scc_input(_scc_state_read("carry_in")),
-        ),
-        asm_forms=_asm(results=("sum",), operands=("lhs", "rhs")),
-        flags=(DescriptorFlag.DEAD_REMOVABLE,),
-    )
-
-
-def _s_addc_u32_rhs_symbol_rel32_hi_overlay() -> AmdgpuDescriptorOverlay:
-    return AmdgpuDescriptorOverlay(
-        descriptor_key="amdgpu.s_addc_u32.rhs_symbol_rel32_hi",
-        instruction_name="S_ADDC_U32",
-        mnemonic="s_addc_u32",
-        encoding_name="ENC_SOP2",
-        encoding_format_id=AMDGPU_ENCODING_FORMAT_SOP2_LITERAL,
-        semantic_tag="address.add.pc_relative.hi.u32",
-        schedule_class=_SCHEDULE_SALU,
-        operands=(
-            AmdgpuOperandOverlay("SDST", _sgpr_result("sum")),
-            AmdgpuOperandOverlay("SSRC0", _sgpr_operand("lhs")),
-        ),
-        implicit_operands=(
-            _scc_output(_scc_clobber("carry")),
-            _scc_input(_scc_state_read("carry_in")),
-        ),
-        immediates=(
-            _symbol_rel32_immediate(),
-            _SYMBOL_BYTE_OFFSET_IMMEDIATE,
-        ),
-        effects=(_PC_RELATIVE_EFFECT,),
-        fixed_encoding_fields=(("SSRC1", _predefined("SRC_LITERAL", "OPR_SSRC")),),
-        asm_forms=_asm(
-            mnemonic="s_addc_u32_rhs_symbol_rel32_hi",
-            results=("sum",),
-            operands=("lhs",),
-            immediates=("symbol", "byte_offset"),
-            named_immediates=True,
-        ),
-        flags=(DescriptorFlag.DEAD_REMOVABLE,),
     )
 
 
@@ -6869,9 +6762,6 @@ __all__ = (
     "_s_add_u32_overlay",
     "_s_add_u32_rhs_inline_overlay",
     "_s_addk_i32_overlay",
-    "_s_add_u32_rhs_symbol_rel32_lo_overlay",
-    "_s_addc_u32_rhs_symbol_rel32_hi_overlay",
-    "_s_addc_u32_overlay",
     "_s_and_b32_overlay",
     "_s_and_b32_rhs_inline_overlay",
     "_s_and_b32_literal_overlay",

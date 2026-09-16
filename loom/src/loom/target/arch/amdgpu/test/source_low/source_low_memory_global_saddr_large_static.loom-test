@@ -39,10 +39,10 @@ low.kernel.def target<amdgpu.gfx11.generic.core>(@target) workgroup_size(256, 1,
   %36 = slice %input_view[0] : reg<amdgpu.sgpr x2> -> reg<amdgpu.sgpr>
   %37 = slice %input_view[1] : reg<amdgpu.sgpr x2> -> reg<amdgpu.sgpr>
   %38 = s_mov_b32 0
-  %39 = s_add_u32 %36, %35
-  %40 = s_addc_u32 %37, %38
-  %41 = concat(%39, %40) : (reg<amdgpu.sgpr>, reg<amdgpu.sgpr>) -> reg<amdgpu.sgpr x2>
-  %value = global_load_b128_saddr %34, %41 {offset = 4080}
+  %39, %40 = s_add_co_u32 %36, %35
+  %41, %42 = s_addc_u32 %37, %38, %40
+  %43 = concat(%39, %41) : (reg<amdgpu.sgpr>, reg<amdgpu.sgpr>) -> reg<amdgpu.sgpr x2>
+  %value = global_load_b128_saddr %34, %43 {offset = 4080}
   global_store_b128_saddr %output_row_byte_base, %value, %output_view
   return
 }

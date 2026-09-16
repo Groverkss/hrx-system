@@ -8,8 +8,8 @@ amdgpu.target<gfx942> @target
 low.func.def target<amdgpu.cdna3.core>(@target) @add_pair_inline(%low: reg<amdgpu.sgpr>, %high: reg<amdgpu.sgpr>) -> (reg<amdgpu.sgpr>, reg<amdgpu.sgpr>) asm {
   %step = s_mov_b32 3
   %zero = s_mov_b32 0
-  %sum_low = s_add_u32 %low, %step
-  %sum_high = s_addc_u32 %high, %zero
+  %sum_low, %sum_low_carry = s_add_co_u32 %low, %step
+  %sum_high, %sum_high_carry = s_addc_u32 %high, %zero, %sum_low_carry
   return %sum_low, %sum_high
 }
 
@@ -18,8 +18,8 @@ amdgpu.target<gfx942> @target
 
 low.func.def target<amdgpu.cdna3.core>(@target) @add_pair_inline(%low: reg<amdgpu.sgpr>, %high: reg<amdgpu.sgpr>) -> (reg<amdgpu.sgpr>, reg<amdgpu.sgpr>) asm {
   %zero = s_mov_b32 0
-  %sum_low = s_add_u32_rhs_inline %low, 3
-  %sum_high = s_addc_u32 %high, %zero
+  %sum_low, %sum_low_carry = s_add_co_u32_rhs_inline %low, 3
+  %sum_high, %sum_high_carry = s_addc_u32 %high, %zero, %sum_low_carry
   return %sum_low, %sum_high
 }
 
@@ -30,8 +30,8 @@ amdgpu.target<gfx942> @target
 low.func.def target<amdgpu.cdna3.core>(@target) @add_pair_literal(%low: reg<amdgpu.sgpr>, %high: reg<amdgpu.sgpr>) -> (reg<amdgpu.sgpr>, reg<amdgpu.sgpr>) asm {
   %step = s_mov_b32 256
   %zero = s_mov_b32 0
-  %sum_low = s_add_u32 %low, %step
-  %sum_high = s_addc_u32 %high, %zero
+  %sum_low, %sum_low_carry = s_add_co_u32 %low, %step
+  %sum_high, %sum_high_carry = s_addc_u32 %high, %zero, %sum_low_carry
   return %sum_low, %sum_high
 }
 
@@ -42,8 +42,8 @@ amdgpu.target<gfx1100> @target
 low.func.def target<amdgpu.rdna3.core>(@target) @add_pair_inline(%low: reg<amdgpu.sgpr>, %high: reg<amdgpu.sgpr>) -> (reg<amdgpu.sgpr>, reg<amdgpu.sgpr>) asm {
   %step = s_mov_b32 3
   %zero = s_mov_b32 0
-  %sum_low = s_add_u32 %low, %step
-  %sum_high = s_addc_u32 %high, %zero
+  %sum_low, %sum_low_carry = s_add_co_u32 %low, %step
+  %sum_high, %sum_high_carry = s_addc_u32 %high, %zero, %sum_low_carry
   return %sum_low, %sum_high
 }
 
@@ -52,8 +52,8 @@ amdgpu.target<gfx1100> @target
 
 low.func.def target<amdgpu.rdna3.core>(@target) @add_pair_inline(%low: reg<amdgpu.sgpr>, %high: reg<amdgpu.sgpr>) -> (reg<amdgpu.sgpr>, reg<amdgpu.sgpr>) asm {
   %zero = s_mov_b32 0
-  %sum_low = s_add_u32_rhs_inline %low, 3
-  %sum_high = s_addc_u32 %high, %zero
+  %sum_low, %sum_low_carry = s_add_co_u32_rhs_inline %low, 3
+  %sum_high, %sum_high_carry = s_addc_u32 %high, %zero, %sum_low_carry
   return %sum_low, %sum_high
 }
 
@@ -64,8 +64,8 @@ amdgpu.target<gfx1100> @target
 low.func.def target<amdgpu.rdna3.core>(@target) @add_pair_literal(%low: reg<amdgpu.sgpr>, %high: reg<amdgpu.sgpr>) -> (reg<amdgpu.sgpr>, reg<amdgpu.sgpr>) asm {
   %step = s_mov_b32 256
   %zero = s_mov_b32 0
-  %sum_low = s_add_u32 %low, %step
-  %sum_high = s_addc_u32 %high, %zero
+  %sum_low, %sum_low_carry = s_add_co_u32 %low, %step
+  %sum_high, %sum_high_carry = s_addc_u32 %high, %zero, %sum_low_carry
   return %sum_low, %sum_high
 }
 
@@ -76,8 +76,8 @@ amdgpu.target<gfx1250> @target
 low.func.def target<amdgpu.rdna4.gfx125x.core>(@target) @add_pair_inline(%low: reg<amdgpu.sgpr>, %high: reg<amdgpu.sgpr>) -> (reg<amdgpu.sgpr>, reg<amdgpu.sgpr>) asm {
   %step = s_mov_b32 3
   %zero = s_mov_b32 0
-  %sum_low = s_add_u32 %low, %step
-  %sum_high = s_addc_u32 %high, %zero
+  %sum_low, %sum_low_carry = s_add_co_u32 %low, %step
+  %sum_high, %sum_high_carry = s_addc_u32 %high, %zero, %sum_low_carry
   return %sum_low, %sum_high
 }
 
@@ -86,8 +86,8 @@ amdgpu.target<gfx1250> @target
 
 low.func.def target<amdgpu.rdna4.gfx125x.core>(@target) @add_pair_inline(%low: reg<amdgpu.sgpr>, %high: reg<amdgpu.sgpr>) -> (reg<amdgpu.sgpr>, reg<amdgpu.sgpr>) asm {
   %zero = s_mov_b32 0
-  %sum_low = s_add_u32_rhs_inline %low, 3
-  %sum_high = s_addc_u32 %high, %zero
+  %sum_low, %sum_low_carry = s_add_co_u32_rhs_inline %low, 3
+  %sum_high, %sum_high_carry = s_addc_u32 %high, %zero, %sum_low_carry
   return %sum_low, %sum_high
 }
 
@@ -98,7 +98,49 @@ amdgpu.target<gfx1250> @target
 low.func.def target<amdgpu.rdna4.gfx125x.core>(@target) @add_pair_literal(%low: reg<amdgpu.sgpr>, %high: reg<amdgpu.sgpr>) -> (reg<amdgpu.sgpr>, reg<amdgpu.sgpr>) asm {
   %step = s_mov_b32 256
   %zero = s_mov_b32 0
-  %sum_low = s_add_u32 %low, %step
-  %sum_high = s_addc_u32 %high, %zero
+  %sum_low, %sum_low_carry = s_add_co_u32 %low, %step
+  %sum_high, %sum_high_carry = s_addc_u32 %high, %zero, %sum_low_carry
   return %sum_low, %sum_high
+}
+
+// ====
+
+// The low sum is dead, but its unsigned carry contributes to the returned word.
+amdgpu.target<gfx942> @target
+
+low.func.def target<amdgpu.cdna3.core>(@target) @high_word_only(%low: reg<amdgpu.sgpr>, %high: reg<amdgpu.sgpr>) -> (reg<amdgpu.sgpr>) asm {
+  %step = s_mov_b32 3
+  %zero = s_mov_b32 0
+  %sum_low, %carry = s_add_co_u32 %low, %step
+  %sum_high, %carry_out = s_addc_u32 %high, %zero, %carry
+  return %sum_high
+}
+
+// ----
+amdgpu.target<gfx942> @target
+
+low.func.def target<amdgpu.cdna3.core>(@target) @high_word_only(%low: reg<amdgpu.sgpr>, %high: reg<amdgpu.sgpr>) -> (reg<amdgpu.sgpr>) asm {
+  %zero = s_mov_b32 0
+  %sum_low, %carry = s_add_co_u32_rhs_inline %low, 3
+  %sum_high, %carry_out = s_addc_u32 %high, %zero, %carry
+  return %sum_high
+}
+
+// ====
+
+// Both the carry chain and ordinary arithmetic disappear when their values die.
+amdgpu.target<gfx942> @target
+
+low.func.def target<amdgpu.cdna3.core>(@target) @dead_carry_chain(%lhs: reg<amdgpu.sgpr>, %rhs: reg<amdgpu.sgpr>) -> (reg<amdgpu.sgpr>) asm {
+  %low, %carry = s_add_co_u32 %lhs, %rhs
+  %high, %carry_out = s_addc_u32 %lhs, %rhs, %carry
+  %ordinary = s_add_u32 %lhs, %rhs
+  return %lhs
+}
+
+// ----
+amdgpu.target<gfx942> @target
+
+low.func.def target<amdgpu.cdna3.core>(@target) @dead_carry_chain(%lhs: reg<amdgpu.sgpr>, %rhs: reg<amdgpu.sgpr>) -> (reg<amdgpu.sgpr>) asm {
+  return %lhs
 }

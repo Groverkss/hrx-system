@@ -2413,6 +2413,40 @@ def test_feedback_control_descriptors_cover_execution_families() -> None:
         assert message_immediate.unsigned_max >= 128
 
 
+def test_scalar_carry_forms_preserve_native_unsigned_addition() -> None:
+    for overlays in (
+        _gfx940_core_overlays(),
+        _gfx950_core_overlays(),
+        _gfx11_core_overlays(),
+        _gfx12_core_overlays(),
+        _gfx125x_core_overlays(),
+    ):
+        descriptors = {row.descriptor_key: row for row in overlays}
+        for suffix in ("", ".rhs_inline"):
+            ordinary = descriptors[f"amdgpu.s_add_u32{suffix}"]
+            carry = descriptors[f"amdgpu.s_add_co_u32{suffix}"]
+            assert carry.instruction_name == ordinary.instruction_name == "S_ADD_U32"
+            assert carry.operands == ordinary.operands
+            assert carry.encoding_name == ordinary.encoding_name
+            assert carry.schedule_class == ordinary.schedule_class
+            assert carry.flags == ordinary.flags
+            assert (
+                ordinary.implicit_operands[0].descriptor_operand.role
+                is OperandRole.IMPLICIT
+            )
+            state = carry.implicit_operands[0].descriptor_operand
+            assert state.role is OperandRole.RESULT
+            assert OperandFlag.STATE_WRITE in state.flags
+            assert carry.asm_forms[0].results == ("dst", "carry")
+            assert carry.asm_forms[0].native_assembly_mnemonic == "s_add_u32"
+        consumer = descriptors["amdgpu.s_addc_u32"]
+        assert consumer.asm_forms[0].results == ("sum", "carry")
+        assert consumer.asm_forms[0].operands == ("lhs", "rhs", "carry_in")
+        carry_in = consumer.implicit_operands[1].descriptor_operand
+        assert carry_in.role is OperandRole.PREDICATE
+        assert OperandFlag.STATE_READ in carry_in.flags
+
+
 def test_symbol_relative_salu_descriptors_have_lossless_low_asm_forms() -> None:
     pc_relative_effect = (Effect(EffectKind.CONVERGENT, flags=(EffectFlag.ORDERED,)),)
 
@@ -2429,7 +2463,7 @@ def test_symbol_relative_salu_descriptors_have_lossless_low_asm_forms() -> None:
         assert add_lo.effects == pc_relative_effect
         assert add_lo.asm_forms is not None
         assert add_lo.asm_forms[0].mnemonic == "s_add_u32_rhs_symbol_rel32_lo"
-        assert add_lo.asm_forms[0].results == ("dst",)
+        assert add_lo.asm_forms[0].results == ("dst", "carry")
         assert add_lo.asm_forms[0].operands == ("lhs",)
         assert tuple(
             immediate.field_name for immediate in add_lo.asm_forms[0].immediates
@@ -2439,8 +2473,8 @@ def test_symbol_relative_salu_descriptors_have_lossless_low_asm_forms() -> None:
         assert addc_hi.effects == pc_relative_effect
         assert addc_hi.asm_forms is not None
         assert addc_hi.asm_forms[0].mnemonic == "s_addc_u32_rhs_symbol_rel32_hi"
-        assert addc_hi.asm_forms[0].results == ("sum",)
-        assert addc_hi.asm_forms[0].operands == ("lhs",)
+        assert addc_hi.asm_forms[0].results == ("sum", "carry")
+        assert addc_hi.asm_forms[0].operands == ("lhs", "carry_in")
         assert tuple(
             immediate.field_name for immediate in addc_hi.asm_forms[0].immediates
         ) == ("symbol", "byte_offset")

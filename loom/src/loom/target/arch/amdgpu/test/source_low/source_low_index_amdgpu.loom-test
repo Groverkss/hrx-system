@@ -45,9 +45,9 @@ low.kernel.def target<amdgpu.gfx11.generic.core>(@target) workgroup_size(1, 1, 1
   %step = s_mov_b32 1
   %value = v_mov_b32 42
   low.br ^_bb3
-^_bb1(%47: reg<amdgpu.sgpr>, %48: reg<amdgpu.sgpr>):
-  %22 = v_mov_b32_copy %47
-  %24 = v_mov_b32_copy %48
+^_bb1(%49: reg<amdgpu.sgpr>, %50: reg<amdgpu.sgpr>):
+  %22 = v_mov_b32_copy %49
+  %24 = v_mov_b32_copy %50
   %25 = v_mov_b32_copy %end
   %26 = v_mov_b32 0
   %27 = v_cmp_lt_u32 %24, %26
@@ -62,12 +62,12 @@ low.kernel.def target<amdgpu.gfx11.generic.core>(@target) workgroup_size(1, 1, 1
   %37 = slice %output_view[0] : reg<amdgpu.sgpr x2> -> reg<amdgpu.sgpr>
   %38 = slice %output_view[1] : reg<amdgpu.sgpr x2> -> reg<amdgpu.sgpr>
   %39 = s_mov_b32 0
-  %40 = s_add_u32 %37, %47
-  %41 = s_addc_u32 %38, %39
-  %42 = concat(%40, %41) : (reg<amdgpu.sgpr>, reg<amdgpu.sgpr>) -> reg<amdgpu.sgpr x2>
-  global_store_b8_saddr %35, %value, %42
-  %44 = s_add_u32 %47, %step
-  low.br ^_bb1(%44: reg<amdgpu.sgpr>, %39: reg<amdgpu.sgpr>)
+  %40, %41 = s_add_co_u32 %37, %49
+  %42, %43 = s_addc_u32 %38, %39, %41
+  %44 = concat(%40, %42) : (reg<amdgpu.sgpr>, reg<amdgpu.sgpr>) -> reg<amdgpu.sgpr x2>
+  global_store_b8_saddr %35, %value, %44
+  %46 = s_add_u32 %49, %step
+  low.br ^_bb1(%46: reg<amdgpu.sgpr>, %39: reg<amdgpu.sgpr>)
 ^_bb3:
   %32 = s_mov_b64_exec_read
   low.br ^_bb1(%begin: reg<amdgpu.sgpr>, %begin: reg<amdgpu.sgpr>)

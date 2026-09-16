@@ -223,10 +223,10 @@ low.func.def target<amdgpu.gfx11.generic.core>(@target) abi(hal_kernel) @dynamic
   %12 = slice %input_view[0] : reg<amdgpu.sgpr x2> -> reg<amdgpu.sgpr>
   %13 = slice %input_view[1] : reg<amdgpu.sgpr x2> -> reg<amdgpu.sgpr>
   %14 = s_mov_b32 0
-  %15 = s_add_u32 %12, %11
-  %16 = s_addc_u32 %13, %14
-  %17 = concat(%15, %16) : (reg<amdgpu.sgpr>, reg<amdgpu.sgpr>) -> reg<amdgpu.sgpr x2>
-  %loaded = global_load_b32_saddr %10, %17
+  %15, %16 = s_add_co_u32 %12, %11
+  %17, %18 = s_addc_u32 %13, %14, %16
+  %19 = concat(%15, %17) : (reg<amdgpu.sgpr>, reg<amdgpu.sgpr>) -> reg<amdgpu.sgpr x2>
+  %loaded = global_load_b32_saddr %10, %19
   return %loaded
 }
 
