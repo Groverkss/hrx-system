@@ -268,6 +268,18 @@ def _dense_integer_matrix_descriptor_specs() -> tuple[_DescriptorSpec, ...]:
             ("negative-multiply", "VNEGMUL", "mnegmul", ()),
             ("accumulate", "VMAC", "mma", (("acc1", "mBMs"),)),
             ("subtract-product", "VMSC", "mms", (("acc1", "mBMs"),)),
+            (
+                "add-accumulate",
+                "VADDMAC_vmac_cm2_add_reg",
+                "maddmac",
+                (("acc1", "mBMs"), ("acc2", "mBMs")),
+            ),
+            (
+                "add-subtract-product",
+                "VADDMSC_vmac_cm2_add_reg",
+                "maddmsc",
+                (("acc1", "mBMs"), ("acc2", "mBMs")),
+            ),
         )
         for left in ("X", "Y")
         for right in ("X", "Y")
@@ -1072,6 +1084,24 @@ _BASE_DESCRIPTOR_SPECS = (
     ),
     *_integer_matrix_descriptor_specs(),
     *_dense_integer_matrix_descriptor_specs(),
+    *(
+        _DescriptorSpec(
+            native,
+            f"{_TARGET_KEY}.accumulator.{operation}.integer.configured",
+            f"integer.accumulator.{operation}.configured",
+            f"II_{native}",
+            storage_overrides=tuple(
+                (name, "mBMs")
+                for name in ("dst", "acc1", *(("acc2",) if operation != "neg" else ()))
+            ),
+            asm_mnemonic=f"v{operation}.acc.integer",
+        )
+        for operation, native in (
+            ("add", "VADD_vmac_cm2_add_reg"),
+            ("sub", "VSUB_vmac_cm2_add_reg"),
+            ("neg", "VNEG"),
+        )
+    ),
     _DescriptorSpec(
         "VCONV_bfp16ebs8_fp32",
         f"{_TARGET_KEY}.convert.f32x64.bfp16ebs8",
