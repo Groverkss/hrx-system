@@ -224,6 +224,39 @@ class ModuleTypesTest : public ::testing::Test {
   loom_module_t* module_ = nullptr;
 };
 
+TEST_F(ModuleTypesTest, TopologicalShapedTypesRetainScalarDependencies) {
+  const loom_type_kind_t kinds[] = {LOOM_TYPE_TILE, LOOM_TYPE_TENSOR,
+                                    LOOM_TYPE_VECTOR, LOOM_TYPE_VIEW};
+  const loom_scalar_type_t elements[] = {
+      LOOM_SCALAR_TYPE_F16, LOOM_SCALAR_TYPE_F32, LOOM_SCALAR_TYPE_I16,
+      LOOM_SCALAR_TYPE_I32};
+  for (iree_host_size_t i = 0; i < IREE_ARRAYSIZE(kinds); ++i) {
+    SCOPED_TRACE(i);
+    const auto type =
+        loom_type_shaped_1d(kinds[i], elements[i], loom_dim_pack_static(4), 0);
+    const auto previous_count = module_->types.count;
+    loom_type_id_t type_id = LOOM_TYPE_ID_INVALID;
+    IREE_ASSERT_OK(loom_module_intern_topological_type_id(
+        module_, type, nullptr, 0, &type_id));
+    EXPECT_EQ(module_->types.count, previous_count + 2);
+    EXPECT_TRUE(loom_type_equal(module_->types.entries[type_id], type));
+
+    loom_type_id_t element_id = LOOM_TYPE_ID_INVALID;
+    IREE_ASSERT_OK(loom_module_intern_type_id(
+        module_, loom_type_scalar(elements[i]), &element_id));
+    EXPECT_LT(element_id, type_id);
+    EXPECT_EQ(module_->types.count, previous_count + 2);
+
+    const auto arena_size = module_->arena.total_allocation_size;
+    loom_type_id_t repeated_id = LOOM_TYPE_ID_INVALID;
+    IREE_ASSERT_OK(loom_module_intern_topological_type_id(
+        module_, type, nullptr, 0, &repeated_id));
+    EXPECT_EQ(repeated_id, type_id);
+    EXPECT_EQ(module_->types.count, previous_count + 2);
+    EXPECT_EQ(module_->arena.total_allocation_size, arena_size);
+  }
+}
+
 TEST_F(ModuleTypesTest, FunctionTypeReferencesPreserveCombinedArity) {
   const auto index_type = loom_type_scalar(LOOM_SCALAR_TYPE_INDEX);
   loom_value_id_t source_dimension = LOOM_VALUE_ID_INVALID;

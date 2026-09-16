@@ -201,10 +201,13 @@ TEST_F(BytecodeSelectedTablesTest, MaterializesOnlyReachedMixedTableFacts) {
   loom_type_id_t target_type_id = LOOM_TYPE_ID_INVALID;
   IREE_ASSERT_OK(loom_bytecode_selected_table_materialize_type(
       &materializer, /*source_type_id=*/1, &target_type_id));
-  EXPECT_EQ(target_type_id, 0u);
-  ASSERT_EQ(module_->types.count, 1u);
-  EXPECT_EQ(loom_type_kind(module_->types.entries[0]), LOOM_TYPE_TENSOR);
-  EXPECT_EQ(module_->types.entries[0].encoding_id, 2u);
+  EXPECT_EQ(target_type_id, 1u);
+  ASSERT_EQ(module_->types.count, 2u);
+  EXPECT_TRUE(loom_type_equal(module_->types.entries[0],
+                              loom_type_scalar(LOOM_SCALAR_TYPE_F32)));
+  EXPECT_EQ(loom_type_kind(module_->types.entries[target_type_id]),
+            LOOM_TYPE_TENSOR);
+  EXPECT_EQ(module_->types.entries[target_type_id].encoding_id, 2u);
   ASSERT_EQ(module_->encodings.count, 2u);
   ASSERT_EQ(module_->encodings.entries[0].attribute_count, 1u);
   EXPECT_EQ(module_->encodings.entries[0].attributes[0].value.i64, 7);
@@ -221,6 +224,14 @@ TEST_F(BytecodeSelectedTablesTest, MaterializesOnlyReachedMixedTableFacts) {
   EXPECT_TRUE(iree_string_view_equal(module_->sources.entries[0], sources[0]));
 
   EXPECT_EQ(materializer.projection.slots.count, 5u);
+  // The scalar dependency is already retained even though its source table
+  // entry has not been projected yet.
+  loom_type_id_t target_element_id = LOOM_TYPE_ID_INVALID;
+  IREE_ASSERT_OK(loom_bytecode_selected_table_materialize_type(
+      &materializer, /*source_type_id=*/0, &target_element_id));
+  EXPECT_EQ(target_element_id, 0u);
+  EXPECT_EQ(module_->types.count, 2u);
+  EXPECT_EQ(materializer.projection.slots.count, 6u);
   EXPECT_EQ(error_count_, 0u);
   loom_bytecode_selected_table_materializer_deinitialize(&materializer);
 }

@@ -498,8 +498,7 @@ iree_status_t loom_module_intern_type_id(loom_module_t* module,
                                          loom_type_t type,
                                          loom_type_id_t* out_type_id);
 
-// Interns one type whose immediate structural dependencies are already
-// interned in |module|.
+// Interns one type with pre-interned explicit structural dependencies.
 //
 // |structural_dependency_ids| lists function arguments/results, dialect type
 // parameters, or a typed register's value type in representation order. It is
@@ -507,6 +506,9 @@ iree_status_t loom_module_intern_type_id(loom_module_t* module,
 // must be exact copies of those module entries. Pointer-backed storage owned by
 // |type| may be temporary; only its top-level payload is copied because nested
 // payloads are retained by the canonical dependency entries.
+// Shaped scalar element types are interned implicitly to preserve the module's
+// serializer closure even when a selective reader has not reached a separate
+// scalar type-table entry.
 //
 // This is the topological construction path for validated serialized type
 // tables. General callers with arbitrary recursive type values use

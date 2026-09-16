@@ -4582,6 +4582,7 @@ TEST_F(ReaderTest, SelectedDeclarationRetainsArgumentOwnership) {
   EXPECT_EQ(loom_value_owner_op(argument), declaration);
   IREE_ASSERT_OK(loom_module_compute_uses(selected_module));
   EXPECT_EQ(loom_value_owner_op(argument), declaration);
+  EXPECT_EQ(WriteModule(selected_module), bytes);
 
   loom_module_free(selected_module);
   iree_arena_deinitialize(&metadata_arena);

@@ -4318,6 +4318,18 @@ iree_status_t loom_module_intern_topological_type_id(
   type = loom_module_canonicalize_shaped_type_attachment(module, type);
   iree_host_size_t expected_dependency_count = 0;
   switch (loom_type_kind(type)) {
+    case LOOM_TYPE_TILE:
+    case LOOM_TYPE_TENSOR:
+    case LOOM_TYPE_VECTOR:
+    case LOOM_TYPE_VIEW: {
+      // Shaped wire records name their scalar element inline. Selective
+      // readers may not have reached a separate scalar table entry.
+      loom_type_id_t element_type_id = LOOM_TYPE_ID_INVALID;
+      IREE_RETURN_IF_ERROR(loom_module_intern_type_id(
+          module, loom_type_scalar(loom_type_element_type(type)),
+          &element_type_id));
+      break;
+    }
     case LOOM_TYPE_FUNCTION: {
       const loom_func_type_data_t* data = loom_type_func_data(type);
       IREE_ASSERT(data != NULL);
