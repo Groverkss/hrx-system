@@ -86,7 +86,7 @@ _VECTOR_MEMORY_FORM_FAMILIES = (
     ),
 )
 
-_VECTOR_MEMORY_ADDRESS_FORMS = (
+_MEMORY_ADDRESS_FORMS = (
     ("indexed.immediate", "idx_imm", "", 0),
     ("indexed.register", "idx", ".index", 0),
     ("postincrement.immediate", "pstm_nrm_imm", ".post", 0),
@@ -163,7 +163,7 @@ def _vector_memory_descriptor_specs() -> tuple[_DescriptorSpec, ...]:
                     native_suffix,
                     asm_suffix,
                     dimension,
-                ) in _VECTOR_MEMORY_ADDRESS_FORMS:
+                ) in _MEMORY_ADDRESS_FORMS:
                     form = (
                         forms[1].format(dimension=dimension)
                         if dimension
@@ -470,28 +470,30 @@ def _fused_vector_memory_descriptor_specs() -> tuple[_DescriptorSpec, ...]:
 
 
 def _accumulator_memory_descriptor_specs() -> tuple[_DescriptorSpec, ...]:
-    """Selects raw 512-bit accumulator loads and stores."""
+    """Selects raw 512-bit accumulator transfers and address updates."""
 
-    return tuple(
-        _DescriptorSpec(
-            form_name,
-            f"{_TARGET_KEY}.{operation}.accumulator.indexed.{address_form}",
-            f"memory.{operation}.accumulator.indexed",
-            f"II_{form_name}",
-            storage_overrides=((("dst", "mBMs"),) if operation == "load" else ()),
-            asm_mnemonic=(
-                f"v{'lda' if operation == 'load' else 'st'}.acc"
-                f"{'.index' if address_form == 'register' else ''}"
-            ),
-            memory_width_bits=512,
-        )
-        for operation, address_form, form_name in (
-            ("load", "register", "VLDA_dmx_lda_bm_idx"),
-            ("load", "immediate", "VLDA_dmx_lda_bm_idx_imm"),
-            ("store", "register", "VST_dmx_sts_bm_idx"),
-            ("store", "immediate", "VST_dmx_sts_bm_idx_imm"),
-        )
-    )
+    result = []
+    for operation, prefix, memory_stem, mnemonic in (
+        ("load", "VLDA", "dmx_lda_bm", "vlda"),
+        ("store", "VST", "dmx_sts_bm", "vst"),
+    ):
+        for addressing, native_suffix, asm_suffix, dimension in _MEMORY_ADDRESS_FORMS:
+            form = (
+                f"{prefix}_{dimension}D_{memory_stem}"
+                if dimension
+                else f"{prefix}_{memory_stem}_{native_suffix}"
+            )
+            spec = _DescriptorSpec(
+                form,
+                f"{_TARGET_KEY}.{operation}.accumulator.{addressing}",
+                f"memory.{operation}.accumulator.{addressing.split('.')[0]}",
+                f"II_{form}",
+                storage_overrides=((("dst", "mBMs"),) if operation == "load" else ()),
+                asm_mnemonic=f"{mnemonic}.acc{asm_suffix}",
+                memory_width_bits=512,
+            )
+            result.append(_dimension_update(spec, dimension) if dimension else spec)
+    return tuple(result)
 
 
 def _scalar_memory_descriptor_specs() -> tuple[_DescriptorSpec, ...]:

@@ -122,3 +122,16 @@ low.func.def target<amd.xdna.aie2p.core> @consumed_vector_pointer(%pointer: reg<
   %stale = vldb.128.bf16x8 %pointer, 0
   return
 }
+
+// ====
+
+// Accumulator transfers retain pointer updates even when the loaded data is unused.
+// RUN: with-low-asm pass low-cse,low-dce
+
+low.func.def target<amd.xdna.aie2p.core> @accumulator_pointer_recurrence(%input: reg<aie2p.ep>, %output: reg<aie2p.ep>, %modifier: reg<aie2p.em>) -> (reg<aie2p.ep>, reg<aie2p.ep>) asm {
+  %unused, %input1 = vlda.acc.post %input, 64
+  %value, %input2 = vlda.acc.post.modifier %input1, %modifier
+  %output1 = vst.acc.post %value, %output, -64
+  %output2 = vst.acc.post.modifier %value, %output1, %modifier
+  return %input2, %output2
+}

@@ -647,3 +647,24 @@ def test_vector_address_updates_preserve_pointer_and_dimension_ownership() -> No
                         if family == "load.a"
                         else ()
                     )
+
+
+def test_accumulator_address_updates_retain_raw_storage() -> None:
+    for descriptor in AIE2P_CORE_DESCRIPTOR_SET.descriptors:
+        if not descriptor.key.startswith(
+            ("amd.xdna.aie2p.load.accumulator.", "amd.xdna.aie2p.store.accumulator.")
+        ):
+            continue
+        value = next(
+            operand
+            for operand in descriptor.operands
+            if operand.field_name in ("src", "dst")
+        )
+        assert value.reg_alts[0].reg_class == "aie2p.mbms"
+        assert value.unit_count == 1
+        assert value.register_part is None
+        assert descriptor.effects[0].width_bits == 512
+        assert all(
+            not operand.field_name.startswith("implicit_")
+            for operand in descriptor.operands
+        )

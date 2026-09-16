@@ -195,3 +195,14 @@ low.func.def target<amd.xdna.aie2p.core> @consumed_vector_dimension(%pointer: re
   %stale = mov.3d.inner.count-to-scalar %dimension
   return
 }
+
+// ====
+
+// Raw accumulator transfers preserve both independent dimension recurrences.
+// RUN: with-low-asm pass low-cse,low-dce
+
+low.func.def target<amd.xdna.aie2p.core> @accumulator_recurrence(%input: reg<aie2p.ep>, %output: reg<aie2p.ep>, %rows: reg<aie2p.ed>, %volume: reg<aie2p.eds>) -> (reg<aie2p.ed>, reg<aie2p.eds>) asm {
+  %value, %next_input, %next_rows = vlda.acc.2d %input, %rows
+  %next_output, %next_volume = vst.acc.3d %value, %output, %volume
+  return %next_rows, %next_volume
+}
