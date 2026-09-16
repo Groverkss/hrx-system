@@ -119,15 +119,19 @@ def _vector_memory_operand_overrides(
         return (), (), ()
     if native_adapter is None:
         raise ValueError("128-bit vector memory forms need an encoding adapter")
+    # Native loads define fresh W storage without preserving a destination
+    # input. Stores consume only the low 128 bits of their source register.
+    part = _EWL_LOW128_PART if element_type == "bf16" else _VEC256_LOW128_PART
+    parts = ((operand_name, part),) if operand_name == "src" else ()
     if element_type == "bf16":
         return (
             ((operand_name, "eWL"),),
-            ((operand_name, _EWL_LOW128_PART),),
+            parts,
             ((operand_name, f"LOOM_eWL_{native_adapter}"),),
         )
     return (
         (),
-        ((operand_name, _VEC256_LOW128_PART),),
+        parts,
         ((operand_name, native_adapter),),
     )
 
@@ -154,11 +158,6 @@ def _vector_memory_descriptor_specs() -> tuple[_DescriptorSpec, ...]:
             store_overrides = _vector_memory_operand_overrides(
                 width_bits, element_type, "src", store[2]
             )
-            load_storage_continuation_part = (
-                _VEC256_HIGH128_PART
-                if width_bits == 128 and element_type != "bf16"
-                else None
-            )
             result.extend(
                 (
                     _DescriptorSpec(
@@ -170,7 +169,6 @@ def _vector_memory_descriptor_specs() -> tuple[_DescriptorSpec, ...]:
                         asm_mnemonic=f"vlda.{width_bits}.{shape}",
                         operand_register_parts=load_a_overrides[1],
                         encoding_adapter_overrides=load_a_overrides[2],
-                        storage_continuation_part=load_storage_continuation_part,
                         schedule_alternatives=(load_b_immediate_key,),
                         memory_width_bits=width_bits,
                     ),
@@ -183,7 +181,6 @@ def _vector_memory_descriptor_specs() -> tuple[_DescriptorSpec, ...]:
                         asm_mnemonic=f"vlda.{width_bits}.{shape}.index",
                         operand_register_parts=load_a_overrides[1],
                         encoding_adapter_overrides=load_a_overrides[2],
-                        storage_continuation_part=load_storage_continuation_part,
                         schedule_alternatives=(load_b_register_key,),
                         memory_width_bits=width_bits,
                     ),
@@ -196,7 +193,6 @@ def _vector_memory_descriptor_specs() -> tuple[_DescriptorSpec, ...]:
                         asm_mnemonic=f"vldb.{width_bits}.{shape}",
                         operand_register_parts=load_b_overrides[1],
                         encoding_adapter_overrides=load_b_overrides[2],
-                        storage_continuation_part=load_storage_continuation_part,
                         memory_width_bits=width_bits,
                     ),
                     _DescriptorSpec(
@@ -208,7 +204,6 @@ def _vector_memory_descriptor_specs() -> tuple[_DescriptorSpec, ...]:
                         asm_mnemonic=f"vldb.{width_bits}.{shape}.index",
                         operand_register_parts=load_b_overrides[1],
                         encoding_adapter_overrides=load_b_overrides[2],
-                        storage_continuation_part=load_storage_continuation_part,
                         memory_width_bits=width_bits,
                     ),
                     _DescriptorSpec(

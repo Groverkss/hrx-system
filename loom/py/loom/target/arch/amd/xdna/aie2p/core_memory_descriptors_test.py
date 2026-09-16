@@ -429,6 +429,15 @@ def test_vector_memory_descriptors_cover_each_native_width_and_value_shape() -> 
                     payload = descriptor.operands[0]
                     assert payload.reg_alts[0].reg_class == expected_register_class
                     assert payload.unit_count == unit_count
+                    assert payload.register_part is None
+                    assert all(
+                        operand.field_name != "storage"
+                        for operand in descriptor.operands
+                    )
+                    assert all(
+                        constraint.kind is not ConstraintKind.TIED
+                        for constraint in descriptor.constraints
+                    )
                     assert descriptor.effects[0].width_bits == width_bits
                     if address_form == "immediate":
                         assert descriptor.immediates[0].value_step == immediate_step
@@ -451,32 +460,7 @@ def test_vector_memory_descriptors_cover_each_native_width_and_value_shape() -> 
                     if element_type == "bf16"
                     else "aie2p.vec256.low128"
                 )
-                assert load.operands[0].register_part == expected_part
                 assert store.operands[0].register_part == expected_part
-                if element_type == "bf16":
-                    assert all(
-                        operand.field_name != "storage" for operand in load.operands
-                    )
-                else:
-                    storage = next(
-                        operand
-                        for operand in load.operands
-                        if operand.field_name == "storage"
-                    )
-                    assert storage.register_part == "aie2p.vec256.high128"
-                    assert set(storage.flags) == {
-                        OperandFlag.IMPLICIT,
-                        OperandFlag.STORAGE_CONTINUATION,
-                    }
-                    assert load.constraints[-1] == Constraint(
-                        ConstraintKind.TIED,
-                        0,
-                        next(
-                            index
-                            for index, operand in enumerate(load.operands)
-                            if operand.field_name == "storage"
-                        ),
-                    )
             else:
                 assert load.operands[0].register_part is None
                 assert store.operands[0].register_part is None
@@ -512,35 +496,17 @@ def test_float_vector_memory_descriptors_reuse_bit_exact_physical_forms() -> Non
                         storage_descriptor.encoding_field_values
                     )
                     if width_bits == 128 and value_type == "bf16":
-                        assert tuple(
-                            operand
-                            for operand in value_descriptor.operands[1:]
-                            if operand.field_name != "storage"
-                        ) == tuple(
-                            operand
-                            for operand in storage_descriptor.operands[1:]
-                            if operand.field_name != "storage"
+                        assert (
+                            value_descriptor.operands[1:]
+                            == storage_descriptor.operands[1:]
                         )
                         assert (
                             value_descriptor.operands[0].reg_alts[0].reg_class
                             == "aie2p.ewl"
                         )
                         assert value_descriptor.operands[0].register_part == (
-                            "aie2p.ewl.low128"
+                            "aie2p.ewl.low128" if descriptor_family == "store" else None
                         )
-                        if descriptor_family.startswith("load"):
-                            assert all(
-                                operand.field_name != "storage"
-                                for operand in value_descriptor.operands
-                            )
-                            storage_storage = next(
-                                operand
-                                for operand in storage_descriptor.operands
-                                if operand.field_name == "storage"
-                            )
-                            assert storage_storage.register_part == (
-                                "aie2p.vec256.high128"
-                            )
                     else:
                         assert value_descriptor.operands == storage_descriptor.operands
                     assert value_descriptor.immediates == storage_descriptor.immediates

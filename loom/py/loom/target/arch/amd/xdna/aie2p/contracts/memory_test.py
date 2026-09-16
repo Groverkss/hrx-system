@@ -615,7 +615,7 @@ def test_vector_memory_rules_cover_every_native_width_and_address_form() -> None
                     emit for emit in rule.emit if isinstance(emit, EmitRegisterConcat)
                 ]
                 if expands_logical_carrier and operation is SourceMemoryOperation.LOAD:
-                    assert len(slices) == (2 if width_bits == 128 else 1)
+                    assert len(slices) == 1
                     assert len(concats) == 1
                     assert concats[0].sources[0] != concats[0].sources[1]
                     assert concats[0].sources[1].field == "memory_padding"
@@ -630,13 +630,8 @@ def test_vector_memory_rules_cover_every_native_width_and_address_form() -> None
                     assert not slices
                     assert not concats
                 memory_emit = _source_memory_emit(rule)
-                has_storage_continuation = any(
-                    operand.field_name == "storage"
-                    for operand in rule.descriptor.operands
-                )
-                assert memory_emit.copy_operands == (
-                    ("storage",) if has_storage_continuation else ()
-                )
+                assert not memory_emit.copy_operands
+                assert "storage" not in memory_emit.operands
                 constraint = memory_emit.source_memory
                 assert constraint is not None
                 assert constraint.operation is operation
@@ -711,7 +706,8 @@ def test_256bit_vector_loads_split_at_16_byte_alignment() -> None:
                     and emit.descriptor == rule.descriptor
                 ]
                 assert len(memory_emits) == 2
-                assert all(emit.copy_operands == ("storage",) for emit in memory_emits)
+                assert all(not emit.copy_operands for emit in memory_emits)
+                assert all("storage" not in emit.operands for emit in memory_emits)
                 concats = [
                     emit for emit in rule.emit if isinstance(emit, EmitRegisterConcat)
                 ]

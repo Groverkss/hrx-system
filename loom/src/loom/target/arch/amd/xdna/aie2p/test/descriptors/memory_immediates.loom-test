@@ -44,3 +44,38 @@ low.func.def target<amd.xdna.aie2p.core> @misaligned(%pointer: reg<aie2p.ep>) as
   %unused = vlda.acc %pointer, 1
   return
 }
+
+// ====
+
+// A 128-bit load defines fresh W storage without a preserved input. A possibly
+// aliasing store invalidates the memory read.
+// RUN: with-low-asm pass low-cse,low-dce
+
+low.func.def target<amd.xdna.aie2p.core> @fresh_vector_loads(%pointer: reg<aie2p.ep>, %output: reg<aie2p.ep>) -> (reg<aie2p.vec256>, reg<aie2p.vec256>, reg<aie2p.vec256>) asm {
+  %first = vlda.128.i32x4 %pointer, 16
+  %same = vlda.128.i32x4 %pointer, 16
+  vst.128.i32x4 %first, %output, 0
+  %after = vlda.128.i32x4 %pointer, 16
+  return %first, %same, %after
+}
+
+// ----
+low.func.def target<amd.xdna.aie2p.core> @fresh_vector_loads(%pointer: reg<aie2p.ep>, %output: reg<aie2p.ep>) -> (reg<aie2p.vec256>, reg<aie2p.vec256>, reg<aie2p.vec256>) asm {
+  %first = vlda.128.i32x4 %pointer, 16
+  vst.128.i32x4 %first, %output, 0
+  %after = vlda.128.i32x4 %pointer, 16
+  return %first, %first, %after
+}
+
+// ====
+
+// Both load lanes and BF16 storage define their whole result register without
+// an input destination, including register-indexed addresses.
+// RUN: verify
+
+low.func.def target<amd.xdna.aie2p.core> @fresh_indexed_vectors(%pointer: reg<aie2p.ep>, %index: reg<aie2p.edj>) -> (reg<aie2p.vec256>, reg<aie2p.ewl>, reg<aie2p.ewl>) asm {
+  %bytes = vldb.128.i8x16.index %pointer, %index
+  %bf16_a = vlda.128.bf16x8.index %pointer, %index
+  %bf16_b = vldb.128.bf16x8 %pointer, 16
+  return %bytes, %bf16_a, %bf16_b
+}
