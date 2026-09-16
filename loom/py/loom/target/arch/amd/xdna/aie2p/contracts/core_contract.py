@@ -95,7 +95,6 @@ def aie2p_core_cases() -> Sequence[ContractCase]:
             source_op=vector.vector_mma,
             source="vector_mma",
         ),
-        *(core_rules._matrix_fragment_store_rule(t) for t in ("i32", "f32")),
         RecipeRule(
             source_op=vector.vector_encode,
             guards=(

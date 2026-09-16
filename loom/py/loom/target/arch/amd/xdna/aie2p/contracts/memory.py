@@ -469,16 +469,17 @@ def _accumulator_memory_rule(
     operation: SourceMemoryOperation,
     address_form: _MemoryAddressForm,
     *,
+    source_op: Op,
     root_kind: SourceMemoryRootKind,
     memory_spaces: tuple[str, ...],
     element_byte_count: int,
     vector_lane_count: int,
     value_type: TypePattern,
     volatile: bool,
+    guards: tuple[Guard, ...] = (),
 ) -> DescriptorRule:
     is_load = operation is SourceMemoryOperation.LOAD
     immediate_memory = address_form is _MemoryAddressForm.IMMEDIATE
-    source_op = vector.vector_load if is_load else vector.vector_store
     descriptor_family = "load" if is_load else "store"
     address_family = "immediate" if immediate_memory else "register"
     descriptor_key = (
@@ -571,6 +572,7 @@ def _accumulator_memory_rule(
         source_op=source_op,
         descriptor=memory_descriptor,
         guards=(
+            *guards,
             *(
                 (Guard.instance_flags_has_all("memory_flags", "volatile"),)
                 if volatile
@@ -1371,6 +1373,11 @@ def _accumulator_memory_rules(*, volatile: bool) -> tuple[DescriptorRule, ...]:
         _accumulator_memory_rule(
             operation,
             address_form,
+            source_op=(
+                vector.vector_load
+                if operation is SourceMemoryOperation.LOAD
+                else vector.vector_store
+            ),
             root_kind=root_kind,
             memory_spaces=memory_spaces,
             element_byte_count=element_byte_count,
@@ -1387,7 +1394,38 @@ def _accumulator_memory_rules(*, volatile: bool) -> tuple[DescriptorRule, ...]:
     )
 
 
+def _matrix_fragment_store_rules() -> tuple[DescriptorRule, ...]:
+    # This native result layout is exactly four contiguous accumulator chunks.
+    # Its address uses the same retained source-memory plan as vector stores.
+    return tuple(
+        _accumulator_memory_rule(
+            SourceMemoryOperation.STORE,
+            address_form,
+            source_op=vector.vector_fragment_store,
+            root_kind=root_kind,
+            memory_spaces=memory_spaces,
+            element_byte_count=4,
+            vector_lane_count=64,
+            value_type=Vector(element_type, lanes=64),
+            volatile=False,
+            guards=(
+                Guard.enum_attr_equals("role", "result"),
+                Guard.value_type("view", TypePattern.view(element_type, dims=(8, 8))),
+                Guard.operand_segment_count("indices", 0),
+                Guard.i64_array_count("static_indices", 2),
+                Guard.i64_array_elements_range("static_indices", 0, 0),
+                Guard.value_i64_range("rows", 8, 8),
+                Guard.value_i64_range("columns", 8, 8),
+            ),
+        )
+        for root_kind, memory_spaces in _MEMORY_ROOTS
+        for element_type in ("i32", "f32")
+        for address_form in _MemoryAddressForm
+    )
+
+
 AIE2P_MEMORY_RULES: tuple[DescriptorRule, ...] = (
+    *_matrix_fragment_store_rules(),
     *_scalar_memory_rules(volatile=True),
     *_pair_scalar_memory_rules(volatile=True),
     *_bytewise_scalar_memory_rules(volatile=True),
