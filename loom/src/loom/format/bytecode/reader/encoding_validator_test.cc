@@ -4,6 +4,8 @@
 // See https://llvm.org/LICENSE.txt for license information.
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
+#include <initializer_list>
+
 #include "iree/testing/gtest.h"
 #include "iree/testing/status_matchers.h"
 #include "loom/format/bytecode/format.h"
@@ -12,11 +14,23 @@
 namespace loom {
 namespace {
 
-static const loom_attr_descriptor_t kEncodingParameters[] = {{
-    /*.name=*/LOOM_BSTRING_REF(5, "block"),
-    /*.attr_kind=*/LOOM_ATTR_I64,
-    /*.flags=*/LOOM_ATTR_OPTIONAL,
-}};
+static const loom_attr_descriptor_t kEncodingParameters[] = {
+    {
+        /*.name=*/LOOM_BSTRING_REF(4, "base"),
+        /*.attr_kind=*/LOOM_ATTR_ENCODING,
+        /*.flags=*/LOOM_ATTR_OPTIONAL,
+    },
+    {
+        /*.name=*/LOOM_BSTRING_REF(5, "block"),
+        /*.attr_kind=*/LOOM_ATTR_I64,
+        /*.flags=*/LOOM_ATTR_OPTIONAL,
+    },
+    {
+        /*.name=*/LOOM_BSTRING_REF(7, "options"),
+        /*.attr_kind=*/LOOM_ATTR_DICT,
+        /*.flags=*/LOOM_ATTR_OPTIONAL,
+    },
+};
 static const loom_encoding_family_descriptor_t kEncodingDescriptor = {
     /*.name=*/LOOM_BSTRING_REF(4, "q8_0"),
     /*.role=*/LOOM_ENCODING_ROLE_STORAGE_SCHEMA,
@@ -53,6 +67,8 @@ class BytecodeEncodingValidatorTest : public ::testing::Test {
     strings_[0] = iree_string_view_empty();
     strings_[1] = IREE_SV("q8_0");
     strings_[2] = IREE_SV("block");
+    strings_[3] = IREE_SV("base");
+    strings_[4] = IREE_SV("options");
     module_view_.strings.values = strings_;
     module_view_.strings.count = IREE_ARRAYSIZE(strings_);
   }
@@ -83,7 +99,7 @@ class BytecodeEncodingValidatorTest : public ::testing::Test {
   // Number of accepted malformed-input diagnostics.
   uint32_t error_count_ = 0;
   // String table addressed by the encoded family and parameter names.
-  iree_string_view_t strings_[3];
+  iree_string_view_t strings_[5];
   // Block source shared by the short-lived and retained arenas.
   iree_arena_block_pool_t block_pool_;
   // Storage for validation facts consumed by later tables.
@@ -144,6 +160,131 @@ TEST_F(BytecodeEncodingValidatorTest, IndexesExactInstanceRange) {
   EXPECT_EQ(entries[0].entry_offset, 44u);
   EXPECT_EQ(entries[0].entry_length, 6u);
   EXPECT_EQ(entries[0].name_string_index, 1u);
+  EXPECT_EQ(error_count_, 0u);
+}
+
+TEST_F(BytecodeEncodingValidatorTest, AcceptsPriorEncodingReferences) {
+  const uint8_t data[] = {
+      0x01, 0x01, 0x03,  // One family, three instances.
+      0x00, 0x00, 0x00,  // First instance has no parameters.
+      0x00, 0x00, 0x01, 0x03, LOOM_BYTECODE_ATTR_ENCODING, 0x01,
+      0x00, 0x00, 0x01, 0x03, LOOM_BYTECODE_ATTR_ENCODING, 0x02,
+  };
+  const auto section = MakeSection(data, sizeof(data));
+  IREE_ASSERT_OK(loom_bytecode_encoding_table_validate(
+      &decoder_, &context_, &module_view_, &scratch_arena_, &section));
+  EXPECT_EQ(module_view_.encodings.count, 3u);
+
+  loom_bytecode_encoding_metadata_t* entries = nullptr;
+  iree_host_size_t count = 0;
+  IREE_ASSERT_OK(loom_bytecode_encoding_table_index(
+      &decoder_, &context_, &module_view_, &scratch_arena_, &section,
+      &retained_arena_, &entries, &count));
+  EXPECT_EQ(count, 3u);
+  EXPECT_NE(entries, nullptr);
+  EXPECT_EQ(module_view_.encodings.count, 3u);
+  EXPECT_EQ(error_count_, 0u);
+}
+
+TEST_F(BytecodeEncodingValidatorTest, RejectsNonPriorEncodingReferences) {
+  for (const uint8_t reference : {0, 2, 3, 4}) {
+    SCOPED_TRACE(static_cast<unsigned>(reference));
+    const uint8_t data[] = {
+        0x01, 0x01, 0x03,  // One family, three instances.
+        0x00, 0x00, 0x00,  // First instance has no parameters.
+        0x00, 0x00, 0x01, 0x03, LOOM_BYTECODE_ATTR_ENCODING, reference,
+        0x00, 0x00, 0x01, 0x03, LOOM_BYTECODE_ATTR_ENCODING, 0x01,
+    };
+    const auto section = MakeSection(data, sizeof(data));
+    error_count_ = 0;
+    IREE_EXPECT_STATUS_IS(
+        IREE_STATUS_DEFERRED,
+        loom_bytecode_encoding_table_validate(
+            &decoder_, &context_, &module_view_, &scratch_arena_, &section));
+    EXPECT_EQ(error_count_, 1u);
+
+    loom_bytecode_encoding_metadata_t* entries = nullptr;
+    iree_host_size_t count = 0;
+    error_count_ = 0;
+    IREE_EXPECT_STATUS_IS(
+        IREE_STATUS_DEFERRED,
+        loom_bytecode_encoding_table_index(&decoder_, &context_, &module_view_,
+                                           &scratch_arena_, &section,
+                                           &retained_arena_, &entries, &count));
+    EXPECT_EQ(error_count_, 1u);
+    EXPECT_EQ(entries, nullptr);
+    EXPECT_EQ(count, 0u);
+  }
+}
+
+TEST_F(BytecodeEncodingValidatorTest, RejectsNestedNonPriorEncodingReferences) {
+  for (const uint8_t reference : {0, 2, 3, 4}) {
+    SCOPED_TRACE(static_cast<unsigned>(reference));
+    const uint8_t data[] = {
+        0x01,
+        0x01,
+        0x03,  // One family, three instances.
+        0x00,
+        0x00,
+        0x00,  // First instance has no parameters.
+        0x00,
+        0x00,
+        0x01,
+        0x04,
+        LOOM_BYTECODE_ATTR_DICT,
+        0x01,
+        0x03,
+        LOOM_BYTECODE_ATTR_ENCODING,
+        reference,
+        0x00,
+        0x00,
+        0x01,
+        0x03,
+        LOOM_BYTECODE_ATTR_ENCODING,
+        0x01,
+    };
+    const auto section = MakeSection(data, sizeof(data));
+    error_count_ = 0;
+    IREE_EXPECT_STATUS_IS(
+        IREE_STATUS_DEFERRED,
+        loom_bytecode_encoding_table_validate(
+            &decoder_, &context_, &module_view_, &scratch_arena_, &section));
+    EXPECT_EQ(error_count_, 1u);
+  }
+}
+
+TEST_F(BytecodeEncodingValidatorTest, EmptyTableHasNoAvailableEncodings) {
+  const uint8_t data[] = {0x01, 0x01, 0x00};
+  const auto section = MakeSection(data, sizeof(data));
+  module_view_.encodings.count = 3;
+  IREE_ASSERT_OK(loom_bytecode_encoding_table_validate(
+      &decoder_, &context_, &module_view_, &scratch_arena_, &section));
+  EXPECT_EQ(module_view_.encodings.count, 0u);
+  EXPECT_EQ(error_count_, 0u);
+}
+
+TEST_F(BytecodeEncodingValidatorTest, AcceptsNestedPriorEncodingReference) {
+  const uint8_t data[] = {
+      0x01,
+      0x01,
+      0x02,  // One family, two instances.
+      0x00,
+      0x00,
+      0x00,  // First instance has no parameters.
+      0x00,
+      0x00,
+      0x01,
+      0x04,
+      LOOM_BYTECODE_ATTR_DICT,
+      0x01,
+      0x03,
+      LOOM_BYTECODE_ATTR_ENCODING,
+      0x01,
+  };
+  const auto section = MakeSection(data, sizeof(data));
+  IREE_ASSERT_OK(loom_bytecode_encoding_table_validate(
+      &decoder_, &context_, &module_view_, &scratch_arena_, &section));
+  EXPECT_EQ(module_view_.encodings.count, 2u);
   EXPECT_EQ(error_count_, 0u);
 }
 

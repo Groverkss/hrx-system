@@ -2560,6 +2560,86 @@ TEST_F(ReaderTest, AcceptsEmptyModuleMetadata) {
   loom_module_free(module);
 }
 
+TEST_F(ReaderTest, RejectsNonPriorEncodingReferencesBeforeMaterialization) {
+  const loom_attr_descriptor_t parameter = {
+      /*.name=*/LOOM_BSTRING_REF(4, "base"),
+      /*.attr_kind=*/LOOM_ATTR_ENCODING,
+      /*.flags=*/LOOM_ATTR_OPTIONAL,
+  };
+  const loom_encoding_family_descriptor_t descriptor = {
+      /*.name=*/LOOM_BSTRING_REF(9, "dependent"),
+      /*.role=*/LOOM_ENCODING_ROLE_STORAGE_SCHEMA,
+      /*.family_flags=*/{},
+      /*.parameter_count=*/1,
+      /*.parameter_descriptors=*/&parameter,
+  };
+  const loom_encoding_vtable_t vtable = {/*.descriptor=*/&descriptor};
+  loom_context_t context;
+  loom_context_initialize(iree_allocator_system(), &context);
+  IREE_ASSERT_OK(loom_context_register_encoding_vtable(&context, &vtable));
+  IREE_ASSERT_OK(loom_context_finalize(&context));
+  loom_module_t* module = nullptr;
+  IREE_ASSERT_OK(loom_module_allocate(&context, IREE_SV("encodings"),
+                                      &block_pool_, nullptr,
+                                      iree_allocator_system(), &module));
+  loom_encoding_t encoding = {};
+  IREE_ASSERT_OK(loom_module_intern_string(module, IREE_SV("dependent"),
+                                           &encoding.name_id));
+  encoding.alias_id = LOOM_STRING_ID_INVALID;
+  loom_named_attr_t base = {};
+  IREE_ASSERT_OK(
+      loom_module_intern_string(module, IREE_SV("base"), &base.name_id));
+  uint16_t encoding_id = 0;
+  IREE_ASSERT_OK(loom_module_add_encoding(module, &encoding, &encoding_id));
+  encoding.attribute_count = 1;
+  encoding.attributes = &base;
+  for (uint16_t i = 1; i < 3; ++i) {
+    base.value = loom_attr_encoding(encoding_id);
+    IREE_ASSERT_OK(loom_module_add_encoding(module, &encoding, &encoding_id));
+    EXPECT_EQ(encoding_id, i + 1);
+  }
+  auto bytes = WriteModule(module);
+  iree_arena_allocator_t metadata_arena;
+  iree_arena_initialize(&block_pool_, &metadata_arena);
+  loom_bytecode_file_metadata_t metadata = {};
+  loom_bytecode_read_result_t result = {};
+  std::vector<std::string> errors;
+  const loom_bytecode_index_options_t options = {
+      /*.diagnostic_sink=*/{CaptureDiagnostic, &errors},
+  };
+  IREE_ASSERT_OK(loom_bytecode_read_index(
+      iree_make_const_byte_span(bytes.data(), bytes.size()),
+      IREE_SV("encodings.loombc"), &context, &block_pool_, &metadata_arena,
+      &options, &result, &metadata));
+  ASSERT_EQ(result.error_count, 0u);
+  ASSERT_EQ(metadata.module_count, 1u);
+  ASSERT_EQ(metadata.modules[0].encodings.count, 3u);
+  const auto& entry = metadata.modules[0].encodings.entries[1];
+  const auto reference_offset = entry.entry_offset + entry.entry_length - 1;
+  ASSERT_EQ(bytes[reference_offset], 1u);
+  for (const uint8_t reference : {2, 3}) {
+    SCOPED_TRACE(static_cast<unsigned>(reference));
+    bytes[reference_offset] = reference;
+    errors.clear();
+    IREE_ASSERT_OK(loom_bytecode_read_index(
+        iree_make_const_byte_span(bytes.data(), bytes.size()),
+        IREE_SV("encodings.loombc"), &context, &block_pool_, &metadata_arena,
+        &options, &result, &metadata));
+    EXPECT_EQ(result.error_count, 1u);
+    EXPECT_EQ(errors, (std::vector<std::string>{"ERR_BYTECODE_012"}));
+    errors.clear();
+    IREE_ASSERT_OK(loom_bytecode_read_metadata(
+        iree_make_const_byte_span(bytes.data(), bytes.size()),
+        IREE_SV("encodings.loombc"), &context, &block_pool_, &options,
+        &result));
+    EXPECT_EQ(result.error_count, 1u);
+    EXPECT_EQ(errors, (std::vector<std::string>{"ERR_BYTECODE_012"}));
+  }
+  iree_arena_deinitialize(&metadata_arena);
+  loom_module_free(module);
+  loom_context_deinitialize(&context);
+}
+
 TEST_F(ReaderTest, DiagnosticSinkFailureEscapesPublicBoundary) {
   const uint8_t bytes[] = {0x00};
   loom_bytecode_read_result_t result = {

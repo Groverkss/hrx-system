@@ -108,7 +108,9 @@ static iree_status_t loom_bytecode_encoding_table_begin(
         validator->decoder, IREE_SV("encoding_instances"), instance_count,
         LOOM_BYTECODE_MAX_ENCODING_COUNT, instance_count_offset);
   }
-  validator->module_view->encodings.count = (iree_host_size_t)instance_count;
+  // Parameters may reference only completed prior instances. The declared
+  // total remains separate from the prefix available to attribute validation.
+  validator->module_view->encodings.count = 0;
   table.count = (iree_host_size_t)instance_count;
   table.attributes = (loom_bytecode_attribute_validator_t){
       .decoder = validator->decoder,
@@ -187,6 +189,7 @@ static iree_status_t loom_bytecode_encoding_decode_entry(
       .name_string_index = (uint32_t)validator->module_view->encodings
                                .family_name_ids[family_index],
   };
+  validator->module_view->encodings.count = index + 1;
   return iree_ok_status();
 }
 

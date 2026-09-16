@@ -358,6 +358,11 @@ iree_status_t loom_bytecode_read_metadata(
 
 // Reads and validates the bytecode file index without materializing IR bodies.
 //
+// Malformed bytecode follows the diagnostic contract of
+// loom_bytecode_read_metadata. |out_metadata| is usable only when the returned
+// status is OK and |out_result->error_count| is zero; otherwise it may contain
+// a partially decoded index.
+//
 // The metadata arena owns all arrays stored in |out_metadata|. It is not reset
 // by this function. |block_pool| provides transient scratch storage that is
 // returned before this function returns.

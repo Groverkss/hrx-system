@@ -122,7 +122,8 @@ typedef struct loom_bytecode_reader_module_view_t {
     loom_string_id_t* family_name_ids;
     // Number of encoding families.
     iree_host_size_t family_count;
-    // Number of encoding instances.
+    // Number of validated encoding instances. While reading ENCODINGS this
+    // is the completed prefix available to later instance parameters.
     iree_host_size_t count;
   } encodings;
 
