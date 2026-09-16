@@ -100,14 +100,16 @@ resident worker=0 entry=@repeated_sliding_window_array$worker$0 tile=(0,2) code-
 low.func.def retain target<amd.xdna.aie2p.core>(@repeated_sliding_window_core_target) @repeated_sliding_window_array$worker$0() asm {
   %acquire_delta = mov.short -1
   %release_delta = mov.short 1
-  %41 = mov.local-address 458752
-  %42 = mov.local-address 491520
-  low.br ^_bb1(%41: reg<aie2p.ep>, %42: reg<aie2p.ep>)
-^_bb1(%input: reg<aie2p.ep>, %output: reg<aie2p.ep>):
+  %43 = mov.local-address 458752
+  %44 = mov.local-address 491520
+  low.br ^_bb1(%43: reg<aie2p.ep>, %44: reg<aie2p.ep>)
+^_bb1(%32: reg<aie2p.ep>, %34: reg<aie2p.ep>):
   acq %acquire_delta, 49
   acq %acquire_delta, 50
   low.br ^_bb2
 ^_bb2:
+  %input = copy %32 : reg<aie2p.ep> -> reg<aie2p.ep>
+  %output = copy %34 : reg<aie2p.ep> -> reg<aie2p.ep>
   %value0 = lda %input, 0
   %value1 = lda %input, 4
   %value2 = lda %input, 8
@@ -120,12 +122,12 @@ low.func.def retain target<amd.xdna.aie2p.core>(@repeated_sliding_window_core_ta
 ^_bb3:
   rel %release_delta, 51
   rel %release_delta, 48
-  %34 = mov.address-to-scalar %input
-  %35 = mov.i32 16384
-  %36 = xor %34, %35
-  %37 = mov.scalar-to-address %36
-  %38 = mov.address-to-scalar %output
-  %39 = xor %38, %35
-  %40 = mov.scalar-to-address %39
-  low.br ^_bb1(%37: reg<aie2p.ep>, %40: reg<aie2p.ep>)
+  %36 = mov.address-to-scalar %32
+  %37 = mov.i32 16384
+  %38 = xor %36, %37
+  %39 = mov.scalar-to-address %38
+  %40 = mov.address-to-scalar %34
+  %41 = xor %40, %37
+  %42 = mov.scalar-to-address %41
+  low.br ^_bb1(%39: reg<aie2p.ep>, %42: reg<aie2p.ep>)
 }

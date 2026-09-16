@@ -99,54 +99,56 @@ low.func.def retain target<amd.xdna.aie2p.core>(@temporal_fold_core_target) @tem
   %fold_zero = mov.short 0
   %fold_record_count = mov.i32 4
   %fold_mode = mova.i32 60
-  %40 = acc.clear.f32x64
-  %41 = slice %40[0] : reg<aie2p.mbms x4> -> reg<aie2p.mbms>
-  %60 = mov.local-address 458752
-  %61 = mov.local-address 491520
-  low.br ^_bb1(%60: reg<aie2p.ep>, %61: reg<aie2p.ep>)
-^_bb1(%32: reg<aie2p.ep>, %33: reg<aie2p.ep>):
+  %42 = acc.clear.f32x64
+  %43 = slice %42[0] : reg<aie2p.mbms x4> -> reg<aie2p.mbms>
+  %62 = mov.local-address 458752
+  %63 = mov.local-address 491520
+  low.br ^_bb1(%62: reg<aie2p.ep>, %63: reg<aie2p.ep>)
+^_bb1(%34: reg<aie2p.ep>, %35: reg<aie2p.ep>):
   acq %acquire_delta, 50
-  low.br ^_bb2(%32: reg<aie2p.ep>, %33: reg<aie2p.ep>, %40: reg<aie2p.mbms x4>, %fold_record_count: reg<aie2p.er>, %release_delta: reg<aie2p.er>)
-^_bb2(%input: reg<aie2p.ep>, %output: reg<aie2p.ep>, %34: reg<aie2p.mbms x4>, %35: reg<aie2p.er>, %36: reg<aie2p.er>):
+  low.br ^_bb2(%34: reg<aie2p.ep>, %35: reg<aie2p.ep>, %42: reg<aie2p.mbms x4>, %fold_record_count: reg<aie2p.er>, %release_delta: reg<aie2p.er>)
+^_bb2(%30: reg<aie2p.ep>, %32: reg<aie2p.ep>, %36: reg<aie2p.mbms x4>, %37: reg<aie2p.er>, %38: reg<aie2p.er>):
   acq %acquire_delta, 49
   low.br ^_bb3
 ^_bb3:
+  %input = copy %30 : reg<aie2p.ep> -> reg<aie2p.ep>
+  %output = copy %32 : reg<aie2p.ep> -> reg<aie2p.ep>
   %low = vlda.acc %input, 0
   %high = vlda.acc %input, 64
   vst.acc %low, %output, 0
   vst.acc %high, %output, 64
   low.br ^_bb4
 ^_bb4:
-  %43 = vlda.acc %output, 0
-  %44 = vlda.acc %output, 64
-  %45 = concat(%43, %44, %41, %41) : (reg<aie2p.mbms>, reg<aie2p.mbms>, reg<aie2p.mbms>, reg<aie2p.mbms>) -> reg<aie2p.mbms x4>
-  %46 = nez %36
-  low.cond_br %46, ^_bb5, ^_bb6 : reg<aie2p.er>
+  %45 = vlda.acc %32, 0
+  %46 = vlda.acc %32, 64
+  %47 = concat(%45, %46, %43, %43) : (reg<aie2p.mbms>, reg<aie2p.mbms>, reg<aie2p.mbms>, reg<aie2p.mbms>) -> reg<aie2p.mbms x4>
+  %48 = nez %38
+  low.cond_br %48, ^_bb5, ^_bb6 : reg<aie2p.er>
 ^_bb5:
-  low.br ^_bb7(%45: reg<aie2p.mbms x4>)
-^_bb6:
-  %47 = vadd.f32x64 %34, %45, %fold_mode
   low.br ^_bb7(%47: reg<aie2p.mbms x4>)
-^_bb7(%42: reg<aie2p.mbms x4>):
+^_bb6:
+  %49 = vadd.f32x64 %36, %47, %fold_mode
+  low.br ^_bb7(%49: reg<aie2p.mbms x4>)
+^_bb7(%44: reg<aie2p.mbms x4>):
   rel %release_delta, 48
-  %48 = mov.address-to-scalar %input
-  %49 = mov.i32 16384
-  %50 = xor %48, %49
-  %51 = mov.scalar-to-address %50
-  %52 = sub %35, %release_delta
-  %53 = nez %52
-  low.cond_br %53, ^_bb8, ^_bb9 : reg<aie2p.er>
+  %50 = mov.address-to-scalar %30
+  %51 = mov.i32 16384
+  %52 = xor %50, %51
+  %53 = mov.scalar-to-address %52
+  %54 = sub %37, %release_delta
+  %55 = nez %54
+  low.cond_br %55, ^_bb8, ^_bb9 : reg<aie2p.er>
 ^_bb8:
-  low.br ^_bb2(%51: reg<aie2p.ep>, %output: reg<aie2p.ep>, %42: reg<aie2p.mbms x4>, %52: reg<aie2p.er>, %fold_zero: reg<aie2p.er>)
+  low.br ^_bb2(%53: reg<aie2p.ep>, %32: reg<aie2p.ep>, %44: reg<aie2p.mbms x4>, %54: reg<aie2p.er>, %fold_zero: reg<aie2p.er>)
 ^_bb9:
-  %54 = slice %42[0] : reg<aie2p.mbms x4> -> reg<aie2p.mbms>
-  vst.acc %54, %output, 0
-  %55 = slice %42[1] : reg<aie2p.mbms x4> -> reg<aie2p.mbms>
-  vst.acc %55, %output, 64
+  %56 = slice %44[0] : reg<aie2p.mbms x4> -> reg<aie2p.mbms>
+  vst.acc %56, %32, 0
+  %57 = slice %44[1] : reg<aie2p.mbms x4> -> reg<aie2p.mbms>
+  vst.acc %57, %32, 64
   rel %release_delta, 51
-  %56 = mov.address-to-scalar %output
-  %57 = mov.i32 16384
-  %58 = xor %56, %57
-  %59 = mov.scalar-to-address %58
-  low.br ^_bb1(%51: reg<aie2p.ep>, %59: reg<aie2p.ep>)
+  %58 = mov.address-to-scalar %32
+  %59 = mov.i32 16384
+  %60 = xor %58, %59
+  %61 = mov.scalar-to-address %60
+  low.br ^_bb1(%53: reg<aie2p.ep>, %61: reg<aie2p.ep>)
 }

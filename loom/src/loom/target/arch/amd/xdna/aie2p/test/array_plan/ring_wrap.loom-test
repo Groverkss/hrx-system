@@ -1,6 +1,7 @@
 // RUN: emit aie2p-array-plan @coprime_ring_array
 
-// Coprime ring capacities advance and wrap independently in the resident loop.
+// Coprime rings retain their base addresses while the worker advances a local
+// pointer. Consuming the imported pointer cannot change the outer ring state.
 
 aie2p.target<array> @coprime_array_target
 
@@ -33,10 +34,12 @@ low.func.def public retain target<amd.xdna.aie2p.array>(@coprime_array_target) a
 low.func.def target<amd.xdna.aie2p.core>(@coprime_core_target) abi(object_function) @consume_coprime() asm {
   %input0 = resource<native_pointer> {index = 0, source_type = buffer} : reg<aie2p.ep>
   %input1 = resource<native_pointer> {index = 1, source_type = buffer} : reg<aie2p.ep>
-  %lhs = lda.u8 %input0, 0
+  %offset = mova.modifier 1
+  %cursor = paddb.modifier %input0, %offset
+  %lhs = lda.u8 %cursor, 0
   %rhs = lda.u8 %input1, 0
   %sum = add.rr %lhs, %rhs
-  st.s8 %sum, %input0, 0
+  st.s8 %sum, %cursor, 0
   return
 }
 
@@ -89,51 +92,55 @@ control-relocation index=0 record=0 word=1 payload-offset=44 binding=0 addend=0 
 control-relocation index=1 record=2 word=1 payload-offset=108 binding=1 addend=0 width=8 alignment=4
 
 resident-program workers=1
-resident worker=0 entry=@coprime_ring_array$worker$0 tile=(0,2) code-bytes=304 resources=0 fixups=5
+resident worker=0 entry=@coprime_ring_array$worker$0 tile=(0,2) code-bytes=320 resources=0 fixups=5
 
 low.func.def retain target<amd.xdna.aie2p.core>(@coprime_core_target) @coprime_ring_array$worker$0() asm {
   %acquire_delta = mov.short -1
   %release_delta = mov.short 1
-  %47 = mov.local-address 458752
-  %48 = mov.local-address 491520
+  %53 = mov.local-address 458752
+  %54 = mov.local-address 491520
   %ring_slot_zero = mov.short 0
-  low.br ^_bb1(%47: reg<aie2p.ep>, %48: reg<aie2p.ep>, %ring_slot_zero: reg<aie2p.er>)
-^_bb1(%input0: reg<aie2p.ep>, %input1: reg<aie2p.ep>, %30: reg<aie2p.er>):
+  low.br ^_bb1(%53: reg<aie2p.ep>, %54: reg<aie2p.ep>, %ring_slot_zero: reg<aie2p.er>)
+^_bb1(%32: reg<aie2p.ep>, %34: reg<aie2p.ep>, %35: reg<aie2p.er>):
   acq %acquire_delta, 49
   acq %acquire_delta, 51
   low.br ^_bb2
 ^_bb2:
-  %lhs = lda.u8 %input0, 0
+  %input0 = copy %32 : reg<aie2p.ep> -> reg<aie2p.ep>
+  %input1 = copy %34 : reg<aie2p.ep> -> reg<aie2p.ep>
+  %offset = mova.modifier 1
+  %cursor = paddb.modifier %input0, %offset
+  %lhs = lda.u8 %cursor, 0
   %rhs = lda.u8 %input1, 0
   %sum = add.rr %lhs, %rhs
-  st.s8 %sum, %input0, 0
+  st.s8 %sum, %cursor, 0
   low.br ^_bb3
 ^_bb3:
   rel %release_delta, 48
   rel %release_delta, 50
-  %31 = mov.address-to-scalar %input0
-  %32 = mov.i32 16384
-  %33 = xor %31, %32
-  %34 = mov.scalar-to-address %33
-  %37 = mov.short 0
-  %38 = eq %30, %37
-  low.cond_br %38, ^_bb6, ^_bb4 : reg<aie2p.er>
+  %37 = mov.address-to-scalar %32
+  %38 = mov.i32 16384
+  %39 = xor %37, %38
+  %40 = mov.scalar-to-address %39
+  %43 = mov.short 0
+  %44 = eq %35, %43
+  low.cond_br %44, ^_bb6, ^_bb4 : reg<aie2p.er>
 ^_bb4:
-  %39 = mov.short 1
-  %40 = eq %30, %39
-  low.cond_br %40, ^_bb7, ^_bb5 : reg<aie2p.er>
+  %45 = mov.short 1
+  %46 = eq %35, %45
+  low.cond_br %46, ^_bb7, ^_bb5 : reg<aie2p.er>
 ^_bb5:
-  %41 = mov.local-address 491520
-  %42 = mov.short 0
-  low.br ^_bb8(%41: reg<aie2p.ep>, %42: reg<aie2p.er>)
+  %47 = mov.local-address 491520
+  %48 = mov.short 0
+  low.br ^_bb8(%47: reg<aie2p.ep>, %48: reg<aie2p.er>)
 ^_bb6:
-  %43 = mov.local-address 507904
-  %44 = mov.short 1
-  low.br ^_bb8(%43: reg<aie2p.ep>, %44: reg<aie2p.er>)
+  %49 = mov.local-address 507904
+  %50 = mov.short 1
+  low.br ^_bb8(%49: reg<aie2p.ep>, %50: reg<aie2p.er>)
 ^_bb7:
-  %45 = mov.local-address 458816
-  %46 = mov.short 2
-  low.br ^_bb8(%45: reg<aie2p.ep>, %46: reg<aie2p.er>)
-^_bb8(%35: reg<aie2p.ep>, %36: reg<aie2p.er>):
-  low.br ^_bb1(%34: reg<aie2p.ep>, %35: reg<aie2p.ep>, %36: reg<aie2p.er>)
+  %51 = mov.local-address 458816
+  %52 = mov.short 2
+  low.br ^_bb8(%51: reg<aie2p.ep>, %52: reg<aie2p.er>)
+^_bb8(%41: reg<aie2p.ep>, %42: reg<aie2p.er>):
+  low.br ^_bb1(%40: reg<aie2p.ep>, %41: reg<aie2p.ep>, %42: reg<aie2p.er>)
 }

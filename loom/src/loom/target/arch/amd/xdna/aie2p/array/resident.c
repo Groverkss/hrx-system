@@ -653,10 +653,19 @@ static iree_status_t loom_aie2p_array_resident_bind_resources(
             ir_builder, firing_header, builder->lock_delta_type,
             &port_state->current_slot));
       }
+      // The worker may consume its imported pointer through native address
+      // updates. Keep that value identity separate from the ring address used
+      // by the latch; allocation can coalesce copies that remain read-only.
+      loom_builder_set_before(ir_builder, op);
+      loom_op_t* copy_op = NULL;
+      IREE_RETURN_IF_ERROR(loom_low_copy_build(
+          ir_builder, port_state->current_address, /*detached=*/false,
+          port_state->address_type, op->location, &copy_op));
+      const loom_value_id_t local_address = loom_low_copy_result(copy_op);
       IREE_RETURN_IF_ERROR(loom_module_move_value_name(
-          builder->module, resource_value, port_state->current_address));
+          builder->module, resource_value, local_address));
       IREE_RETURN_IF_ERROR(loom_value_replace_all_uses_with(
-          builder->module, resource_value, port_state->current_address));
+          builder->module, resource_value, local_address));
       IREE_RETURN_IF_ERROR(loom_op_erase(builder->module, op));
     }
     op = next_op;

@@ -125,55 +125,59 @@ resident worker=1 entry=@broadcast_read_array$worker$1 tile=(0,3) code-bytes=154
 low.func.def retain target<amd.xdna.aie2p.core>(@core_target) @broadcast_read_array$worker$0() asm {
   %acquire_delta = mov.short -1
   %release_delta = mov.short 1
-  %75 = mov.local-address 458752
-  %76 = mov.local-address 491520
-  low.br ^_bb1(%75: reg<aie2p.ep>, %76: reg<aie2p.ep>)
-^_bb1(%input_view: reg<aie2p.ep>, %output_view: reg<aie2p.ep>):
+  %77 = mov.local-address 458752
+  %78 = mov.local-address 491520
+  low.br ^_bb1(%77: reg<aie2p.ep>, %78: reg<aie2p.ep>)
+^_bb1(%66: reg<aie2p.ep>, %68: reg<aie2p.ep>):
   acq %acquire_delta, 49
   acq %acquire_delta, 50
   low.br ^_bb2
 ^_bb2:
+  %input_view = copy %66 : reg<aie2p.ep> -> reg<aie2p.ep>
+  %output_view = copy %68 : reg<aie2p.ep> -> reg<aie2p.ep>
   %value = lda %input_view, 0
   st %value, %output_view, 0
   low.br ^_bb3
 ^_bb3:
   rel %release_delta, 51
   rel %release_delta, 48
-  %68 = mov.address-to-scalar %input_view
-  %69 = mov.i32 16384
-  %70 = xor %68, %69
-  %71 = mov.scalar-to-address %70
-  %72 = mov.address-to-scalar %output_view
-  %73 = xor %72, %69
-  %74 = mov.scalar-to-address %73
-  low.br ^_bb1(%71: reg<aie2p.ep>, %74: reg<aie2p.ep>)
+  %70 = mov.address-to-scalar %66
+  %71 = mov.i32 16384
+  %72 = xor %70, %71
+  %73 = mov.scalar-to-address %72
+  %74 = mov.address-to-scalar %68
+  %75 = xor %74, %71
+  %76 = mov.scalar-to-address %75
+  low.br ^_bb1(%73: reg<aie2p.ep>, %76: reg<aie2p.ep>)
 }
 
 low.func.def retain target<amd.xdna.aie2p.core>(@core_target) @broadcast_read_array$worker$1() asm {
   %acquire_delta = mov.short -1
   %release_delta = mov.short 1
-  %91 = mov.local-address 458752
-  %92 = mov.local-address 491520
-  low.br ^_bb1(%91: reg<aie2p.ep>, %92: reg<aie2p.ep>)
-^_bb1(%input_view: reg<aie2p.ep>, %output_view: reg<aie2p.ep>):
+  %95 = mov.local-address 458752
+  %96 = mov.local-address 491520
+  low.br ^_bb1(%95: reg<aie2p.ep>, %96: reg<aie2p.ep>)
+^_bb1(%84: reg<aie2p.ep>, %86: reg<aie2p.ep>):
   acq %acquire_delta, 49
   acq %acquire_delta, 50
   low.br ^_bb2
 ^_bb2:
+  %input_view = copy %84 : reg<aie2p.ep> -> reg<aie2p.ep>
+  %output_view = copy %86 : reg<aie2p.ep> -> reg<aie2p.ep>
   %value = lda %input_view, 0
   st %value, %output_view, 0
   low.br ^_bb3
 ^_bb3:
   rel %release_delta, 51
   rel %release_delta, 48
-  %84 = mov.address-to-scalar %input_view
-  %85 = mov.i32 16384
-  %86 = xor %84, %85
-  %87 = mov.scalar-to-address %86
-  %88 = mov.address-to-scalar %output_view
-  %89 = xor %88, %85
-  %90 = mov.scalar-to-address %89
-  low.br ^_bb1(%87: reg<aie2p.ep>, %90: reg<aie2p.ep>)
+  %88 = mov.address-to-scalar %84
+  %89 = mov.i32 16384
+  %90 = xor %88, %89
+  %91 = mov.scalar-to-address %90
+  %92 = mov.address-to-scalar %86
+  %93 = xor %92, %89
+  %94 = mov.scalar-to-address %93
+  low.br ^_bb1(%91: reg<aie2p.ep>, %94: reg<aie2p.ep>)
 }
 
 // ====
@@ -306,53 +310,57 @@ resident worker=1 entry=@partitioned_write_array$worker$1 tile=(0,3) code-bytes=
 low.func.def retain target<amd.xdna.aie2p.core>(@core_target) @partitioned_write_array$worker$0() asm {
   %acquire_delta = mov.short -1
   %release_delta = mov.short 1
-  %80 = mov.local-address 458752
-  %81 = mov.local-address 491520
-  low.br ^_bb1(%80: reg<aie2p.ep>, %81: reg<aie2p.ep>)
-^_bb1(%input_view: reg<aie2p.ep>, %output_view: reg<aie2p.ep>):
+  %82 = mov.local-address 458752
+  %83 = mov.local-address 491520
+  low.br ^_bb1(%82: reg<aie2p.ep>, %83: reg<aie2p.ep>)
+^_bb1(%71: reg<aie2p.ep>, %73: reg<aie2p.ep>):
   acq %acquire_delta, 49
   acq %acquire_delta, 50
   low.br ^_bb2
 ^_bb2:
+  %input_view = copy %71 : reg<aie2p.ep> -> reg<aie2p.ep>
+  %output_view = copy %73 : reg<aie2p.ep> -> reg<aie2p.ep>
   %value = lda %input_view, 0
   st %value, %output_view, 0
   low.br ^_bb3
 ^_bb3:
   rel %release_delta, 51
   rel %release_delta, 48
-  %73 = mov.address-to-scalar %input_view
-  %74 = mov.i32 16384
-  %75 = xor %73, %74
-  %76 = mov.scalar-to-address %75
-  %77 = mov.address-to-scalar %output_view
-  %78 = xor %77, %74
-  %79 = mov.scalar-to-address %78
-  low.br ^_bb1(%76: reg<aie2p.ep>, %79: reg<aie2p.ep>)
+  %75 = mov.address-to-scalar %71
+  %76 = mov.i32 16384
+  %77 = xor %75, %76
+  %78 = mov.scalar-to-address %77
+  %79 = mov.address-to-scalar %73
+  %80 = xor %79, %76
+  %81 = mov.scalar-to-address %80
+  low.br ^_bb1(%78: reg<aie2p.ep>, %81: reg<aie2p.ep>)
 }
 
 low.func.def retain target<amd.xdna.aie2p.core>(@core_target) @partitioned_write_array$worker$1() asm {
   %acquire_delta = mov.short -1
   %release_delta = mov.short 1
-  %96 = mov.local-address 458752
-  %97 = mov.local-address 491520
-  low.br ^_bb1(%96: reg<aie2p.ep>, %97: reg<aie2p.ep>)
-^_bb1(%input_view: reg<aie2p.ep>, %output_view: reg<aie2p.ep>):
+  %100 = mov.local-address 458752
+  %101 = mov.local-address 491520
+  low.br ^_bb1(%100: reg<aie2p.ep>, %101: reg<aie2p.ep>)
+^_bb1(%89: reg<aie2p.ep>, %91: reg<aie2p.ep>):
   acq %acquire_delta, 49
   acq %acquire_delta, 50
   low.br ^_bb2
 ^_bb2:
+  %input_view = copy %89 : reg<aie2p.ep> -> reg<aie2p.ep>
+  %output_view = copy %91 : reg<aie2p.ep> -> reg<aie2p.ep>
   %value = lda %input_view, 0
   st %value, %output_view, 0
   low.br ^_bb3
 ^_bb3:
   rel %release_delta, 51
   rel %release_delta, 48
-  %89 = mov.address-to-scalar %input_view
-  %90 = mov.i32 16384
-  %91 = xor %89, %90
-  %92 = mov.scalar-to-address %91
-  %93 = mov.address-to-scalar %output_view
-  %94 = xor %93, %90
-  %95 = mov.scalar-to-address %94
-  low.br ^_bb1(%92: reg<aie2p.ep>, %95: reg<aie2p.ep>)
+  %93 = mov.address-to-scalar %89
+  %94 = mov.i32 16384
+  %95 = xor %93, %94
+  %96 = mov.scalar-to-address %95
+  %97 = mov.address-to-scalar %91
+  %98 = xor %97, %94
+  %99 = mov.scalar-to-address %98
+  low.br ^_bb1(%96: reg<aie2p.ep>, %99: reg<aie2p.ep>)
 }
