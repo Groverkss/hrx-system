@@ -338,12 +338,10 @@ static iree_status_t loom_comment_table_ensure_capacity(
 
 static iree_status_t loom_type_use_table_ensure_record_capacity(
     iree_arena_allocator_t* arena, loom_type_use_table_t* table,
-    iree_host_size_t additional_record_count) {
-  if (table->free_count >= additional_record_count) return iree_ok_status();
-  iree_host_size_t new_records_needed =
-      additional_record_count - table->free_count;
-  iree_host_size_t minimum_capacity = table->record_count + new_records_needed;
-  if (minimum_capacity <= table->record_capacity) return iree_ok_status();
+    iree_host_size_t minimum_capacity) {
+  if (minimum_capacity <= table->record_capacity) {
+    return iree_ok_status();
+  }
   if (minimum_capacity >= LOOM_TYPE_USE_ID_INVALID) {
     return iree_make_status(
         IREE_STATUS_RESOURCE_EXHAUSTED,
@@ -1898,34 +1896,52 @@ const iree_string_view_t* loom_module_block_comments(
 // Value definition
 //===----------------------------------------------------------------------===//
 
-typedef struct loom_type_use_prepare_t {
+typedef struct loom_type_use_count_t {
+  // Module defining the valid referenced value range.
   loom_module_t* module;
+  // Number of reference occurrences requiring table records.
   iree_host_size_t reference_count;
-} loom_type_use_prepare_t;
+} loom_type_use_count_t;
 
-static iree_status_t loom_type_use_prepare_callback(loom_value_id_t value_id,
-                                                    void* user_data) {
-  loom_type_use_prepare_t* prepare = (loom_type_use_prepare_t*)user_data;
-  if (value_id >= prepare->module->values.count) return iree_ok_status();
-  ++prepare->reference_count;
+static iree_status_t loom_type_use_count_callback(loom_value_id_t value_id,
+                                                  void* user_data) {
+  loom_type_use_count_t* count = (loom_type_use_count_t*)user_data;
+  if (value_id < count->module->values.count) {
+    ++count->reference_count;
+  }
+  return iree_ok_status();
+}
+
+static iree_status_t loom_type_use_count_for_type(
+    loom_module_t* module, loom_type_t type,
+    iree_host_size_t* out_reference_count) {
+  *out_reference_count = 0;
+  if (!loom_type_may_reference_values(type)) {
+    return iree_ok_status();
+  }
+  loom_type_use_count_t count = {
+      .module = module,
+      .reference_count = 0,
+  };
+  IREE_RETURN_IF_ERROR(loom_type_walk_value_refs(
+      module, type, loom_type_use_count_callback, &count));
+  *out_reference_count = count.reference_count;
   return iree_ok_status();
 }
 
 static iree_status_t loom_type_use_prepare_for_type(
     loom_module_t* module, loom_type_t type,
     iree_host_size_t* out_reference_count) {
-  *out_reference_count = 0;
-  if (!loom_type_may_reference_values(type)) return iree_ok_status();
-  loom_type_use_prepare_t prepare = {
-      .module = module,
-      .reference_count = 0,
-  };
-  IREE_RETURN_IF_ERROR(loom_type_walk_value_refs(
-      module, type, loom_type_use_prepare_callback, &prepare));
-  IREE_RETURN_IF_ERROR(loom_type_use_table_ensure_record_capacity(
-      &module->arena, &module->type_uses, prepare.reference_count));
-  *out_reference_count = prepare.reference_count;
-  return iree_ok_status();
+  IREE_RETURN_IF_ERROR(
+      loom_type_use_count_for_type(module, type, out_reference_count));
+  const loom_type_use_table_t* table = &module->type_uses;
+  if (table->free_count >= *out_reference_count) {
+    return iree_ok_status();
+  }
+  iree_host_size_t new_record_count = *out_reference_count - table->free_count;
+  return loom_type_use_table_ensure_record_capacity(
+      &module->arena, &module->type_uses,
+      table->record_count + new_record_count);
 }
 
 static loom_type_use_id_t loom_type_use_table_allocate_record(
@@ -2348,8 +2364,8 @@ iree_status_t loom_module_recompute_type_uses(loom_module_t* module) {
       continue;
     }
     iree_host_size_t value_reference_count = 0;
-    IREE_RETURN_IF_ERROR(loom_type_use_prepare_for_type(
-        module, value->type, &value_reference_count));
+    IREE_RETURN_IF_ERROR(loom_type_use_count_for_type(module, value->type,
+                                                      &value_reference_count));
     reference_count += value_reference_count;
   }
   IREE_RETURN_IF_ERROR(loom_type_use_table_ensure_record_capacity(

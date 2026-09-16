@@ -164,6 +164,7 @@ loom_cc_test(
     module_test
   SRCS
     "module_test.cc"
+    "module_type_uses_test.cc"
   DEPS
     ::ir
     iree::base::internal::arena

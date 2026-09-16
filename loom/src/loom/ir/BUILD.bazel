@@ -160,7 +160,10 @@ loom_cc_test(
 
 loom_cc_test(
     name = "module_test",
-    srcs = ["module_test.cc"],
+    srcs = [
+        "module_test.cc",
+        "module_type_uses_test.cc",
+    ],
     deps = [
         ":ir",
         "//loom/src/loom/ops:type_registry",
