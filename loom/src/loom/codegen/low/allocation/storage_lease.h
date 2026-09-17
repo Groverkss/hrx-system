@@ -39,6 +39,8 @@ typedef struct loom_low_allocation_storage_lease_state_t {
   const loom_low_storage_lease_table_t* lease_table;
   // Borrowed value domain used to map value IDs to allocation-local ordinals.
   const loom_local_value_domain_t* value_domain;
+  // Borrowed allocation-owned physical reservations for candidate ranges.
+  const loom_liveness_segment_t* storage_segments;
   // Mutable assignment-backed storage-lease records being built.
   loom_low_allocation_storage_lease_t* instances;
   // Mutable allocator-requested storage release actions being built.
@@ -67,7 +69,9 @@ iree_status_t loom_low_allocation_storage_lease_state_initialize(
     const loom_low_storage_lease_table_t* lease_table,
     const loom_module_t* module, const loom_op_t* function_op,
     const loom_local_value_domain_t* value_domain,
-    const loom_liveness_analysis_t* liveness, iree_arena_allocator_t* arena,
+    const loom_liveness_analysis_t* liveness,
+    const loom_liveness_segment_t* storage_segments,
+    iree_arena_allocator_t* arena,
     loom_low_allocation_storage_lease_state_t* out_state);
 
 // Returns true when |candidate| conflicts with materialized storage leases

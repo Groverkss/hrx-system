@@ -240,7 +240,7 @@ TEST_F(LowAllocationUnitLivenessTest, ExtendsTiedResultSourceUnits) {
   placement.relation_count = IREE_ARRAYSIZE(relations);
 
   IREE_ASSERT_OK(loom_low_allocation_unit_liveness_propagate_storage_relations(
-      &unit_liveness, &liveness, &placement));
+      &unit_liveness, &liveness, &placement, &arena_));
   EXPECT_EQ(unit_liveness.start_points[2], 0u);
   EXPECT_EQ(unit_liveness.start_points[3], 0u);
   EXPECT_EQ(unit_liveness.end_points[0], 8u);
@@ -348,7 +348,7 @@ TEST_F(LowAllocationUnitLivenessTest,
   placement.relation_count = IREE_ARRAYSIZE(relations);
 
   IREE_ASSERT_OK(loom_low_allocation_unit_liveness_propagate_storage_relations(
-      &unit_liveness, &liveness, &placement));
+      &unit_liveness, &liveness, &placement, &arena_));
   const uint32_t* concat_start_points =
       loom_low_allocation_unit_liveness_start_points_for_value_ordinal(
           &unit_liveness, &liveness, /*value_ordinal=*/3);
@@ -360,6 +360,93 @@ TEST_F(LowAllocationUnitLivenessTest,
 
   loom_local_value_domain_release(&value_domain);
   loom_module_free(module);
+}
+
+TEST_F(LowAllocationUnitLivenessTest, RetainsSparseTiedStorageReservations) {
+  const loom_value_id_t value_ids[] = {0, 1, 2, 3, 4, 5};
+  const uint32_t interval_indices[] = {0, 1, 2, 3, 4, 5};
+  const loom_liveness_interval_t intervals[] = {
+      RegisterInterval(0, 0, 13, 1),  RegisterInterval(1, 3, 5, 1),
+      RegisterInterval(2, 8, 10, 1),  RegisterInterval(3, 13, 13, 1),
+      RegisterInterval(4, 15, 17, 1), RegisterInterval(5, 17, 19, 1),
+  };
+  loom_liveness_block_info_t blocks[4] = {};
+  blocks[0].end_point = 5;
+  blocks[1].start_point = 6;
+  blocks[1].end_point = 10;
+  blocks[2].start_point = 11;
+  blocks[2].end_point = 14;
+  blocks[3].start_point = 15;
+  blocks[3].end_point = 19;
+  const loom_liveness_segment_t segments[] = {
+      {0, 3}, {6, 8}, {11, 13}, {3, 5}, {8, 10}, {15, 17}, {17, 19},
+  };
+  const loom_liveness_segment_range_t ranges[] = {
+      {0, 3}, {3, 1}, {4, 1}, {5, 0}, {5, 1}, {6, 1},
+  };
+  loom_liveness_analysis_t liveness = Liveness(
+      value_ids, IREE_ARRAYSIZE(value_ids), interval_indices, intervals,
+      IREE_ARRAYSIZE(intervals), blocks, IREE_ARRAYSIZE(blocks));
+  liveness.segments = segments;
+  liveness.segment_count = IREE_ARRAYSIZE(segments);
+  liveness.value_segment_ranges = ranges;
+
+  // The second result has a storage use beyond its semantic end, and the
+  // source at ordinal four has incomplete edge storage. The unused third result
+  // still writes its physical destination at point 13.
+  uint32_t unit_indices[] = {0, 1, 2, 3, 4, 5};
+  uint32_t starts[] = {0, 3, 8, 13, 15, 17};
+  uint32_t ends[] = {13, 5, 11, 14, 17, 19};
+  uint64_t incomplete[] = {(1u << 2) | (1u << 4)};
+  loom_low_allocation_unit_liveness_t unit_liveness = {};
+  unit_liveness.point_starts_by_value_ordinal = unit_indices;
+  unit_liveness.start_points = starts;
+  unit_liveness.end_points = ends;
+  unit_liveness.point_count = IREE_ARRAYSIZE(starts);
+  unit_liveness.values_with_incomplete_storage_segments = {6, incomplete};
+  unit_liveness.storage_segments.entries = segments;
+  loom_low_placement_relation_t relations[4] = {};
+  for (uint32_t i = 0; i < IREE_ARRAYSIZE(relations); ++i) {
+    relations[i].source_ordinal = i < 3 ? 0 : 4;
+    relations[i].result_ordinal = i < 3 ? i + 1 : 5;
+    relations[i].unit_count = 1;
+    relations[i].kind = LOOM_LOW_PLACEMENT_RELATION_SAME_STORAGE;
+    relations[i].cause = LOOM_LOW_PLACEMENT_CAUSE_TIED_RESULT;
+    relations[i].flags = LOOM_LOW_PLACEMENT_RELATION_FLAG_HARD;
+  }
+  loom_low_placement_table_t placement = {};
+  placement.relations = relations;
+  placement.relation_count = IREE_ARRAYSIZE(relations);
+  IREE_ASSERT_OK(loom_low_allocation_unit_liveness_propagate_storage_relations(
+      &unit_liveness, &liveness, &placement, &arena_));
+
+  const loom_liveness_segment_range_t source =
+      loom_low_allocation_unit_liveness_storage_segment_range_for_value_ordinal(
+          &unit_liveness, &liveness, 0);
+  ASSERT_EQ(source.count, 2u);
+  const loom_liveness_segment_t* reservations =
+      &unit_liveness.storage_segments.entries[source.start];
+  EXPECT_EQ(reservations[0].start_point, 0u);
+  EXPECT_EQ(reservations[0].end_point, 5u);
+  EXPECT_EQ(reservations[1].start_point, 6u);
+  EXPECT_EQ(reservations[1].end_point, 14u);
+  EXPECT_EQ(ends[0], 14u);
+  EXPECT_EQ(ends[4], 19u);
+  for (const uint32_t ordinal : {2u, 4u}) {
+    EXPECT_EQ(
+        loom_low_allocation_unit_liveness_storage_segment_range_for_value_ordinal(
+            &unit_liveness, &liveness, ordinal)
+            .count,
+        0u);
+  }
+  const loom_liveness_segment_range_t result =
+      loom_low_allocation_unit_liveness_storage_segment_range_for_value_ordinal(
+          &unit_liveness, &liveness, 1);
+  EXPECT_EQ(result.start, ranges[1].start);
+  EXPECT_EQ(result.count, ranges[1].count);
+  EXPECT_EQ(liveness.segments, segments);
+  EXPECT_EQ(liveness.value_segment_ranges, ranges);
+  EXPECT_EQ(liveness.segment_count, IREE_ARRAYSIZE(segments));
 }
 
 }  // namespace

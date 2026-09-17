@@ -151,7 +151,7 @@ static iree_status_t loom_low_allocation_storage_lease_end_point(
 }
 
 static bool loom_low_allocation_storage_lease_overlaps_liveness(
-    const loom_liveness_analysis_t* liveness,
+    const loom_liveness_segment_t* storage_segments,
     const loom_low_allocation_storage_lease_t* lease,
     const loom_low_allocation_assignment_t* candidate) {
   if (lease->end_point <= candidate->start_point ||
@@ -167,7 +167,7 @@ static bool loom_low_allocation_storage_lease_overlaps_liveness(
   // its full asynchronous lifetime; only the candidate's holes are excluded.
   for (uint32_t i = 0; i < candidate->liveness_segments.count; ++i) {
     const loom_liveness_segment_t* segment =
-        &liveness->segments[candidate->liveness_segments.start + i];
+        &storage_segments[candidate->liveness_segments.start + i];
     if (segment->start_point >= lease->end_point) {
       return false;
     }
@@ -180,11 +180,11 @@ static bool loom_low_allocation_storage_lease_overlaps_liveness(
 
 static bool loom_low_allocation_storage_lease_instance_conflicts(
     const loom_low_descriptor_set_t* descriptor_set,
-    const loom_liveness_analysis_t* liveness,
+    const loom_liveness_segment_t* storage_segments,
     const loom_low_allocation_storage_lease_t* lease,
     const loom_low_allocation_assignment_t* candidate) {
-  if (!loom_low_allocation_storage_lease_overlaps_liveness(liveness, lease,
-                                                           candidate)) {
+  if (!loom_low_allocation_storage_lease_overlaps_liveness(storage_segments,
+                                                           lease, candidate)) {
     return false;
   }
   if (lease->location_kind != candidate->location_kind) {
@@ -435,7 +435,7 @@ static bool loom_low_allocation_storage_lease_scan_conflicts(
       continue;
     }
     if (loom_low_allocation_storage_lease_instance_conflicts(
-            descriptor_set, liveness, lease, candidate)) {
+            descriptor_set, state->storage_segments, lease, candidate)) {
       const loom_low_storage_lease_record_t* record =
           &state->lease_table->records[i];
       if (policy != LOOM_LOW_ALLOCATION_STORAGE_RELEASE_FORBIDDEN &&
@@ -470,8 +470,8 @@ static bool loom_low_allocation_storage_lease_index_conflicts(
       &query, &storage_lease_index)) {
     const loom_low_allocation_storage_lease_t* lease =
         &state->instances[storage_lease_index];
-    if (!loom_low_allocation_storage_lease_overlaps_liveness(liveness, lease,
-                                                             candidate)) {
+    if (!loom_low_allocation_storage_lease_overlaps_liveness(
+            state->storage_segments, lease, candidate)) {
       continue;
     }
     if (loom_low_allocation_storage_lease_value_is_ignored(
@@ -518,7 +518,9 @@ iree_status_t loom_low_allocation_storage_lease_state_initialize(
     const loom_low_storage_lease_table_t* lease_table,
     const loom_module_t* module, const loom_op_t* function_op,
     const loom_local_value_domain_t* value_domain,
-    const loom_liveness_analysis_t* liveness, iree_arena_allocator_t* arena,
+    const loom_liveness_analysis_t* liveness,
+    const loom_liveness_segment_t* storage_segments,
+    iree_arena_allocator_t* arena,
     loom_low_allocation_storage_lease_state_t* out_state) {
   IREE_ASSERT_ARGUMENT(lease_table);
   IREE_ASSERT_ARGUMENT(module);
@@ -529,6 +531,7 @@ iree_status_t loom_low_allocation_storage_lease_state_initialize(
   *out_state = (loom_low_allocation_storage_lease_state_t){0};
   out_state->lease_table = lease_table;
   out_state->value_domain = value_domain;
+  out_state->storage_segments = storage_segments;
   IREE_RETURN_IF_ERROR(loom_low_allocation_validate_storage_lease_table(
       lease_table, module, function_op));
   if (lease_table->record_count == 0) {
@@ -755,7 +758,7 @@ loom_low_allocation_storage_lease_state_scan_release_actions(
       continue;
     }
     if (!loom_low_allocation_storage_lease_instance_conflicts(
-            descriptor_set, liveness, lease, candidate)) {
+            descriptor_set, state->storage_segments, lease, candidate)) {
       continue;
     }
     IREE_RETURN_IF_ERROR(
@@ -805,8 +808,8 @@ iree_status_t loom_low_allocation_storage_lease_state_record_release_actions(
       &query, &storage_lease_index)) {
     loom_low_allocation_storage_lease_t* lease =
         &state->instances[storage_lease_index];
-    if (!loom_low_allocation_storage_lease_overlaps_liveness(liveness, lease,
-                                                             candidate)) {
+    if (!loom_low_allocation_storage_lease_overlaps_liveness(
+            state->storage_segments, lease, candidate)) {
       continue;
     }
     if (loom_low_allocation_storage_lease_value_is_ignored(

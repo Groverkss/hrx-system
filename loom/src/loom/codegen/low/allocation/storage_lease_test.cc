@@ -282,8 +282,8 @@ TEST_P(LowAllocationStorageLeaseReleasePointTest,
 
   loom_low_allocation_storage_lease_state_t state = {};
   IREE_ASSERT_OK(loom_low_allocation_storage_lease_state_initialize(
-      &lease_table, module, function_op, &value_domain, &liveness, &arena_,
-      &state));
+      &lease_table, module, function_op, &value_domain, &liveness,
+      liveness.segments, &arena_, &state));
 
   const loom_low_allocation_assignment_t leased_assignment = Assignment(
       /*value_id=*/value_ids[0], /*descriptor_reg_class_id=*/0,
@@ -415,7 +415,7 @@ TEST_F(LowAllocationStorageLeaseTest, RejectsLeaseOutsideAllocationLiveness) {
       IREE_STATUS_FAILED_PRECONDITION,
       loom_low_allocation_storage_lease_state_initialize(
           &lease_table, module, function_op, &allocation_value_domain,
-          &allocation_liveness, &arena_, &state));
+          &allocation_liveness, allocation_liveness.segments, &arena_, &state));
 
   loom_local_value_domain_release(&allocation_value_domain);
   loom_module_free(module);
@@ -455,6 +455,7 @@ TEST_F(LowAllocationStorageLeaseTest,
       uint8_t instance_written = 1;
       loom_low_allocation_storage_lease_state_t state = {};
       state.lease_table = &table;
+      state.storage_segments = liveness.segments;
       state.instances = &lease;
       state.instance_written = &instance_written;
       state.instance_count = 1;

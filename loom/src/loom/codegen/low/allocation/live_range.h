@@ -78,11 +78,12 @@ bool loom_low_allocation_live_range_values_overlap(
 
 // Returns true when two assignments have overlapping live target-visible
 // storage units under descriptor aliasing and per-unit storage lifetimes.
-// Assignment sparse segment ranges, when present, must belong to |liveness|.
+// Assignment sparse segment ranges, when present, index |storage_segments|.
 bool loom_low_allocation_live_range_assignments_conflict(
     const loom_low_descriptor_set_t* descriptor_set,
-    const loom_liveness_analysis_t* liveness, const uint32_t* unit_start_points,
-    const uint32_t* unit_end_points, iree_host_size_t unit_point_count,
+    const loom_liveness_segment_t* storage_segments,
+    const uint32_t* unit_start_points, const uint32_t* unit_end_points,
+    iree_host_size_t unit_point_count,
     const loom_low_allocation_assignment_t* lhs,
     const loom_low_allocation_assignment_t* rhs);
 

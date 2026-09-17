@@ -231,7 +231,7 @@ static iree_status_t loom_low_allocation_try_rematerialize_value(
 
 // Returns true when any storage unit in |assignment| is live at |point|.
 //
-// Whole-assignment bounds reject most candidates cheaply. Sparse semantic
+// Whole-assignment bounds reject most candidates cheaply. Sparse storage
 // segments exclude values that only appear live because mutually exclusive CFG
 // paths share the linear program-point space, and refined per-unit bounds
 // retain the allocation model's subrange precision.
@@ -241,17 +241,10 @@ static bool loom_low_allocation_assignment_is_live_at_point(
   if (point < assignment->start_point || point >= assignment->end_point) {
     return false;
   }
-  if (assignment->liveness_segments.count != 0) {
-    bool segment_is_live = false;
-    for (uint32_t i = 0; i < assignment->liveness_segments.count; ++i) {
-      const loom_liveness_segment_t* segment =
-          &table->liveness.segments[assignment->liveness_segments.start + i];
-      if (point >= segment->start_point && point < segment->end_point) {
-        segment_is_live = true;
-        break;
-      }
-    }
-    if (!segment_is_live) return false;
+  if (assignment->liveness_segments.count != 0 &&
+      !loom_liveness_segment_range_contains(
+          table->storage_segments, assignment->liveness_segments, point)) {
+    return false;
   }
   for (uint32_t i = 0; i < assignment->unit_count; ++i) {
     const uint32_t start_point =

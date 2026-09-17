@@ -313,9 +313,9 @@ bool loom_low_allocation_search_assignment_conflicts(
     return true;
   }
   if (loom_low_allocation_target_constraints_fixed_storage_conflicts(
-          context->target_constraints, context->liveness,
-          context->unit_liveness, context->placement, candidate,
-          ignored_value_ids, ignored_value_count)) {
+          context->target_constraints, context->unit_liveness,
+          context->placement, candidate, ignored_value_ids,
+          ignored_value_count)) {
     return true;
   }
   if (loom_low_allocation_target_constraints_reserved_range_conflicts(
@@ -849,8 +849,7 @@ static iree_status_t loom_low_allocation_search_collect_active_spill_victim_set(
     IREE_RETURN_IF_ERROR(
         loom_low_allocation_active_unit_index_collect_conflicts(
             &context->active_set->units, context->descriptor_set,
-            context->liveness, context->unit_liveness,
-            context->assignment_map->assignments,
+            context->unit_liveness, context->assignment_map->assignments,
             context->assignment_map->assignment_count, &candidate,
             /*ignored_value_ids=*/NULL,
             /*ignored_value_count=*/0, assignment_indices,
@@ -864,8 +863,8 @@ static iree_status_t loom_low_allocation_search_collect_active_spill_victim_set(
       const loom_low_allocation_assignment_t* assignment =
           &context->assignment_map->assignments[assignment_index];
       if (!loom_low_allocation_active_assignment_conflicts(
-              context->descriptor_set, context->liveness,
-              context->unit_liveness, assignment, &candidate,
+              context->descriptor_set, context->unit_liveness, assignment,
+              &candidate,
               /*ignored_value_ids=*/NULL,
               /*ignored_value_count=*/0)) {
         continue;

@@ -291,7 +291,8 @@ iree_status_t loom_consumption_use_after_query_prepare(
     // Liveness already proves whether any path observes this dynamic value
     // after block exit. Without a live-out, only later same-block uses remain.
     if (!loom_liveness_segment_range_contains(
-            liveness, segments, liveness->blocks[block_index].end_point)) {
+            liveness->segments, segments,
+            liveness->blocks[block_index].end_point)) {
       return iree_ok_status();
     }
   }

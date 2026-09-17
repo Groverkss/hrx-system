@@ -110,20 +110,8 @@ static bool loom_low_allocation_coalescing_value_units_live_at_point(
     // and decomposed edge payloads that semantic SSA segments do not encode.
     value_live_at_point = interval->start_point <= program_point;
   } else {
-    IREE_ASSERT_LE((uint64_t)segments.start + segments.count,
-                   context->liveness->segment_count);
-    for (uint32_t i = 0; i < segments.count; ++i) {
-      const loom_liveness_segment_t* segment =
-          &context->liveness->segments[segments.start + i];
-      if (segment->start_point <= program_point &&
-          program_point < segment->end_point) {
-        value_live_at_point = true;
-        break;
-      }
-      if (segment->start_point > program_point) {
-        break;
-      }
-    }
+    value_live_at_point = loom_liveness_segment_range_contains(
+        unit_liveness->storage_segments.entries, segments, program_point);
   }
   if (value_live_at_point) {
     const uint32_t end_point_start =

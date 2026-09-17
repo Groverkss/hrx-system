@@ -220,6 +220,7 @@ TEST_F(AllocationCheckerTest, RejectsOverlappingLiveAssignments) {
 TEST_F(AllocationCheckerTest, IntersectsUnsegmentedUnitsWithSparseLifetimes) {
   loom_liveness_segment_t segments[] = {{0, 2}, {5, 7}};
   frame_.allocation.liveness.segments = segments;
+  frame_.allocation.storage_segments = segments;
   frame_.allocation.liveness.segment_count = IREE_ARRAYSIZE(segments);
   for (uint32_t sparse_ordinal = 0; sparse_ordinal < 2; ++sparse_ordinal) {
     const uint32_t contiguous_ordinal = 1 - sparse_ordinal;
@@ -257,6 +258,7 @@ TEST_F(AllocationCheckerTest, IntersectsUnsegmentedUnitsWithSparseLifetimes) {
 TEST_F(AllocationCheckerTest, ClipsSparseLifetimesAtRefinedUnitStarts) {
   loom_liveness_segment_t segments[] = {{0, 2}, {5, 7}, {1, 4}};
   frame_.allocation.liveness.segments = segments;
+  frame_.allocation.storage_segments = segments;
   frame_.allocation.liveness.segment_count = IREE_ARRAYSIZE(segments);
   for (uint32_t sparse_ordinal = 0; sparse_ordinal < 2; ++sparse_ordinal) {
     const uint32_t other_ordinal = 1 - sparse_ordinal;

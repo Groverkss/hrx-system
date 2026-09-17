@@ -40,6 +40,15 @@ typedef struct loom_low_allocation_unit_liveness_t {
   // Values whose concrete storage lifetime is not fully represented by their
   // semantic sparse segments.
   iree_bitmap_t values_with_incomplete_storage_segments;
+  // Sparse physical reservations, separate from semantic SSA liveness.
+  struct {
+    // Borrowed semantic segments, or arena-owned semantic prefix followed by
+    // tied-source reservations. Assignment ranges index this table.
+    const loom_liveness_segment_t* entries;
+    // Optional arena-owned tied-source ranges indexed by value ordinal.
+    // Empty entries retain conservative per-unit bounds for incomplete values.
+    const loom_liveness_segment_range_t* tied_sources;
+  } storage_segments;
   // Implicit physical writes, sorted by storage identity and program point
   // after construction. These occupy storage without defining SSA values.
   struct {
@@ -73,7 +82,6 @@ iree_status_t loom_low_allocation_unit_liveness_initialize(
 bool loom_low_allocation_unit_liveness_clobber_conflicts(
     const loom_low_allocation_unit_liveness_t* unit_liveness,
     const loom_low_descriptor_set_t* descriptor_set,
-    const loom_liveness_analysis_t* liveness,
     const loom_low_allocation_assignment_t* candidate);
 
 // Returns the first unit-lifetime record for |value_ordinal|, or UINT32_MAX
@@ -92,8 +100,9 @@ loom_low_allocation_unit_liveness_start_points_for_value_ordinal(
     loom_value_ordinal_t value_ordinal);
 
 // Returns the sparse segment range that is complete for physical storage
-// conflicts. Values with decomposed edge-handoff units return an empty range so
-// conflict checks conservatively use their refined linear unit lifetimes.
+// conflicts, indexing |unit_liveness->storage_segments.entries|. Values with
+// decomposed edge-handoff units return an empty range so conflict checks
+// conservatively use their refined linear unit lifetimes.
 loom_liveness_segment_range_t
 loom_low_allocation_unit_liveness_storage_segment_range_for_value_ordinal(
     const loom_low_allocation_unit_liveness_t* unit_liveness,
@@ -103,11 +112,12 @@ loom_low_allocation_unit_liveness_storage_segment_range_for_value_ordinal(
 // Propagates storage lifetimes across structural placement relations. Exact
 // tied results extend source ends and carry source starts into results.
 // Contiguous aggregate parts carry source starts into potential result
-// reservations.
+// reservations. Sparse tied-source reservations retain the union of source and
+// result lifetimes without occupying gaps between mutually exclusive paths.
 iree_status_t loom_low_allocation_unit_liveness_propagate_storage_relations(
     loom_low_allocation_unit_liveness_t* unit_liveness,
     const loom_liveness_analysis_t* liveness,
-    const loom_low_placement_table_t* placement);
+    const loom_low_placement_table_t* placement, iree_arena_allocator_t* arena);
 
 #ifdef __cplusplus
 }  // extern "C"

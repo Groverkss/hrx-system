@@ -34,8 +34,6 @@ typedef struct loom_low_allocation_active_entry_t {
 // calendar point and expiration entry once, independent of lifetime nesting.
 // Register conflicts use the unit index; tiny active sets use bounded scans.
 typedef struct loom_low_allocation_active_set_t {
-  // Sparse liveness segments used to reject false linear-interval conflicts.
-  const loom_liveness_analysis_t* liveness;
   // Densely packed active assignment indices, in unspecified order.
   uint32_t* assignment_indices;
   // Membership and expiration links indexed by assignment index.
@@ -54,19 +52,17 @@ typedef struct loom_low_allocation_active_set_t {
 
 // Initializes |out_active_set| for |assignment_capacity| assignments and
 // |unit_capacity| active unit-index entries. All inserted assignments must end
-// before |program_point_count|. |liveness| is borrowed and must outlive the
-// set.
+// before |program_point_count|.
 iree_status_t loom_low_allocation_active_set_initialize(
-    const loom_liveness_analysis_t* liveness,
     iree_host_size_t assignment_capacity, iree_host_size_t program_point_count,
     iree_host_size_t unit_capacity, iree_arena_allocator_t* arena,
     loom_low_allocation_active_set_t* out_active_set);
 
 // Returns true when |existing| conflicts with |candidate|. Both assignments'
-// sparse segment ranges, when present, must belong to |liveness|.
+// sparse segment ranges, when present, index
+// |unit_liveness->storage_segments.entries|.
 bool loom_low_allocation_active_assignment_conflicts(
     const loom_low_descriptor_set_t* descriptor_set,
-    const loom_liveness_analysis_t* liveness,
     const loom_low_allocation_unit_liveness_t* unit_liveness,
     const loom_low_allocation_assignment_t* existing,
     const loom_low_allocation_assignment_t* candidate,

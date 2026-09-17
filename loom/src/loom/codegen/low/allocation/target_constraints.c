@@ -1378,7 +1378,6 @@ static bool loom_low_allocation_target_constraints_fixed_value_is_tied_alias(
 
 static bool loom_low_allocation_fixed_interval_conflicts(
     const loom_low_allocation_target_constraints_t* constraints,
-    const loom_liveness_analysis_t* liveness,
     const loom_low_allocation_unit_liveness_t* unit_liveness,
     const loom_low_placement_table_t* placement,
     const loom_low_allocation_assignment_t* candidate,
@@ -1396,8 +1395,8 @@ static bool loom_low_allocation_fixed_interval_conflicts(
       continue;
     }
     if (loom_low_allocation_fixed_interval_conflicts(
-            constraints, liveness, unit_liveness, placement, candidate,
-            ignored_value_ids, ignored_value_count, begin, middle)) {
+            constraints, unit_liveness, placement, candidate, ignored_value_ids,
+            ignored_value_count, begin, middle)) {
       return true;
     }
     begin = middle + 1;
@@ -1422,9 +1421,9 @@ static bool loom_low_allocation_fixed_interval_conflicts(
       continue;
     }
     if (loom_low_allocation_live_range_assignments_conflict(
-            descriptor_set, liveness, unit_liveness->start_points,
-            unit_liveness->end_points, unit_liveness->point_count,
-            fixed_assignment, candidate) &&
+            descriptor_set, unit_liveness->storage_segments.entries,
+            unit_liveness->start_points, unit_liveness->end_points,
+            unit_liveness->point_count, fixed_assignment, candidate) &&
         !loom_low_allocation_target_constraints_fixed_value_is_tied_alias(
             descriptor_set, placement, fixed_value, candidate)) {
       return true;
@@ -1435,20 +1434,17 @@ static bool loom_low_allocation_fixed_interval_conflicts(
 
 bool loom_low_allocation_target_constraints_fixed_storage_conflicts(
     const loom_low_allocation_target_constraints_t* constraints,
-    const loom_liveness_analysis_t* liveness,
     const loom_low_allocation_unit_liveness_t* unit_liveness,
     const loom_low_placement_table_t* placement,
     const loom_low_allocation_assignment_t* candidate,
     const loom_value_id_t* ignored_value_ids, uint16_t ignored_value_count) {
   if (loom_low_allocation_unit_liveness_clobber_conflicts(
-          unit_liveness, constraints->target->descriptor_set, liveness,
-          candidate)) {
+          unit_liveness, constraints->target->descriptor_set, candidate)) {
     return true;
   }
   return loom_low_allocation_fixed_interval_conflicts(
-      constraints, liveness, unit_liveness, placement, candidate,
-      ignored_value_ids, ignored_value_count, 0,
-      (uint32_t)constraints->fixed_value_count);
+      constraints, unit_liveness, placement, candidate, ignored_value_ids,
+      ignored_value_count, 0, (uint32_t)constraints->fixed_value_count);
 }
 
 bool loom_low_allocation_target_constraints_reserved_range_conflicts(

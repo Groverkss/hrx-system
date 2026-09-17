@@ -196,6 +196,9 @@ typedef struct loom_low_allocation_table_t {
   loom_low_resolved_target_t target;
   // Liveness analysis that produced the allocated intervals.
   loom_liveness_analysis_t liveness;
+  // Arena-owned physical reservations indexed by assignment segment ranges.
+  // Borrows |liveness.segments| when no tied-source refinement is required.
+  const loom_liveness_segment_t* storage_segments;
   // Placement relations consumed while assigning intervals.
   loom_low_placement_table_t placement;
   // Resolved fixed SSA value locations consumed by this allocation.

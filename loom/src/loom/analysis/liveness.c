@@ -2049,14 +2049,14 @@ loom_liveness_segment_range_t loom_liveness_segment_range_for_value_ordinal(
 }
 
 bool loom_liveness_segment_range_contains(
-    const loom_liveness_analysis_t* analysis,
+    const loom_liveness_segment_t* segments,
     loom_liveness_segment_range_t range, uint32_t point) {
   uint32_t first = range.start;
   uint32_t count = range.count;
   while (count != 0) {
     const uint32_t half = count / 2;
     const uint32_t middle = first + half;
-    const loom_liveness_segment_t* segment = &analysis->segments[middle];
+    const loom_liveness_segment_t* segment = &segments[middle];
     if (point >= segment->end_point) {
       first = middle + 1;
       count -= half + 1;
@@ -2070,14 +2070,11 @@ bool loom_liveness_segment_range_contains(
 }
 
 bool loom_liveness_segment_ranges_overlap(
-    const loom_liveness_analysis_t* analysis, loom_liveness_segment_range_t lhs,
+    const loom_liveness_segment_t* segments, loom_liveness_segment_range_t lhs,
     loom_liveness_segment_range_t rhs) {
-  IREE_ASSERT_ARGUMENT(analysis);
-  IREE_ASSERT_LE((uint64_t)lhs.start + lhs.count, analysis->segment_count);
-  IREE_ASSERT_LE((uint64_t)rhs.start + rhs.count, analysis->segment_count);
   if (lhs.count == 0 || rhs.count == 0) return false;
-  const loom_liveness_segment_t* lhs_segment = &analysis->segments[lhs.start];
-  const loom_liveness_segment_t* rhs_segment = &analysis->segments[rhs.start];
+  const loom_liveness_segment_t* lhs_segment = &segments[lhs.start];
+  const loom_liveness_segment_t* rhs_segment = &segments[rhs.start];
   const loom_liveness_segment_t* lhs_end = lhs_segment + lhs.count;
   const loom_liveness_segment_t* rhs_end = rhs_segment + rhs.count;
   // Both cursors are valid at entry. Only the advanced cursor can become

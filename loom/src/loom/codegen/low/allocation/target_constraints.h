@@ -348,7 +348,6 @@ uint32_t loom_low_allocation_target_constraints_assigned_location_search_limit(
 // storage even before either interval is assigned; they never excuse clobbers.
 bool loom_low_allocation_target_constraints_fixed_storage_conflicts(
     const loom_low_allocation_target_constraints_t* constraints,
-    const loom_liveness_analysis_t* liveness,
     const loom_low_allocation_unit_liveness_t* unit_liveness,
     const loom_low_placement_table_t* placement,
     const loom_low_allocation_assignment_t* candidate,

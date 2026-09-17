@@ -164,12 +164,12 @@ bool loom_low_allocation_live_range_values_overlap(
 
 bool loom_low_allocation_live_range_assignments_conflict(
     const loom_low_descriptor_set_t* descriptor_set,
-    const loom_liveness_analysis_t* liveness, const uint32_t* unit_start_points,
-    const uint32_t* unit_end_points, iree_host_size_t unit_point_count,
+    const loom_liveness_segment_t* storage_segments,
+    const uint32_t* unit_start_points, const uint32_t* unit_end_points,
+    iree_host_size_t unit_point_count,
     const loom_low_allocation_assignment_t* lhs,
     const loom_low_allocation_assignment_t* rhs) {
   IREE_ASSERT_ARGUMENT(descriptor_set);
-  IREE_ASSERT_ARGUMENT(liveness);
   IREE_ASSERT_ARGUMENT(lhs);
   IREE_ASSERT_ARGUMENT(rhs);
   if (!loom_low_allocation_assignment_is_register_like(lhs) ||
@@ -198,8 +198,8 @@ bool loom_low_allocation_live_range_assignments_conflict(
     }
     if (lhs->liveness_segments.count != 0 &&
         rhs->liveness_segments.count != 0 &&
-        !loom_liveness_segment_ranges_overlap(liveness, lhs->liveness_segments,
-                                              rhs->liveness_segments)) {
+        !loom_liveness_segment_ranges_overlap(
+            storage_segments, lhs->liveness_segments, rhs->liveness_segments)) {
       return false;
     }
     const bool has_refined_unit_starts = iree_any_bit_set(
@@ -246,8 +246,8 @@ bool loom_low_allocation_live_range_assignments_conflict(
     return false;
   }
   if (lhs->liveness_segments.count != 0 && rhs->liveness_segments.count != 0 &&
-      !loom_liveness_segment_ranges_overlap(liveness, lhs->liveness_segments,
-                                            rhs->liveness_segments)) {
+      !loom_liveness_segment_ranges_overlap(
+          storage_segments, lhs->liveness_segments, rhs->liveness_segments)) {
     return false;
   }
   const bool has_refined_unit_starts =

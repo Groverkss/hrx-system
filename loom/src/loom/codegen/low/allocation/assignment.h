@@ -65,7 +65,7 @@ typedef struct loom_low_allocation_assignment_t {
   uint32_t location_count;
   // First per-unit lifetime entry in the allocation table.
   uint32_t unit_point_start;
-  // Sparse liveness segments for |value_id| in the owning liveness analysis.
+  // Sparse physical reservations in the allocation's storage segment table.
   // An empty range keeps conflict checks conservative for synthetic
   // assignments and dead definitions.
   loom_liveness_segment_range_t liveness_segments;

@@ -13,8 +13,6 @@
 namespace loom {
 namespace {
 
-constexpr loom_liveness_analysis_t kEmptyLiveness = {};
-
 loom_low_allocation_assignment_t Assignment(
     loom_value_id_t value_id, uint16_t descriptor_reg_class_id,
     uint32_t start_point, uint32_t end_point, uint32_t location_base,
@@ -73,14 +71,14 @@ TEST(LowAllocationActiveUnitTest, FindsAndRemovesIndexedConflicts) {
       /*assignment_index=*/0);
   EXPECT_NE(index.entry_starts_by_assignment_index[0], UINT32_MAX);
   EXPECT_TRUE(loom_low_allocation_active_unit_index_conflicts(
-      &index, &descriptor_set, &kEmptyLiveness, &unit_liveness, assignments,
+      &index, &descriptor_set, &unit_liveness, assignments,
       IREE_ARRAYSIZE(assignments), &assignments[1],
       /*ignored_value_ids=*/nullptr,
       /*ignored_value_count=*/0));
   uint32_t conflict_indices[2] = {};
   uint16_t conflict_count = 0;
   IREE_ASSERT_OK(loom_low_allocation_active_unit_index_collect_conflicts(
-      &index, &descriptor_set, &kEmptyLiveness, &unit_liveness, assignments,
+      &index, &descriptor_set, &unit_liveness, assignments,
       IREE_ARRAYSIZE(assignments), &assignments[1],
       /*ignored_value_ids=*/nullptr,
       /*ignored_value_count=*/0, conflict_indices,
@@ -90,12 +88,12 @@ TEST(LowAllocationActiveUnitTest, FindsAndRemovesIndexedConflicts) {
 
   const loom_value_id_t ignored_value_ids[] = {1};
   EXPECT_FALSE(loom_low_allocation_active_unit_index_conflicts(
-      &index, &descriptor_set, &kEmptyLiveness, &unit_liveness, assignments,
+      &index, &descriptor_set, &unit_liveness, assignments,
       IREE_ARRAYSIZE(assignments), &assignments[1], ignored_value_ids,
       IREE_ARRAYSIZE(ignored_value_ids)));
   conflict_count = 0;
   IREE_ASSERT_OK(loom_low_allocation_active_unit_index_collect_conflicts(
-      &index, &descriptor_set, &kEmptyLiveness, &unit_liveness, assignments,
+      &index, &descriptor_set, &unit_liveness, assignments,
       IREE_ARRAYSIZE(assignments), &assignments[1], ignored_value_ids,
       IREE_ARRAYSIZE(ignored_value_ids), conflict_indices,
       IREE_ARRAYSIZE(conflict_indices), &conflict_count));
@@ -105,7 +103,7 @@ TEST(LowAllocationActiveUnitTest, FindsAndRemovesIndexedConflicts) {
       &index, assignments, IREE_ARRAYSIZE(assignments), /*assignment_index=*/0);
   EXPECT_EQ(index.entry_starts_by_assignment_index[0], UINT32_MAX);
   EXPECT_FALSE(loom_low_allocation_active_unit_index_conflicts(
-      &index, &descriptor_set, &kEmptyLiveness, &unit_liveness, assignments,
+      &index, &descriptor_set, &unit_liveness, assignments,
       IREE_ARRAYSIZE(assignments), &assignments[1],
       /*ignored_value_ids=*/nullptr,
       /*ignored_value_count=*/0));
@@ -156,8 +154,8 @@ TEST(LowAllocationActiveUnitTest, RecyclesEntriesAcrossAssignmentLifetimes) {
     uint32_t conflict_indices[kUnitCount];
     uint16_t conflict_count = 0;
     IREE_ASSERT_OK(loom_low_allocation_active_unit_index_collect_conflicts(
-        &index, &descriptor_set, &kEmptyLiveness, &unit_liveness, assignments,
-        kAssignmentCount, &assignments[i], /*ignored_value_ids=*/nullptr,
+        &index, &descriptor_set, &unit_liveness, assignments, kAssignmentCount,
+        &assignments[i], /*ignored_value_ids=*/nullptr,
         /*ignored_value_count=*/0, conflict_indices, kUnitCount,
         &conflict_count));
     ASSERT_EQ(conflict_count, 1u);
@@ -213,12 +211,12 @@ TEST(LowAllocationActiveUnitTest, RefinesIndexedConflictByUnitStart) {
       /*assignment_index=*/0);
 
   EXPECT_FALSE(loom_low_allocation_active_unit_index_conflicts(
-      &index, &descriptor_set, &kEmptyLiveness, &unit_liveness, assignments,
+      &index, &descriptor_set, &unit_liveness, assignments,
       IREE_ARRAYSIZE(assignments), &assignments[1],
       /*ignored_value_ids=*/nullptr,
       /*ignored_value_count=*/0));
   EXPECT_TRUE(loom_low_allocation_active_unit_index_conflicts(
-      &index, &descriptor_set, &kEmptyLiveness, &unit_liveness, assignments,
+      &index, &descriptor_set, &unit_liveness, assignments,
       IREE_ARRAYSIZE(assignments), &assignments[2],
       /*ignored_value_ids=*/nullptr,
       /*ignored_value_count=*/0));
@@ -358,12 +356,12 @@ TEST(LowAllocationActiveUnitTest, IndexesExplicitRegisterAtomicUnits) {
       /*assignment_index=*/0);
 
   EXPECT_TRUE(loom_low_allocation_active_unit_index_conflicts(
-      &index, &descriptor_set, &kEmptyLiveness, &unit_liveness, assignments,
+      &index, &descriptor_set, &unit_liveness, assignments,
       IREE_ARRAYSIZE(assignments), &assignments[1],
       /*ignored_value_ids=*/nullptr,
       /*ignored_value_count=*/0));
   EXPECT_FALSE(loom_low_allocation_active_unit_index_conflicts(
-      &index, &descriptor_set, &kEmptyLiveness, &unit_liveness, assignments,
+      &index, &descriptor_set, &unit_liveness, assignments,
       IREE_ARRAYSIZE(assignments), &assignments[2],
       /*ignored_value_ids=*/nullptr,
       /*ignored_value_count=*/0));
@@ -371,7 +369,7 @@ TEST(LowAllocationActiveUnitTest, IndexesExplicitRegisterAtomicUnits) {
       &index, assignments, IREE_ARRAYSIZE(assignments),
       /*assignment_index=*/0);
   EXPECT_FALSE(loom_low_allocation_active_unit_index_conflicts(
-      &index, &descriptor_set, &kEmptyLiveness, &unit_liveness, assignments,
+      &index, &descriptor_set, &unit_liveness, assignments,
       IREE_ARRAYSIZE(assignments), &assignments[1],
       /*ignored_value_ids=*/nullptr,
       /*ignored_value_count=*/0));

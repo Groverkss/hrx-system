@@ -554,21 +554,17 @@ static void loom_low_allocation_checker_constraints(
 }
 
 static bool loom_low_allocation_checker_segments_overlap(
-    const loom_liveness_analysis_t* liveness,
+    const loom_liveness_segment_t* segments,
     loom_liveness_segment_range_t lhs_range,
     loom_liveness_segment_range_t rhs_range, uint32_t overlap_begin,
     uint32_t overlap_end) {
-  if ((uint64_t)lhs_range.start + lhs_range.count > liveness->segment_count ||
-      (uint64_t)rhs_range.start + rhs_range.count > liveness->segment_count) {
-    return true;
-  }
-  // Missing semantic segments make that unit contiguous, not its peer. Both
+  // Missing storage segments make that unit contiguous, not its peer. Both
   // sparse lists are clipped to the actual overlapping per-unit storage span.
   const loom_liveness_segment_t contiguous = {overlap_begin, overlap_end};
   const loom_liveness_segment_t* lhs_segments =
-      lhs_range.count ? &liveness->segments[lhs_range.start] : &contiguous;
+      lhs_range.count ? &segments[lhs_range.start] : &contiguous;
   const loom_liveness_segment_t* rhs_segments =
-      rhs_range.count ? &liveness->segments[rhs_range.start] : &contiguous;
+      rhs_range.count ? &segments[rhs_range.start] : &contiguous;
   const uint32_t lhs_count = iree_max(lhs_range.count, 1u);
   const uint32_t rhs_count = iree_max(rhs_range.count, 1u);
   uint32_t lhs_index = 0;
@@ -628,8 +624,9 @@ static bool loom_low_allocation_checker_unit_lifetimes_overlap(
       .end_point = iree_min(lhs_end, rhs_end),
   };
   return loom_low_allocation_checker_segments_overlap(
-      &allocation->liveness, lhs->liveness_segments, rhs->liveness_segments,
-      iree_max(lhs_start, rhs_start), iree_min(lhs_end, rhs_end));
+      allocation->storage_segments, lhs->liveness_segments,
+      rhs->liveness_segments, iree_max(lhs_start, rhs_start),
+      iree_min(lhs_end, rhs_end));
 }
 
 static uint32_t loom_low_allocation_checker_content_root(uint32_t* parents,

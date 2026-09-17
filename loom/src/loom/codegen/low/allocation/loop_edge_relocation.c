@@ -256,7 +256,8 @@ static iree_status_t loom_low_allocation_loop_edge_relocation_group_supported(
     // before the backedge source replaces it.
     if (member_index != candidate->destination_assignment_index &&
         loom_low_allocation_live_range_assignments_conflict(
-            context->descriptor_set, context->liveness,
+            context->descriptor_set,
+            context->unit_liveness->storage_segments.entries,
             context->unit_liveness->start_points,
             context->unit_liveness->end_points,
             context->unit_liveness->point_count, &proposed, source)) {
@@ -401,9 +402,8 @@ static bool loom_low_allocation_loop_edge_relocation_candidate_target_conflicts(
         loom_low_allocation_loop_edge_relocation_member_assignment(
             state, candidate, member_index);
     if (loom_low_allocation_target_constraints_fixed_storage_conflicts(
-            context->target_constraints, context->liveness,
-            context->unit_liveness, context->placement, &assignment,
-            &source_value_id,
+            context->target_constraints, context->unit_liveness,
+            context->placement, &assignment, &source_value_id,
             /*ignored_value_count=*/1) ||
         loom_low_allocation_target_constraints_reserved_range_conflicts(
             context->target_constraints, assignment.descriptor_reg_class_id,
@@ -437,7 +437,8 @@ static bool loom_low_allocation_loop_edge_relocation_assignment_conflicts(
         loom_low_allocation_loop_edge_relocation_member_assignment(
             state, candidate, member_index);
     if (loom_low_allocation_live_range_assignments_conflict(
-            context->descriptor_set, context->liveness,
+            context->descriptor_set,
+            context->unit_liveness->storage_segments.entries,
             context->unit_liveness->start_points,
             context->unit_liveness->end_points,
             context->unit_liveness->point_count, &member, assignment)) {
@@ -599,7 +600,8 @@ static bool loom_low_allocation_loop_edge_relocation_eviction_location_is_legal(
       continue;
     }
     if (loom_low_allocation_live_range_assignments_conflict(
-            context->descriptor_set, context->liveness,
+            context->descriptor_set,
+            context->unit_liveness->storage_segments.entries,
             context->unit_liveness->start_points,
             context->unit_liveness->end_points,
             context->unit_liveness->point_count, &assignment,
@@ -608,8 +610,8 @@ static bool loom_low_allocation_loop_edge_relocation_eviction_location_is_legal(
     }
   }
   if (loom_low_allocation_target_constraints_fixed_storage_conflicts(
-          context->target_constraints, context->liveness,
-          context->unit_liveness, context->placement, &assignment,
+          context->target_constraints, context->unit_liveness,
+          context->placement, &assignment,
           /*ignored_value_ids=*/NULL, /*ignored_value_count=*/0) ||
       loom_low_allocation_target_constraints_reserved_range_conflicts(
           context->target_constraints, assignment.descriptor_reg_class_id,

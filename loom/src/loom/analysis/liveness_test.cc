@@ -403,10 +403,10 @@ func.def @cfg_loop(%cond: i1, %x: i32) -> (i32) {
           &analysis, FindValueOrdinal(analysis, args[1]));
   EXPECT_EQ(iter_segments.count, 3u);
   EXPECT_EQ(next_segments.count, 1u);
-  EXPECT_FALSE(loom_liveness_segment_ranges_overlap(&analysis, iter_segments,
-                                                    next_segments));
+  EXPECT_FALSE(loom_liveness_segment_ranges_overlap(
+      analysis.segments, iter_segments, next_segments));
   EXPECT_TRUE(loom_liveness_segment_ranges_overlap(
-      &analysis, invariant_segments, next_segments));
+      analysis.segments, invariant_segments, next_segments));
 
   const loom_liveness_pressure_summary_t* pressure =
       FindScalarPressure(analysis, LOOM_SCALAR_TYPE_I32);
@@ -585,21 +585,18 @@ TEST(LivenessSegmentsTest, SparseOverlapAndHalfOpenBoundaries) {
       {0, 1}, {3, 8},  {10, 12},  // Second value touches but never overlaps.
       {3, 8}, {9, 12},            // Third value overlaps only at the tail.
   };
-  loom_liveness_analysis_t analysis = {};
-  analysis.segments = segments;
-  analysis.segment_count = IREE_ARRAYSIZE(segments);
   const loom_liveness_segment_range_t first = {0, 2};
   const loom_liveness_segment_range_t second = {2, 3};
   const loom_liveness_segment_range_t third = {5, 2};
   const loom_liveness_segment_range_t empty = {7, 0};
-  EXPECT_FALSE(loom_liveness_segment_ranges_overlap(&analysis, first, second));
-  EXPECT_FALSE(loom_liveness_segment_ranges_overlap(&analysis, second, first));
-  EXPECT_TRUE(loom_liveness_segment_ranges_overlap(&analysis, first, third));
-  EXPECT_TRUE(loom_liveness_segment_ranges_overlap(&analysis, third, first));
-  EXPECT_TRUE(loom_liveness_segment_ranges_overlap(&analysis, first, first));
-  EXPECT_FALSE(loom_liveness_segment_ranges_overlap(&analysis, first, empty));
-  EXPECT_FALSE(loom_liveness_segment_ranges_overlap(&analysis, empty, first));
-  EXPECT_FALSE(loom_liveness_segment_ranges_overlap(&analysis, empty, empty));
+  EXPECT_FALSE(loom_liveness_segment_ranges_overlap(segments, first, second));
+  EXPECT_FALSE(loom_liveness_segment_ranges_overlap(segments, second, first));
+  EXPECT_TRUE(loom_liveness_segment_ranges_overlap(segments, first, third));
+  EXPECT_TRUE(loom_liveness_segment_ranges_overlap(segments, third, first));
+  EXPECT_TRUE(loom_liveness_segment_ranges_overlap(segments, first, first));
+  EXPECT_FALSE(loom_liveness_segment_ranges_overlap(segments, first, empty));
+  EXPECT_FALSE(loom_liveness_segment_ranges_overlap(segments, empty, first));
+  EXPECT_FALSE(loom_liveness_segment_ranges_overlap(segments, empty, empty));
 }
 
 TEST(LivenessSegmentsTest, ExhaustiveSmallSparseSets) {
@@ -627,18 +624,15 @@ TEST(LivenessSegmentsTest, ExhaustiveSmallSparseSets) {
       uint32_t count = 0;
       const auto lhs = append(lhs_bits, segments, count);
       const auto rhs = append(rhs_bits, segments, count);
-      loom_liveness_analysis_t analysis = {};
-      analysis.segments = count == 0 ? nullptr : segments;
-      analysis.segment_count = count;
       for (uint32_t point = 0; point <= 6; ++point) {
-        EXPECT_EQ(loom_liveness_segment_range_contains(&analysis, lhs, point),
+        EXPECT_EQ(loom_liveness_segment_range_contains(segments, lhs, point),
                   (lhs_bits & (1u << point)) != 0)
             << "bits=" << lhs_bits << ", point=" << point;
-        EXPECT_EQ(loom_liveness_segment_range_contains(&analysis, rhs, point),
+        EXPECT_EQ(loom_liveness_segment_range_contains(segments, rhs, point),
                   (rhs_bits & (1u << point)) != 0)
             << "bits=" << rhs_bits << ", point=" << point;
       }
-      EXPECT_EQ(loom_liveness_segment_ranges_overlap(&analysis, lhs, rhs),
+      EXPECT_EQ(loom_liveness_segment_ranges_overlap(segments, lhs, rhs),
                 (lhs_bits & rhs_bits) != 0)
           << "lhs=" << lhs_bits << ", rhs=" << rhs_bits;
     }

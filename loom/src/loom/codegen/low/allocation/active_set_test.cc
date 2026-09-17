@@ -15,8 +15,6 @@
 namespace loom {
 namespace {
 
-constexpr loom_liveness_analysis_t kEmptyLiveness = {};
-
 loom_low_allocation_assignment_t Assignment(loom_value_id_t value_id,
                                             uint32_t start_point,
                                             uint32_t end_point,
@@ -66,7 +64,7 @@ TEST(LowAllocationActiveSetTest, ExpiresAndRemovesIndexedUnits) {
 
   loom_low_allocation_active_set_t active_set = {};
   IREE_ASSERT_OK(loom_low_allocation_active_set_initialize(
-      &kEmptyLiveness, IREE_ARRAYSIZE(assignments),
+      IREE_ARRAYSIZE(assignments),
       /*program_point_count=*/11, /*unit_capacity=*/32, &arena, &active_set));
   loom_low_allocation_active_set_insert(
       &active_set, &descriptor_set, assignments, IREE_ARRAYSIZE(assignments),
@@ -145,7 +143,7 @@ TEST(LowAllocationActiveSetTest,
       DescriptorSet(reg_classes, IREE_ARRAYSIZE(reg_classes));
   loom_low_allocation_active_set_t active_set = {};
   IREE_ASSERT_OK(loom_low_allocation_active_set_initialize(
-      &kEmptyLiveness, kAssignmentCount, kLastEndPoint + 1,
+      kAssignmentCount, kLastEndPoint + 1,
       /*unit_capacity=*/kAssignmentCount, &arena, &active_set));
   const iree_host_size_t initialized_bytes = arena.used_allocation_size;
   for (uint32_t i = 0; i < kAssignmentCount; ++i) {
@@ -209,7 +207,7 @@ TEST(LowAllocationActiveSetTest, ReusesStorageBeforeRemovedLifetimeExpires) {
     unit_liveness.point_count = IREE_ARRAYSIZE(unit_end_points);
     loom_low_allocation_active_set_t active_set = {};
     IREE_ASSERT_OK(loom_low_allocation_active_set_initialize(
-        &kEmptyLiveness, IREE_ARRAYSIZE(assignments),
+        IREE_ARRAYSIZE(assignments),
         /*program_point_count=*/9, unit_capacity, &arena, &active_set));
     loom_low_allocation_active_set_insert(
         &active_set, &descriptor_set, assignments, IREE_ARRAYSIZE(assignments),
