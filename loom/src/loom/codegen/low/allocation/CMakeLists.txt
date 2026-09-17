@@ -209,6 +209,30 @@ loom_cc_library(
 
 loom_cc_library(
   NAME
+    concat_reservation
+  HDRS
+    "concat_reservation.h"
+  SRCS
+    "concat_reservation.c"
+  DEPS
+    ::assignment
+    ::assignment_map
+    ::live_range
+    ::search
+    ::storage
+    ::target_constraints
+    ::unit_liveness
+    iree::base
+    loom::analysis::liveness
+    loom::codegen::low::descriptors
+    loom::codegen::low::placement
+    loom::ir
+    loom::target::residency
+  PUBLIC
+)
+
+loom_cc_library(
+  NAME
     coalescing
   HDRS
     "coalescing.h"
@@ -217,6 +241,7 @@ loom_cc_library(
   DEPS
     ::assignment
     ::assignment_map
+    ::concat_reservation
     ::edge_alias
     ::live_range
     ::search

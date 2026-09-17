@@ -1,0 +1,70 @@
+// RUN: emit low-allocation-json @reversed_physical_sources
+
+test.target<low_core> @target
+
+// The first source occupies the second unit of l0: physical r2, not r1.
+low.func.def target<test.low.core>(@target) @reversed_physical_sources(%high: reg<test.explicit32>, %low: reg<test.explicit32>) -> (reg<test.explicit32 x2>) asm {
+  %pair = concat(%low, %high) : (reg<test.explicit32>, reg<test.explicit32>) -> reg<test.explicit32 x2>
+  return %pair
+}
+
+// ----
+{"format":"loom.low.allocation.v0","function":"reversed_physical_sources","target":"target","descriptor_set":"test.low.core","allocation_mode":"virtual","assignment_count":3,"remark_count":0,"copy_decision_count":0,"spill_count":0,"spill_plan_count":0,"coalesced_copy_count":0,"materialized_copy_count":0,"assignments":[{"index":0,"value":{"id":3,"name":"pair","type":"reg<test.explicit32 x2>"},"class":{"type_kind":12,"type_kind_name":"register","element_type":0,"element_type_name":null,"register_class":"test.explicit32"},"start_point":1,"end_point":2,"unit_count":2,"location":{"kind":"physical_register","base":4,"count":2}},{"index":1,"value":{"id":0,"name":"high","type":"reg<test.explicit32>"},"class":{"type_kind":12,"type_kind_name":"register","element_type":0,"element_type_name":null,"register_class":"test.explicit32"},"start_point":0,"end_point":1,"unit_count":1,"location":{"kind":"physical_register","base":2,"count":1}},{"index":2,"value":{"id":1,"name":"low","type":"reg<test.explicit32>"},"class":{"type_kind":12,"type_kind_name":"register","element_type":0,"element_type_name":null,"register_class":"test.explicit32"},"start_point":0,"end_point":1,"unit_count":1,"location":{"kind":"physical_register","base":0,"count":1}}],"spill_plans":[],"copy_decisions":[],"remarks":[]}
+
+// ====
+
+// RUN: emit low-allocation-json @physical_concat_avoids_live_alias fixed=%blocker:physical_register:0:1
+
+test.target<low_core> @target
+
+// Live r0 excludes l0. The sources must assemble l1 from r1 and r3.
+low.func.def target<test.low.core>(@target) @physical_concat_avoids_live_alias(%blocker: reg<test.explicit32>, %high: reg<test.explicit32>, %low: reg<test.explicit32>) -> (reg<test.explicit32 x2>, reg<test.explicit32>) asm {
+  %pair = concat(%low, %high) : (reg<test.explicit32>, reg<test.explicit32>) -> reg<test.explicit32 x2>
+  return %pair, %blocker
+}
+
+// ----
+{"format":"loom.low.allocation.v0","function":"physical_concat_avoids_live_alias","target":"target","descriptor_set":"test.low.core","allocation_mode":"virtual","assignment_count":4,"remark_count":0,"copy_decision_count":0,"spill_count":0,"spill_plan_count":0,"coalesced_copy_count":0,"materialized_copy_count":0,"assignments":[{"index":0,"value":{"id":5,"name":"pair","type":"reg<test.explicit32 x2>"},"class":{"type_kind":12,"type_kind_name":"register","element_type":0,"element_type_name":null,"register_class":"test.explicit32"},"start_point":1,"end_point":2,"unit_count":2,"location":{"kind":"physical_register","base":5,"count":2}},{"index":1,"value":{"id":1,"name":"high","type":"reg<test.explicit32>"},"class":{"type_kind":12,"type_kind_name":"register","element_type":0,"element_type_name":null,"register_class":"test.explicit32"},"start_point":0,"end_point":1,"unit_count":1,"location":{"kind":"physical_register","base":3,"count":1}},{"index":2,"value":{"id":2,"name":"low","type":"reg<test.explicit32>"},"class":{"type_kind":12,"type_kind_name":"register","element_type":0,"element_type_name":null,"register_class":"test.explicit32"},"start_point":0,"end_point":1,"unit_count":1,"location":{"kind":"physical_register","base":1,"count":1}},{"index":3,"value":{"id":0,"name":"blocker","type":"reg<test.explicit32>"},"class":{"type_kind":12,"type_kind_name":"register","element_type":0,"element_type_name":null,"register_class":"test.explicit32"},"start_point":0,"end_point":2,"unit_count":1,"location":{"kind":"physical_register","base":0,"count":1}}],"spill_plans":[],"copy_decisions":[],"remarks":[]}
+
+// ====
+
+// RUN: emit low-allocation-json @physical_concat_candidate_budget test.explicit32=3
+
+test.target<low_core> @target
+
+// A three-candidate budget permits l0 (r0,r2), even though its view ID is 4.
+low.func.def target<test.low.core>(@target) @physical_concat_candidate_budget(%high: reg<test.explicit32>, %low: reg<test.explicit32>) -> (reg<test.explicit32 x2>) asm {
+  %pair = concat(%low, %high) : (reg<test.explicit32>, reg<test.explicit32>) -> reg<test.explicit32 x2>
+  return %pair
+}
+
+// ----
+{"format":"loom.low.allocation.v0","function":"physical_concat_candidate_budget","target":"target","descriptor_set":"test.low.core","allocation_mode":"virtual","assignment_count":3,"remark_count":0,"copy_decision_count":0,"spill_count":0,"spill_plan_count":0,"coalesced_copy_count":0,"materialized_copy_count":0,"assignments":[{"index":0,"value":{"id":3,"name":"pair","type":"reg<test.explicit32 x2>"},"class":{"type_kind":12,"type_kind_name":"register","element_type":0,"element_type_name":null,"register_class":"test.explicit32"},"start_point":1,"end_point":2,"unit_count":2,"location":{"kind":"physical_register","base":4,"count":2}},{"index":1,"value":{"id":0,"name":"high","type":"reg<test.explicit32>"},"class":{"type_kind":12,"type_kind_name":"register","element_type":0,"element_type_name":null,"register_class":"test.explicit32"},"start_point":0,"end_point":1,"unit_count":1,"location":{"kind":"physical_register","base":2,"count":1}},{"index":2,"value":{"id":1,"name":"low","type":"reg<test.explicit32>"},"class":{"type_kind":12,"type_kind_name":"register","element_type":0,"element_type_name":null,"register_class":"test.explicit32"},"start_point":0,"end_point":1,"unit_count":1,"location":{"kind":"physical_register","base":0,"count":1}}],"spill_plans":[],"copy_decisions":[],"remarks":[]}
+
+// ====
+
+// RUN: emit low-allocation-json @physical_concat_excludes_incomplete_view test.explicit32=2 output=none
+
+test.target<low_core> @target
+
+// Neither declared pair is wholly inside the r0,r1 candidate budget.
+low.func.def target<test.low.core>(@target) @physical_concat_excludes_incomplete_view(%high: reg<test.explicit32>, %low: reg<test.explicit32>) -> (reg<test.explicit32 x2>) asm {
+  // ERROR@+1: BACKEND/005 {function_name="physical_concat_excludes_incomplete_view", value_class="test.explicit32", budget="2", peak="2", failure_code="unspillable-register-exhausted"}
+  %pair = concat(%low, %high) : (reg<test.explicit32>, reg<test.explicit32>) -> reg<test.explicit32 x2>
+  return %pair
+}
+
+// ====
+
+// RUN: emit low-allocation-json @physical_concat_broadcast_source
+
+test.target<low_core> @target
+
+// A repeated source has no unique unit affinity and keeps normal placement.
+low.func.def target<test.low.core>(@target) @physical_concat_broadcast_source(%value: reg<test.explicit32>) -> (reg<test.explicit32 x2>) asm {
+  %pair = concat(%value, %value) : (reg<test.explicit32>, reg<test.explicit32>) -> reg<test.explicit32 x2>
+  return %pair
+}
+
+// ----
+{"format":"loom.low.allocation.v0","function":"physical_concat_broadcast_source","target":"target","descriptor_set":"test.low.core","allocation_mode":"virtual","assignment_count":2,"remark_count":0,"copy_decision_count":0,"spill_count":0,"spill_plan_count":0,"coalesced_copy_count":0,"materialized_copy_count":0,"assignments":[{"index":0,"value":{"id":0,"name":"value","type":"reg<test.explicit32>"},"class":{"type_kind":12,"type_kind_name":"register","element_type":0,"element_type_name":null,"register_class":"test.explicit32"},"start_point":0,"end_point":1,"unit_count":1,"location":{"kind":"physical_register","base":0,"count":1}},{"index":1,"value":{"id":2,"name":"pair","type":"reg<test.explicit32 x2>"},"class":{"type_kind":12,"type_kind_name":"register","element_type":0,"element_type_name":null,"register_class":"test.explicit32"},"start_point":1,"end_point":2,"unit_count":2,"location":{"kind":"physical_register","base":4,"count":2}}],"spill_plans":[],"copy_decisions":[],"remarks":[]}

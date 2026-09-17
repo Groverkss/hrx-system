@@ -11,6 +11,61 @@
 #include "loom/codegen/low/storage_relation.h"
 #include "loom/codegen/low/target_binding.h"
 
+// Composes source -> intermediate and intermediate -> result placement over
+// the units covered by both relations. The returned relation maps the first
+// source directly into the second result while retaining the second
+// relation's placement semantics.
+bool loom_low_placement_relation_compose(
+    const loom_low_placement_relation_t* source_to_intermediate,
+    const loom_low_placement_relation_t* intermediate_to_result,
+    loom_low_placement_relation_t* out_relation) {
+  if (source_to_intermediate->result_ordinal !=
+      intermediate_to_result->source_ordinal) {
+    return false;
+  }
+  const uint32_t overlap_offset =
+      iree_max(source_to_intermediate->result_unit_offset,
+               intermediate_to_result->source_unit_offset);
+  const uint64_t source_to_intermediate_end =
+      (uint64_t)source_to_intermediate->result_unit_offset +
+      source_to_intermediate->unit_count;
+  const uint64_t intermediate_to_result_end =
+      (uint64_t)intermediate_to_result->source_unit_offset +
+      intermediate_to_result->unit_count;
+  const uint64_t overlap_end =
+      iree_min(source_to_intermediate_end, intermediate_to_result_end);
+  if (overlap_offset >= overlap_end) return false;
+  const uint32_t overlap_count = (uint32_t)(overlap_end - overlap_offset);
+  *out_relation = *intermediate_to_result;
+  out_relation->source_ordinal = source_to_intermediate->source_ordinal;
+  out_relation->source_unit_offset =
+      source_to_intermediate->source_unit_offset +
+      (overlap_offset - source_to_intermediate->result_unit_offset);
+  out_relation->result_unit_offset =
+      intermediate_to_result->result_unit_offset +
+      (overlap_offset - intermediate_to_result->source_unit_offset);
+  out_relation->unit_count = overlap_count;
+  return true;
+}
+
+bool loom_low_placement_relation_compose_tied_concat_source(
+    const loom_low_placement_relation_t* tied_relation,
+    const loom_low_placement_relation_t* concat_relation,
+    loom_low_placement_relation_t* out_relation) {
+  // Carries a concat source slice backward through an exact tied-result alias
+  // so the operand can reserve the eventual aligned aggregate.
+  if (tied_relation->cause != LOOM_LOW_PLACEMENT_CAUSE_TIED_RESULT ||
+      concat_relation->cause != LOOM_LOW_PLACEMENT_CAUSE_LOW_CONCAT ||
+      !iree_all_bits_set(
+          tied_relation->flags,
+          LOOM_LOW_PLACEMENT_RELATION_FLAG_HARD |
+              LOOM_LOW_PLACEMENT_RELATION_FLAG_CAN_ALIAS_STORAGE)) {
+    return false;
+  }
+  return loom_low_placement_relation_compose(tied_relation, concat_relation,
+                                             out_relation);
+}
+
 typedef struct loom_low_placement_build_state_t {
   // Module containing the analyzed low region.
   loom_module_t* module;

@@ -145,6 +145,21 @@ typedef struct loom_low_placement_relation_t {
   uint16_t priority;
 } loom_low_placement_relation_t;
 
+// Composes two retained relations over their overlapping intermediate units.
+// Returns false for different intermediate values or disjoint unit ranges.
+// The result retains the second relation's placement semantics and operation.
+bool loom_low_placement_relation_compose(
+    const loom_low_placement_relation_t* source_to_intermediate,
+    const loom_low_placement_relation_t* intermediate_to_result,
+    loom_low_placement_relation_t* out_relation);
+
+// Composes a required tied-result alias with a concat source relation.
+// Returns false unless the source tie can justify overlapping storage.
+bool loom_low_placement_relation_compose_tied_concat_source(
+    const loom_low_placement_relation_t* tied_relation,
+    const loom_low_placement_relation_t* concat_relation,
+    loom_low_placement_relation_t* out_relation);
+
 // Contiguous relation range for one result value ordinal.
 typedef struct loom_low_placement_relation_range_t {
   // First relation index for the value ordinal.
