@@ -13,7 +13,14 @@ static void SelectedScales(benchmark::Benchmark* benchmark) {
   benchmark->Arg(1)->Arg(16)->Arg(64)->Arg(512)->Arg(4096);
 }
 
-static void BM_InsertReachedFacts(benchmark::State& state) {
+static void SparseSelectedScales(benchmark::Benchmark* benchmark) {
+  benchmark->Arg(16)->Arg(64)->Arg(256)->Arg(1024)->Arg(2048);
+}
+
+// The largest source ordinal remains below the 24-bit wire identity limit.
+static constexpr uint32_t kSparseOrdinalStride = 8192;
+
+static void InsertReachedFacts(benchmark::State& state, uint32_t stride) {
   const uint32_t count = static_cast<uint32_t>(state.range(0));
   for (auto _ : state) {
     loom_bytecode_selected_projection_t projection;
@@ -23,7 +30,7 @@ static void BM_InsertReachedFacts(benchmark::State& state) {
       const auto domain =
           static_cast<loom_bytecode_selected_projection_domain_t>(i % 5u);
       IREE_CHECK_OK(loom_bytecode_selected_projection_insert(
-          &projection, domain, i, count - i));
+          &projection, domain, i * stride, count - i));
     }
     benchmark::DoNotOptimize(projection.slots.values);
     state.PauseTiming();
@@ -33,20 +40,42 @@ static void BM_InsertReachedFacts(benchmark::State& state) {
   state.SetItemsProcessed(state.iterations() * count);
   state.SetComplexityN(count);
 }
-BENCHMARK(BM_InsertReachedFacts)
-    ->Apply(SelectedScales)
-    ->Complexity(benchmark::oN);
 
-static void BM_LookupReachedFacts(benchmark::State& state) {
+static void BM_InsertReachedFacts(benchmark::State& state) {
+  InsertReachedFacts(state, 1);
+}
+BENCHMARK(BM_InsertReachedFacts)->Apply(SelectedScales)->Complexity();
+
+static void BM_InsertSparseReachedFacts(benchmark::State& state) {
+  InsertReachedFacts(state, kSparseOrdinalStride);
+}
+BENCHMARK(BM_InsertSparseReachedFacts)
+    ->Apply(SparseSelectedScales)
+    ->Complexity();
+
+static void LookupReachedFacts(benchmark::State& state, uint32_t stride) {
   const uint32_t count = static_cast<uint32_t>(state.range(0));
   loom_bytecode_selected_projection_t projection;
   loom_bytecode_selected_projection_initialize(iree_allocator_system(),
                                                &projection);
   for (uint32_t i = 0; i < count; ++i) {
     const auto domain =
-        static_cast<loom_bytecode_selected_projection_domain_t>(i & 3u);
-    IREE_CHECK_OK(loom_bytecode_selected_projection_insert(&projection, domain,
-                                                           i, count - i));
+        static_cast<loom_bytecode_selected_projection_domain_t>(i % 5u);
+    IREE_CHECK_OK(loom_bytecode_selected_projection_insert(
+        &projection, domain, i * stride, count - i));
+  }
+  for (uint32_t i = 0; i < count; ++i) {
+    const auto domain =
+        static_cast<loom_bytecode_selected_projection_domain_t>(i % 5u);
+    uint32_t target_id = 0;
+    if (!loom_bytecode_selected_projection_lookup(&projection, domain,
+                                                  i * stride, &target_id) ||
+        target_id != count - i) {
+      state.SkipWithError(
+          "reached-fact lookup must return its inserted target");
+      loom_bytecode_selected_projection_deinitialize(&projection);
+      return;
+    }
   }
 
   uint32_t ordinal = 0;
@@ -55,8 +84,9 @@ static void BM_LookupReachedFacts(benchmark::State& state) {
     const auto domain = static_cast<loom_bytecode_selected_projection_domain_t>(
         source_ordinal % 5u);
     uint32_t target_id = 0;
-    loom_bytecode_selected_projection_lookup(&projection, domain,
-                                             source_ordinal, &target_id);
+    bool found = loom_bytecode_selected_projection_lookup(
+        &projection, domain, source_ordinal * stride, &target_id);
+    benchmark::DoNotOptimize(found);
     benchmark::DoNotOptimize(target_id);
   }
   state.SetItemsProcessed(state.iterations());
@@ -64,7 +94,16 @@ static void BM_LookupReachedFacts(benchmark::State& state) {
       static_cast<double>(projection.slots.capacity * sizeof(uint64_t));
   loom_bytecode_selected_projection_deinitialize(&projection);
 }
+
+static void BM_LookupReachedFacts(benchmark::State& state) {
+  LookupReachedFacts(state, 1);
+}
 BENCHMARK(BM_LookupReachedFacts)->Apply(SelectedScales);
+
+static void BM_LookupSparseReachedFacts(benchmark::State& state) {
+  LookupReachedFacts(state, kSparseOrdinalStride);
+}
+BENCHMARK(BM_LookupSparseReachedFacts)->Apply(SparseSelectedScales);
 
 }  // namespace
 
