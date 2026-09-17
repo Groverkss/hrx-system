@@ -128,6 +128,8 @@ typedef struct loom_low_allocation_search_location_preference_t {
   loom_low_placement_relation_range_t result_range;
   // Relations where the candidate is the source assignment.
   loom_low_placement_relation_range_t source_range;
+  // One penalty bit per semantic candidate ordinal, or NULL when inert.
+  const uint64_t* physical_domain_words;
 } loom_low_allocation_search_location_preference_t;
 
 static bool loom_low_allocation_search_relation_is_actionable(
@@ -456,6 +458,8 @@ loom_low_allocation_search_find_explicit_physical_register_for_release_policy(
   const uint32_t candidate_count =
       unit_count == 1 ? reg_class->allocatable_count
                       : descriptor_set->physical_register_view_count;
+  const bool needs_first_candidate =
+      loom_low_allocation_search_has_pressure_release_records(context);
   for (uint32_t i = 0; i < candidate_count; ++i) {
     uint32_t physical_register_id = 0;
     uint32_t candidate_ordinal = 0;
@@ -488,6 +492,19 @@ loom_low_allocation_search_find_explicit_physical_register_for_release_policy(
       if (pressure_extent > maximum_pressure_extent) continue;
       physical_register_id = view->physical_register_id;
     }
+    const uint32_t domain_penalty =
+        preference->physical_domain_words
+            ? (preference->physical_domain_words[candidate_ordinal / 64] >>
+               (candidate_ordinal % 64)) &
+                  1
+            : 0;
+    // Scalars arrive in packing order and every other penalty is nonnegative.
+    // This lower bound cannot beat an earlier choice, even before conflicts
+    // are queried. Pressure release still needs the minimum legal ordinal.
+    if (unit_count == 1 && !needs_first_candidate && out_choice->found &&
+        domain_penalty >= out_choice->preference_penalty) {
+      continue;
+    }
     loom_low_allocation_assignment_t candidate = *candidate_template;
     candidate.location_base = physical_register_id;
     if (loom_low_allocation_search_assignment_conflicts(
@@ -497,9 +514,11 @@ loom_low_allocation_search_find_explicit_physical_register_for_release_policy(
             /*ignored_storage_lease_value_count=*/0, release_policy)) {
       continue;
     }
-    const uint32_t preference_penalty =
+    uint32_t preference_penalty =
         loom_low_allocation_search_location_preference_penalty(
             context, preference, &candidate);
+    preference_penalty =
+        iree_math_saturating_add_u32(preference_penalty, domain_penalty);
     const uint32_t first_candidate_ordinal =
         out_choice->found
             ? iree_min(out_choice->first_candidate_ordinal, candidate_ordinal)
@@ -524,8 +543,7 @@ loom_low_allocation_search_find_explicit_physical_register_for_release_policy(
     // Scalars are visited in packing order, so the first zero-penalty choice
     // is final unless pressure-release comparison also needs the minimum
     // semantic ordinal. Views retain physical-ID order for indexed lookup.
-    if (unit_count == 1 && preference_penalty == 0 &&
-        !loom_low_allocation_search_has_pressure_release_records(context)) {
+    if (unit_count == 1 && preference_penalty == 0 && !needs_first_candidate) {
       return;
     }
   }
@@ -623,9 +641,19 @@ bool loom_low_allocation_search_find_free_location(
       loom_low_allocation_search_candidate_assignment(
           context, interval, capacity.descriptor_reg_class_id,
           capacity.location_kind, /*location_base=*/0, interval->unit_count);
-  const loom_low_allocation_search_location_preference_t preference =
+  loom_low_allocation_search_location_preference_t preference =
       loom_low_allocation_search_location_preference(context,
                                                      &candidate_template);
+  if (uses_explicit_physical_registers && interval->unit_count == 1 &&
+      context->physical_domains && context->physical_domains->offsets) {
+    const uint32_t offset =
+        context->physical_domains
+            ->offsets[interval - context->liveness->intervals];
+    if (offset != UINT32_MAX) {
+      preference.physical_domain_words =
+          context->physical_domains->words + offset;
+    }
+  }
   const uint32_t scalar_packing_frontier =
       loom_low_allocation_search_scalar_packing_frontier(context, interval,
                                                          &capacity);

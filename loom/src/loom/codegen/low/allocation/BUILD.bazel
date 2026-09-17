@@ -143,6 +143,7 @@ loom_cc_library(
         ":assignment",
         ":assignment_map",
         ":live_range",
+        ":physical_domains",
         ":scalar_packing",
         ":spill_plan",
         ":spill_traffic",
@@ -492,6 +493,23 @@ loom_cc_library(
 )
 
 loom_cc_library(
+    name = "physical_domains",
+    srcs = ["physical_domains.c"],
+    hdrs = ["physical_domains.h"],
+    deps = [
+        ":live_range",
+        ":unit_liveness",
+        "//loom/src/loom/analysis:liveness",
+        "//loom/src/loom/codegen/low:descriptors",
+        "//loom/src/loom/codegen/low:placement",
+        "//loom/src/loom/util:adaptive_sort",
+        "//runtime/src/iree/base",
+        "//runtime/src/iree/base/internal",
+        "//runtime/src/iree/base/internal:arena",
+    ],
+)
+
+loom_cc_library(
     name = "scalar_packing",
     srcs = ["scalar_packing.c"],
     hdrs = ["scalar_packing.h"],
@@ -565,6 +583,7 @@ loom_cc_library(
         ":coalescing",
         ":interval_order",
         ":live_range",
+        ":physical_domains",
         ":scalar_packing",
         ":search",
         ":spill_plan",

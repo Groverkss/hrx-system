@@ -16,6 +16,7 @@
 #include "loom/codegen/low/allocation/active_set.h"
 #include "loom/codegen/low/allocation/assignment.h"
 #include "loom/codegen/low/allocation/assignment_map.h"
+#include "loom/codegen/low/allocation/physical_domains.h"
 #include "loom/codegen/low/allocation/scalar_packing.h"
 #include "loom/codegen/low/allocation/spill_plan.h"
 #include "loom/codegen/low/allocation/storage_lease.h"
@@ -63,6 +64,8 @@ typedef struct loom_low_allocation_search_context_t {
   iree_bitmap_t required_register_values;
   // Scalar/aggregate lifetime preferences computed before coloring.
   loom_low_allocation_scalar_packing_t scalar_packing;
+  // Optional retained scalar physical-domain preferences for this attempt.
+  const loom_low_allocation_physical_domains_t* physical_domains;
 } loom_low_allocation_search_context_t;
 
 // Active assignment set selected for spilling before an interval is assigned.

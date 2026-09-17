@@ -1,0 +1,133 @@
+// RUN: emit low-allocation-json @later_restricted_value
+
+test.target<low_core> @target
+
+// The persistent value leaves r0/r1 available for the later narrow value.
+low.func.def target<test.low.core>(@target) @later_restricted_value(%persistent: reg<test.explicit32>) -> (reg<test.explicit32>, reg<test.packed.narrow>) asm {
+  %restricted = test.const.packed.narrow 7
+  return %persistent, %restricted
+}
+
+// ----
+{"format":"loom.low.allocation.v0","function":"later_restricted_value","target":"target","descriptor_set":"test.low.core","allocation_mode":"virtual","assignment_count":2,"remark_count":0,"copy_decision_count":0,"spill_count":0,"spill_plan_count":0,"coalesced_copy_count":0,"materialized_copy_count":0,"assignments":[{"index":0,"value":{"id":0,"name":"persistent","type":"reg<test.explicit32>"},"class":{"type_kind":12,"type_kind_name":"register","element_type":0,"element_type_name":null,"register_class":"test.explicit32"},"start_point":0,"end_point":2,"unit_count":1,"location":{"kind":"physical_register","base":2,"count":1}},{"index":1,"value":{"id":3,"name":"restricted","type":"reg<test.packed.narrow>"},"class":{"type_kind":12,"type_kind_name":"register","element_type":0,"element_type_name":null,"register_class":"test.packed.narrow"},"start_point":1,"end_point":2,"unit_count":1,"location":{"kind":"physical_register","base":0,"count":1}}],"spill_plans":[],"copy_decisions":[],"remarks":[]}
+
+// ====
+
+// RUN: emit low-allocation-json @loop_initializer_keeps_future_domain_available
+
+test.target<low_core> @target
+
+// The initializer ends before the restricted value starts. Its loop affinity
+// carries the state lifetime back to the initial physical choice.
+low.func.def target<test.low.core>(@target) @loop_initializer_keeps_future_domain_available(%condition: reg<test.i32>) -> (reg<test.explicit32>, reg<test.packed.narrow>) asm {
+  %initial = test.const.explicit32 1
+  low.br ^loop(%initial: reg<test.explicit32>)
+^loop(%state: reg<test.explicit32>):
+  %restricted = test.const.packed.narrow 7
+  low.cond_br %condition, ^body, ^exit : reg<test.i32>
+^body:
+  low.br ^loop(%state: reg<test.explicit32>)
+^exit:
+  return %state, %restricted
+}
+
+// ----
+{"format":"loom.low.allocation.v0","function":"loop_initializer_keeps_future_domain_available","target":"target","descriptor_set":"test.low.core","allocation_mode":"virtual","assignment_count":4,"remark_count":0,"copy_decision_count":0,"spill_count":0,"spill_plan_count":0,"coalesced_copy_count":0,"materialized_copy_count":0,"assignments":[{"index":0,"value":{"id":0,"name":"condition","type":"reg<test.i32>"},"class":{"type_kind":12,"type_kind_name":"register","element_type":0,"element_type_name":null,"register_class":"test.i32"},"start_point":0,"end_point":8,"unit_count":1,"location":{"kind":"target_id","base":0,"count":1}},{"index":1,"value":{"id":3,"name":"initial","type":"reg<test.explicit32>"},"class":{"type_kind":12,"type_kind_name":"register","element_type":0,"element_type_name":null,"register_class":"test.explicit32"},"start_point":1,"end_point":2,"unit_count":1,"location":{"kind":"physical_register","base":2,"count":1}},{"index":2,"value":{"id":4,"name":"state","type":"reg<test.explicit32>"},"class":{"type_kind":12,"type_kind_name":"register","element_type":0,"element_type_name":null,"register_class":"test.explicit32"},"start_point":3,"end_point":9,"unit_count":1,"location":{"kind":"physical_register","base":2,"count":1}},{"index":3,"value":{"id":5,"name":"restricted","type":"reg<test.packed.narrow>"},"class":{"type_kind":12,"type_kind_name":"register","element_type":0,"element_type_name":null,"register_class":"test.packed.narrow"},"start_point":4,"end_point":9,"unit_count":1,"location":{"kind":"physical_register","base":0,"count":1}}],"spill_plans":[],"copy_decisions":[],"remarks":[]}
+
+// ====
+
+// RUN: emit low-allocation-json @equal_restricted_domains_remain_preferred
+
+test.target<low_core> @target
+
+// Both producers can already occupy their consumer's domain. Equal-domain
+// competitors require distinct registers, not an intermediate broad register.
+low.func.def target<test.low.core>(@target) @equal_restricted_domains_remain_preferred(%first: reg<test.explicit32>, %second: reg<test.explicit32>) -> (reg<test.packed.narrow>, reg<test.packed.narrow>) asm {
+  %narrow_first = copy %first : reg<test.explicit32> -> reg<test.packed.narrow>
+  %narrow_second = copy %second : reg<test.explicit32> -> reg<test.packed.narrow>
+  return %narrow_first, %narrow_second
+}
+
+// ----
+{"format":"loom.low.allocation.v0","function":"equal_restricted_domains_remain_preferred","target":"target","descriptor_set":"test.low.core","allocation_mode":"virtual","assignment_count":4,"remark_count":0,"copy_decision_count":2,"spill_count":0,"spill_plan_count":0,"coalesced_copy_count":2,"materialized_copy_count":0,"assignments":[{"index":0,"value":{"id":0,"name":"first","type":"reg<test.explicit32>"},"class":{"type_kind":12,"type_kind_name":"register","element_type":0,"element_type_name":null,"register_class":"test.explicit32"},"start_point":0,"end_point":1,"unit_count":1,"location":{"kind":"physical_register","base":0,"count":1}},{"index":1,"value":{"id":1,"name":"second","type":"reg<test.explicit32>"},"class":{"type_kind":12,"type_kind_name":"register","element_type":0,"element_type_name":null,"register_class":"test.explicit32"},"start_point":0,"end_point":2,"unit_count":1,"location":{"kind":"physical_register","base":1,"count":1}},{"index":2,"value":{"id":4,"name":"narrow_first","type":"reg<test.packed.narrow>"},"class":{"type_kind":12,"type_kind_name":"register","element_type":0,"element_type_name":null,"register_class":"test.packed.narrow"},"start_point":1,"end_point":3,"unit_count":1,"location":{"kind":"physical_register","base":0,"count":1}},{"index":3,"value":{"id":5,"name":"narrow_second","type":"reg<test.packed.narrow>"},"class":{"type_kind":12,"type_kind_name":"register","element_type":0,"element_type_name":null,"register_class":"test.packed.narrow"},"start_point":2,"end_point":3,"unit_count":1,"location":{"kind":"physical_register","base":1,"count":1}}],"spill_plans":[],"copy_decisions":[{"index":0,"kind":"coalesced","source_value":{"id":0,"name":"first","type":"reg<test.explicit32>"},"result_value":{"id":4,"name":"narrow_first","type":"reg<test.packed.narrow>"},"source_assignment":0,"result_assignment":2},{"index":1,"kind":"coalesced","source_value":{"id":1,"name":"second","type":"reg<test.explicit32>"},"result_value":{"id":5,"name":"narrow_second","type":"reg<test.packed.narrow>"},"source_assignment":1,"result_assignment":3}],"remarks":[]}
+
+// ====
+
+// RUN: emit low-allocation-json @semantic_candidates_use_physical_identity
+
+test.target<low_core> @target
+
+// packed.wide enumerates r0,r2,r1,r3. The partner domain is r2,r3, so the
+// producer preference must translate physical IDs into its own ordinals.
+low.func.def target<test.low.core>(@target) @semantic_candidates_use_physical_identity(%source: reg<test.packed.wide>) -> (reg<test.coindexed.partner>) asm {
+  %result = copy %source : reg<test.packed.wide> -> reg<test.coindexed.partner>
+  return %result
+}
+
+// ----
+{"format":"loom.low.allocation.v0","function":"semantic_candidates_use_physical_identity","target":"target","descriptor_set":"test.low.core","allocation_mode":"virtual","assignment_count":2,"remark_count":0,"copy_decision_count":1,"spill_count":0,"spill_plan_count":0,"coalesced_copy_count":1,"materialized_copy_count":0,"assignments":[{"index":0,"value":{"id":0,"name":"source","type":"reg<test.packed.wide>"},"class":{"type_kind":12,"type_kind_name":"register","element_type":0,"element_type_name":null,"register_class":"test.packed.wide"},"start_point":0,"end_point":1,"unit_count":1,"location":{"kind":"physical_register","base":2,"count":1}},{"index":1,"value":{"id":2,"name":"result","type":"reg<test.coindexed.partner>"},"class":{"type_kind":12,"type_kind_name":"register","element_type":0,"element_type_name":null,"register_class":"test.coindexed.partner"},"start_point":1,"end_point":2,"unit_count":1,"location":{"kind":"physical_register","base":2,"count":1}}],"spill_plans":[],"copy_decisions":[{"index":0,"kind":"coalesced","source_value":{"id":0,"name":"source","type":"reg<test.packed.wide>"},"result_value":{"id":2,"name":"result","type":"reg<test.coindexed.partner>"},"source_assignment":0,"result_assignment":1}],"remarks":[]}
+
+// ====
+
+// RUN: emit low-allocation-json @disjoint_domains_preserve_transfer
+
+test.target<low_core> @target
+
+low.func.def target<test.low.core>(@target) @disjoint_domains_preserve_transfer(%source: reg<test.packed.narrow>) -> (reg<test.coindexed.partner>) asm {
+  %result = copy %source : reg<test.packed.narrow> -> reg<test.coindexed.partner>
+  return %result
+}
+
+// ----
+{"format":"loom.low.allocation.v0","function":"disjoint_domains_preserve_transfer","target":"target","descriptor_set":"test.low.core","allocation_mode":"virtual","assignment_count":2,"remark_count":0,"copy_decision_count":1,"spill_count":0,"spill_plan_count":0,"coalesced_copy_count":0,"materialized_copy_count":1,"assignments":[{"index":0,"value":{"id":0,"name":"source","type":"reg<test.packed.narrow>"},"class":{"type_kind":12,"type_kind_name":"register","element_type":0,"element_type_name":null,"register_class":"test.packed.narrow"},"start_point":0,"end_point":1,"unit_count":1,"location":{"kind":"physical_register","base":0,"count":1}},{"index":1,"value":{"id":2,"name":"result","type":"reg<test.coindexed.partner>"},"class":{"type_kind":12,"type_kind_name":"register","element_type":0,"element_type_name":null,"register_class":"test.coindexed.partner"},"start_point":1,"end_point":2,"unit_count":1,"location":{"kind":"physical_register","base":2,"count":1}}],"spill_plans":[],"copy_decisions":[{"index":0,"kind":"materialized","source_value":{"id":0,"name":"source","type":"reg<test.packed.narrow>"},"result_value":{"id":2,"name":"result","type":"reg<test.coindexed.partner>"},"source_assignment":0,"result_assignment":1}],"remarks":[]}
+
+// ====
+
+// RUN: emit low-allocation-json @fixed_binding_overrides_preference fixed=%persistent:physical_register:0:1
+
+test.target<low_core> @target
+
+low.func.def target<test.low.core>(@target) @fixed_binding_overrides_preference(%persistent: reg<test.explicit32>) -> (reg<test.explicit32>, reg<test.packed.narrow>) asm {
+  %restricted = test.const.packed.narrow 7
+  return %persistent, %restricted
+}
+
+// ----
+{"format":"loom.low.allocation.v0","function":"fixed_binding_overrides_preference","target":"target","descriptor_set":"test.low.core","allocation_mode":"virtual","assignment_count":2,"remark_count":0,"copy_decision_count":0,"spill_count":0,"spill_plan_count":0,"coalesced_copy_count":0,"materialized_copy_count":0,"assignments":[{"index":0,"value":{"id":0,"name":"persistent","type":"reg<test.explicit32>"},"class":{"type_kind":12,"type_kind_name":"register","element_type":0,"element_type_name":null,"register_class":"test.explicit32"},"start_point":0,"end_point":2,"unit_count":1,"location":{"kind":"physical_register","base":0,"count":1}},{"index":1,"value":{"id":3,"name":"restricted","type":"reg<test.packed.narrow>"},"class":{"type_kind":12,"type_kind_name":"register","element_type":0,"element_type_name":null,"register_class":"test.packed.narrow"},"start_point":1,"end_point":2,"unit_count":1,"location":{"kind":"physical_register","base":1,"count":1}}],"spill_plans":[],"copy_decisions":[],"remarks":[]}
+
+// ====
+
+// RUN: emit low-allocation-json @budget_overrides_preference test.explicit32=2
+
+test.target<low_core> @target
+
+low.func.def target<test.low.core>(@target) @budget_overrides_preference(%persistent: reg<test.explicit32>) -> (reg<test.explicit32>, reg<test.packed.narrow>) asm {
+  %restricted = test.const.packed.narrow 7
+  return %persistent, %restricted
+}
+
+// ----
+{"format":"loom.low.allocation.v0","function":"budget_overrides_preference","target":"target","descriptor_set":"test.low.core","allocation_mode":"virtual","assignment_count":2,"remark_count":0,"copy_decision_count":0,"spill_count":0,"spill_plan_count":0,"coalesced_copy_count":0,"materialized_copy_count":0,"assignments":[{"index":0,"value":{"id":0,"name":"persistent","type":"reg<test.explicit32>"},"class":{"type_kind":12,"type_kind_name":"register","element_type":0,"element_type_name":null,"register_class":"test.explicit32"},"start_point":0,"end_point":2,"unit_count":1,"location":{"kind":"physical_register","base":0,"count":1}},{"index":1,"value":{"id":3,"name":"restricted","type":"reg<test.packed.narrow>"},"class":{"type_kind":12,"type_kind_name":"register","element_type":0,"element_type_name":null,"register_class":"test.packed.narrow"},"start_point":1,"end_point":2,"unit_count":1,"location":{"kind":"physical_register","base":1,"count":1}}],"spill_plans":[],"copy_decisions":[],"remarks":[]}
+
+// ====
+
+// RUN: emit low-allocation-json @rotating_versions_remain_distinct
+
+test.target<low_core> @target
+
+// The backedge connects both arguments through one affinity component. Their
+// simultaneously live versions still require separate physical locations while
+// both leave the restricted domain available throughout the loop.
+low.func.def target<test.low.core>(@target) @rotating_versions_remain_distinct(%condition: reg<test.i32>, %first: reg<test.explicit32>, %second: reg<test.explicit32>) -> (reg<test.explicit32>, reg<test.explicit32>, reg<test.packed.narrow>) asm {
+  low.br ^loop(%first: reg<test.explicit32>, %second: reg<test.explicit32>)
+^loop(%left: reg<test.explicit32>, %right: reg<test.explicit32>):
+  %restricted = test.const.packed.narrow 7
+  low.cond_br %condition, ^body, ^exit : reg<test.i32>
+^body:
+  low.br ^loop(%right: reg<test.explicit32>, %left: reg<test.explicit32>)
+^exit:
+  return %left, %right, %restricted
+}
+
+// ----
+{"format":"loom.low.allocation.v0","function":"rotating_versions_remain_distinct","target":"target","descriptor_set":"test.low.core","allocation_mode":"virtual","assignment_count":6,"remark_count":0,"copy_decision_count":0,"spill_count":0,"spill_plan_count":0,"coalesced_copy_count":0,"materialized_copy_count":0,"assignments":[{"index":0,"value":{"id":1,"name":"first","type":"reg<test.explicit32>"},"class":{"type_kind":12,"type_kind_name":"register","element_type":0,"element_type_name":null,"register_class":"test.explicit32"},"start_point":0,"end_point":1,"unit_count":1,"location":{"kind":"physical_register","base":2,"count":1}},{"index":1,"value":{"id":2,"name":"second","type":"reg<test.explicit32>"},"class":{"type_kind":12,"type_kind_name":"register","element_type":0,"element_type_name":null,"register_class":"test.explicit32"},"start_point":0,"end_point":1,"unit_count":1,"location":{"kind":"physical_register","base":3,"count":1}},{"index":2,"value":{"id":0,"name":"condition","type":"reg<test.i32>"},"class":{"type_kind":12,"type_kind_name":"register","element_type":0,"element_type_name":null,"register_class":"test.i32"},"start_point":0,"end_point":7,"unit_count":1,"location":{"kind":"target_id","base":0,"count":1}},{"index":3,"value":{"id":6,"name":"left","type":"reg<test.explicit32>"},"class":{"type_kind":12,"type_kind_name":"register","element_type":0,"element_type_name":null,"register_class":"test.explicit32"},"start_point":2,"end_point":8,"unit_count":1,"location":{"kind":"physical_register","base":2,"count":1}},{"index":4,"value":{"id":7,"name":"right","type":"reg<test.explicit32>"},"class":{"type_kind":12,"type_kind_name":"register","element_type":0,"element_type_name":null,"register_class":"test.explicit32"},"start_point":2,"end_point":8,"unit_count":1,"location":{"kind":"physical_register","base":3,"count":1}},{"index":5,"value":{"id":8,"name":"restricted","type":"reg<test.packed.narrow>"},"class":{"type_kind":12,"type_kind_name":"register","element_type":0,"element_type_name":null,"register_class":"test.packed.narrow"},"start_point":3,"end_point":8,"unit_count":1,"location":{"kind":"physical_register","base":0,"count":1}}],"spill_plans":[],"copy_decisions":[],"remarks":[]}

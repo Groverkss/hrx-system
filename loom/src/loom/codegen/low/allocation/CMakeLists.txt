@@ -157,6 +157,7 @@ loom_cc_library(
     ::assignment
     ::assignment_map
     ::live_range
+    ::physical_domains
     ::scalar_packing
     ::spill_plan
     ::spill_traffic
@@ -556,6 +557,26 @@ loom_cc_library(
 
 loom_cc_library(
   NAME
+    physical_domains
+  HDRS
+    "physical_domains.h"
+  SRCS
+    "physical_domains.c"
+  DEPS
+    ::live_range
+    ::unit_liveness
+    iree::base
+    iree::base::internal
+    iree::base::internal::arena
+    loom::analysis::liveness
+    loom::codegen::low::descriptors
+    loom::codegen::low::placement
+    loom::util::adaptive_sort
+  PUBLIC
+)
+
+loom_cc_library(
+  NAME
     scalar_packing
   HDRS
     "scalar_packing.h"
@@ -639,6 +660,7 @@ loom_cc_library(
     ::coalescing
     ::interval_order
     ::live_range
+    ::physical_domains
     ::scalar_packing
     ::search
     ::spill_plan
