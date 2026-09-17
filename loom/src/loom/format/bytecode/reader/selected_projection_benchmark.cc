@@ -5,6 +5,7 @@
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
 #include "benchmark/benchmark.h"
+#include "iree/base/internal/arena.h"
 #include "loom/format/bytecode/reader/selected_projection.h"
 
 namespace {
@@ -22,23 +23,27 @@ static constexpr uint32_t kSparseOrdinalStride = 8192;
 
 static void InsertReachedFacts(benchmark::State& state, uint32_t stride) {
   const uint32_t count = static_cast<uint32_t>(state.range(0));
+  iree_arena_block_pool_t pool;
+  iree_arena_block_pool_initialize(32768, iree_allocator_system(), &pool);
   for (auto _ : state) {
+    iree_arena_allocator_t arena;
+    iree_arena_initialize(&pool, &arena);
     loom_bytecode_selected_projection_t projection;
-    loom_bytecode_selected_projection_initialize(iree_allocator_system(),
-                                                 &projection);
+    loom_bytecode_selected_projection_initialize(&arena, &projection);
     for (uint32_t i = 0; i < count; ++i) {
       const auto domain =
           static_cast<loom_bytecode_selected_projection_domain_t>(i % 5u);
       IREE_CHECK_OK(loom_bytecode_selected_projection_insert(
           &projection, domain, i * stride, count - i));
     }
-    benchmark::DoNotOptimize(projection.slots.values);
+    benchmark::DoNotOptimize(projection.buckets.values);
     state.PauseTiming();
-    loom_bytecode_selected_projection_deinitialize(&projection);
+    iree_arena_deinitialize(&arena);
     state.ResumeTiming();
   }
   state.SetItemsProcessed(state.iterations() * count);
   state.SetComplexityN(count);
+  iree_arena_block_pool_deinitialize(&pool);
 }
 
 static void BM_InsertReachedFacts(benchmark::State& state) {
@@ -55,9 +60,12 @@ BENCHMARK(BM_InsertSparseReachedFacts)
 
 static void LookupReachedFacts(benchmark::State& state, uint32_t stride) {
   const uint32_t count = static_cast<uint32_t>(state.range(0));
+  iree_arena_block_pool_t pool;
+  iree_arena_block_pool_initialize(32768, iree_allocator_system(), &pool);
+  iree_arena_allocator_t arena;
+  iree_arena_initialize(&pool, &arena);
   loom_bytecode_selected_projection_t projection;
-  loom_bytecode_selected_projection_initialize(iree_allocator_system(),
-                                               &projection);
+  loom_bytecode_selected_projection_initialize(&arena, &projection);
   for (uint32_t i = 0; i < count; ++i) {
     const auto domain =
         static_cast<loom_bytecode_selected_projection_domain_t>(i % 5u);
@@ -73,7 +81,8 @@ static void LookupReachedFacts(benchmark::State& state, uint32_t stride) {
         target_id != count - i) {
       state.SkipWithError(
           "reached-fact lookup must return its inserted target");
-      loom_bytecode_selected_projection_deinitialize(&projection);
+      iree_arena_deinitialize(&arena);
+      iree_arena_block_pool_deinitialize(&pool);
       return;
     }
   }
@@ -90,9 +99,12 @@ static void LookupReachedFacts(benchmark::State& state, uint32_t stride) {
     benchmark::DoNotOptimize(target_id);
   }
   state.SetItemsProcessed(state.iterations());
-  state.counters["retained_bytes"] =
-      static_cast<double>(projection.slots.capacity * sizeof(uint64_t));
-  loom_bytecode_selected_projection_deinitialize(&projection);
+  state.counters["arena_bytes"] =
+      static_cast<double>(arena.total_allocation_size);
+  state.counters["used_bytes"] =
+      static_cast<double>(arena.used_allocation_size);
+  iree_arena_deinitialize(&arena);
+  iree_arena_block_pool_deinitialize(&pool);
 }
 
 static void BM_LookupReachedFacts(benchmark::State& state) {

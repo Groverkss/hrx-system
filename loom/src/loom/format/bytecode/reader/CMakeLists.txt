@@ -357,6 +357,8 @@ loom_cc_library(
     "selected_projection.c"
   DEPS
     iree::base
+    iree::base::internal
+    iree::base::internal::arena
   PUBLIC
 )
 
@@ -367,6 +369,7 @@ loom_cc_test(
     "selected_projection_test.cc"
   DEPS
     ::selected_projection
+    iree::base::internal::arena
     iree::testing::gtest
     iree::testing::gtest_main
 )
@@ -378,6 +381,7 @@ loom_cc_benchmark(
     "selected_projection_benchmark.cc"
   DEPS
     ::selected_projection
+    iree::base::internal::arena
     iree::testing::benchmark_main
   TESTONLY
 )

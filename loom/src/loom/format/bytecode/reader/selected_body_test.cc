@@ -85,8 +85,7 @@ TEST_F(BytecodeSelectedBodyTest, ProjectsHighValueReferencesToCompactIds) {
   loom_bytecode_selected_table_materializer_initialize(
       &decoder_, iree_make_const_byte_span(bytecode.data(), bytecode.size()),
       &context_, &metadata, &table_arena_, module_,
-      loom_bytecode_selected_symbol_resolver_empty(), iree_allocator_system(),
-      &tables);
+      loom_bytecode_selected_symbol_resolver_empty(), &tables);
   loom_bytecode_selected_body_materializer_t materializer = {
       /*.tables=*/&tables,
       /*.block_pool=*/&block_pool_,
@@ -129,7 +128,7 @@ TEST_F(BytecodeSelectedBodyTest, ProjectsHighValueReferencesToCompactIds) {
   EXPECT_EQ(loom_module_value(module_, value_id)->name_id, 1u);
   EXPECT_TRUE(loom_type_equal(loom_module_value(module_, value_id)->type,
                               module_->types.entries[0]));
-  EXPECT_EQ(tables.projection.slots.count, 1u);
+  EXPECT_EQ(tables.projection.buckets.count, 1u);
   EXPECT_EQ(error_count_, 0u);
 
   iree_arena_deinitialize(&body_arena);

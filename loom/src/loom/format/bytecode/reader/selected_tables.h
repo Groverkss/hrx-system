@@ -76,7 +76,7 @@ typedef struct loom_bytecode_selected_table_frame_t {
 // Invocation-local state for reached-only shared-table materialization.
 //
 // Exact entry ranges and borrowed strings come from |metadata|. Completed
-// source identities are memoized in |projection|, while the allocator-owned
+// source identities are memoized in |projection|, while the arena-owned
 // worklist replaces recursive C calls across prior-entry dependency chains.
 typedef struct loom_bytecode_selected_table_materializer_t {
   // Bounded decoder and structured diagnostic state.
@@ -93,8 +93,8 @@ typedef struct loom_bytecode_selected_table_materializer_t {
   loom_module_t* output_module;
   // Optional projection for references to symbols outside the selection.
   loom_bytecode_selected_symbol_resolver_t symbol_resolver;
-  // Allocator owning transient projections and worklist storage.
-  iree_allocator_t allocator;
+  // Retained projections and worklist storage, independent of fact checkpoints.
+  iree_arena_allocator_t retained_arena;
   // Reached source identity to compact output identity map.
   loom_bytecode_selected_projection_t projection;
   // Source-table state captured before this materializer appends entries.
@@ -104,7 +104,7 @@ typedef struct loom_bytecode_selected_table_materializer_t {
   } sources;
   // Explicit dependency stack reused across root resolutions.
   struct {
-    // Allocator-owned frames in dependency order.
+    // Retained-arena-owned frames in dependency order.
     loom_bytecode_selected_table_frame_t* values;
     // Number of live frames.
     iree_host_size_t count;
@@ -118,12 +118,12 @@ typedef struct loom_bytecode_selected_table_materializer_t {
 // Source names already present in |output_module| are inherited and reused by
 // reached locations. Sources appended by this materializer remain unique by
 // the validated source metadata and reached-source projection.
+// The initialized materializer remains at its original address until teardown.
 void loom_bytecode_selected_table_materializer_initialize(
     loom_bytecode_reader_decoder_t* decoder, iree_const_byte_span_t bytecode,
     loom_context_t* context, const loom_bytecode_module_metadata_t* metadata,
     iree_arena_allocator_t* scratch_arena, loom_module_t* output_module,
     loom_bytecode_selected_symbol_resolver_t symbol_resolver,
-    iree_allocator_t allocator,
     loom_bytecode_selected_table_materializer_t* out_materializer);
 
 // Releases all transient storage owned by |materializer|.

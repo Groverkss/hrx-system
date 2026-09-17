@@ -12,7 +12,7 @@
 #include "loom/format/bytecode/reader/selected_tables.h"
 
 struct loom_bytecode_function_projection_reader_t {
-  // Host allocator owning this reader and transient selected-table storage.
+  // Host allocator owning this reader object.
   iree_allocator_t allocator;
   // Reset-free storage retaining decoded header payloads for the reader life.
   iree_arena_allocator_t arena;
@@ -65,7 +65,7 @@ iree_status_t loom_bytecode_function_projection_reader_allocate(
           ? loom_bytecode_selected_symbol_resolver_make(
                 options->symbol_resolver, options->symbol_resolver_user_data)
           : loom_bytecode_selected_symbol_resolver_empty(),
-      allocator, &reader->tables);
+      &reader->tables);
   const loom_low_repr_environment_t low_repr_environment =
       options ? options->low_repr_environment
               : (loom_low_repr_environment_t){0};

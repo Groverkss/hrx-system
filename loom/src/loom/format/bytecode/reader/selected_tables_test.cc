@@ -46,8 +46,11 @@ static iree_status_t AcceptDiagnostic(void* user_data,
 }
 
 struct ExternalSymbolResolver {
+  // Indexed source symbol accepted by this resolver.
   uint32_t expected_source_ordinal;
+  // Predeclared output symbol returned for the source symbol.
   loom_symbol_ref_t target_ref;
+  // Number of resolver invocations, excluding memoized resolutions.
   iree_host_size_t invocation_count;
 };
 
@@ -100,23 +103,27 @@ class BytecodeSelectedTablesTest : public ::testing::Test {
     iree_arena_block_pool_deinitialize(&block_pool_);
   }
 
-  loom_bytecode_selected_table_materializer_t MakeMaterializer(
+  void InitializeMaterializer(
       const std::vector<uint8_t>& bytecode,
-      const loom_bytecode_module_metadata_t* metadata) {
-    loom_bytecode_selected_table_materializer_t materializer;
+      const loom_bytecode_module_metadata_t* metadata,
+      loom_bytecode_selected_table_materializer_t* out_materializer) {
     loom_bytecode_selected_table_materializer_initialize(
         &decoder_, iree_make_const_byte_span(bytecode.data(), bytecode.size()),
         &context_, metadata, &scratch_arena_, module_,
-        loom_bytecode_selected_symbol_resolver_empty(), iree_allocator_system(),
-        &materializer);
-    return materializer;
+        loom_bytecode_selected_symbol_resolver_empty(), out_materializer);
   }
 
+  // Malformed-bytecode diagnostics emitted by the table decoder.
   uint32_t error_count_ = 0;
+  // Backing blocks shared by output IR and materialization scratch.
   iree_arena_block_pool_t block_pool_;
+  // Resettable per-frame decoding storage.
   iree_arena_allocator_t scratch_arena_;
+  // Registered dialect and encoding descriptors used by the fixture.
   loom_context_t context_;
+  // Output module receiving projected table entries.
   loom_module_t* module_ = nullptr;
+  // Bytecode decoder reporting into error_count_.
   loom_bytecode_reader_decoder_t decoder_ = {};
 };
 
@@ -195,8 +202,8 @@ TEST_F(BytecodeSelectedTablesTest, MaterializesOnlyReachedMixedTableFacts) {
   metadata.types = {IREE_ARRAYSIZE(types), types};
   metadata.encodings = {IREE_ARRAYSIZE(encodings), encodings};
   metadata.locations = {IREE_ARRAYSIZE(locations), locations};
-  loom_bytecode_selected_table_materializer_t materializer =
-      MakeMaterializer(bytecode, &metadata);
+  loom_bytecode_selected_table_materializer_t materializer;
+  InitializeMaterializer(bytecode, &metadata, &materializer);
 
   loom_type_id_t target_type_id = LOOM_TYPE_ID_INVALID;
   IREE_ASSERT_OK(loom_bytecode_selected_table_materialize_type(
@@ -223,7 +230,7 @@ TEST_F(BytecodeSelectedTablesTest, MaterializesOnlyReachedMixedTableFacts) {
   ASSERT_EQ(module_->sources.count, 1u);
   EXPECT_TRUE(iree_string_view_equal(module_->sources.entries[0], sources[0]));
 
-  EXPECT_EQ(materializer.projection.slots.count, 5u);
+  EXPECT_EQ(materializer.projection.buckets.count, 5u);
   // The scalar dependency is already retained even though its source table
   // entry has not been projected yet.
   loom_type_id_t target_element_id = LOOM_TYPE_ID_INVALID;
@@ -231,7 +238,7 @@ TEST_F(BytecodeSelectedTablesTest, MaterializesOnlyReachedMixedTableFacts) {
       &materializer, /*source_type_id=*/0, &target_element_id));
   EXPECT_EQ(target_element_id, 0u);
   EXPECT_EQ(module_->types.count, 2u);
-  EXPECT_EQ(materializer.projection.slots.count, 6u);
+  EXPECT_EQ(materializer.projection.buckets.count, 6u);
   EXPECT_EQ(error_count_, 0u);
   loom_bytecode_selected_table_materializer_deinitialize(&materializer);
 }
@@ -262,8 +269,8 @@ TEST_F(BytecodeSelectedTablesTest, ReusesInheritedSourceWhenComposingLocation) {
   IREE_ASSERT_OK(
       loom_module_append_source(module_, sources[0], &inherited_source_id));
   ASSERT_EQ(inherited_source_id, 0u);
-  loom_bytecode_selected_table_materializer_t materializer =
-      MakeMaterializer(bytecode, &metadata);
+  loom_bytecode_selected_table_materializer_t materializer;
+  InitializeMaterializer(bytecode, &metadata, &materializer);
 
   loom_location_id_t target_location_id = LOOM_LOCATION_UNKNOWN;
   IREE_ASSERT_OK(loom_bytecode_selected_table_materialize_location(
@@ -309,7 +316,7 @@ TEST_F(BytecodeSelectedTablesTest, ResolvesExternalSymbolsByDenseSourceIndex) {
       &scratch_arena_, module_,
       loom_bytecode_selected_symbol_resolver_make(ResolveExternalSymbol,
                                                   &resolver),
-      iree_allocator_system(), &materializer);
+      &materializer);
 
   loom_symbol_ref_t resolved = loom_symbol_ref_null();
   bool found = false;
@@ -354,15 +361,15 @@ TEST_F(BytecodeSelectedTablesTest, MaterializesDeepTypeChainIteratively) {
   }
   loom_bytecode_module_metadata_t metadata = {};
   metadata.types = {entries.size(), entries.data()};
-  loom_bytecode_selected_table_materializer_t materializer =
-      MakeMaterializer(bytecode, &metadata);
+  loom_bytecode_selected_table_materializer_t materializer;
+  InitializeMaterializer(bytecode, &metadata, &materializer);
 
   loom_type_id_t target_type_id = LOOM_TYPE_ID_INVALID;
   IREE_ASSERT_OK(loom_bytecode_selected_table_materialize_type(
       &materializer, kTypeCount - 1, &target_type_id));
   EXPECT_EQ(target_type_id, kTypeCount - 1);
   EXPECT_EQ(module_->types.count, kTypeCount);
-  EXPECT_EQ(materializer.projection.slots.count, kTypeCount);
+  EXPECT_EQ(materializer.projection.buckets.count, kTypeCount);
   EXPECT_GE(materializer.worklist.capacity, kTypeCount);
   EXPECT_EQ(error_count_, 0u);
   loom_bytecode_selected_table_materializer_deinitialize(&materializer);
@@ -385,8 +392,8 @@ TEST_F(BytecodeSelectedTablesTest, MaterializesWideTypeReferencesInOneRetry) {
   entries[1].entry_length = bytecode.size() - entries[1].entry_offset;
   loom_bytecode_module_metadata_t metadata = {};
   metadata.types = {IREE_ARRAYSIZE(entries), entries};
-  loom_bytecode_selected_table_materializer_t materializer =
-      MakeMaterializer(bytecode, &metadata);
+  loom_bytecode_selected_table_materializer_t materializer;
+  InitializeMaterializer(bytecode, &metadata, &materializer);
 
   loom_type_id_t target_type_id = LOOM_TYPE_ID_INVALID;
   IREE_ASSERT_OK(loom_bytecode_selected_table_materialize_type(
@@ -395,7 +402,7 @@ TEST_F(BytecodeSelectedTablesTest, MaterializesWideTypeReferencesInOneRetry) {
   ASSERT_EQ(module_->types.count, 2u);
   EXPECT_EQ(loom_type_func_arg_count(module_->types.entries[1]),
             kArgumentCount);
-  EXPECT_EQ(materializer.projection.slots.count, 2u);
+  EXPECT_EQ(materializer.projection.buckets.count, 2u);
   EXPECT_GE(materializer.worklist.capacity, kArgumentCount);
   EXPECT_EQ(error_count_, 0u);
   loom_bytecode_selected_table_materializer_deinitialize(&materializer);
@@ -421,15 +428,15 @@ TEST_F(BytecodeSelectedTablesTest, MaterializesDeepLocationChainIteratively) {
   }
   loom_bytecode_module_metadata_t metadata = {};
   metadata.locations = {entries.size(), entries.data()};
-  loom_bytecode_selected_table_materializer_t materializer =
-      MakeMaterializer(bytecode, &metadata);
+  loom_bytecode_selected_table_materializer_t materializer;
+  InitializeMaterializer(bytecode, &metadata, &materializer);
 
   loom_location_id_t target_location_id = LOOM_LOCATION_UNKNOWN;
   IREE_ASSERT_OK(loom_bytecode_selected_table_materialize_location(
       &materializer, kLocationCount - 1, &target_location_id));
   EXPECT_EQ(target_location_id, kLocationCount - 1);
   EXPECT_EQ(module_->locations.count, kLocationCount);
-  EXPECT_EQ(materializer.projection.slots.count, kLocationCount - 1);
+  EXPECT_EQ(materializer.projection.buckets.count, kLocationCount - 1);
   EXPECT_GE(materializer.worklist.capacity, kLocationCount - 1);
   EXPECT_EQ(error_count_, 0u);
   loom_bytecode_selected_table_materializer_deinitialize(&materializer);

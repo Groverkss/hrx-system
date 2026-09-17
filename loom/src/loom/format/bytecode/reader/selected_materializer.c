@@ -169,7 +169,7 @@ static iree_status_t loom_bytecode_selected_module_materialize_prepared_into(
   loom_bytecode_selected_table_materializer_initialize(
       materializer->decoder, materializer->bytecode, materializer->context,
       materializer->metadata, materializer->scratch_arena, output_module,
-      symbol_resolver, materializer->host_allocator, &tables);
+      symbol_resolver, &tables);
   loom_bytecode_selected_symbol_materializer_t symbols;
   loom_bytecode_selected_symbol_materializer_initialize(
       materializer->decoder, materializer->block_pool, &tables,

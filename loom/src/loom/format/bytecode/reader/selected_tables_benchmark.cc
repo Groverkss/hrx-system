@@ -37,11 +37,10 @@ static void SelectedScales(benchmark::Benchmark* benchmark) {
 static void SetStorageCounters(
     benchmark::State& state,
     const loom_bytecode_selected_table_materializer_t& materializer) {
-  state.counters["projection_bytes"] = static_cast<double>(
-      materializer.projection.slots.capacity * sizeof(uint64_t));
-  state.counters["worklist_bytes"] =
-      static_cast<double>(materializer.worklist.capacity *
-                          sizeof(loom_bytecode_selected_table_frame_t));
+  state.counters["retained_arena_bytes"] =
+      static_cast<double>(materializer.retained_arena.total_allocation_size);
+  state.counters["retained_used_bytes"] =
+      static_cast<double>(materializer.retained_arena.used_allocation_size);
 }
 
 static void BM_MaterializeTypeChain(benchmark::State& state) {
@@ -84,8 +83,7 @@ static void BM_MaterializeTypeChain(benchmark::State& state) {
     loom_bytecode_selected_table_materializer_initialize(
         &decoder, iree_make_const_byte_span(bytecode.data(), bytecode.size()),
         &context, &metadata, &scratch_arena, module,
-        loom_bytecode_selected_symbol_resolver_empty(), iree_allocator_system(),
-        &materializer);
+        loom_bytecode_selected_symbol_resolver_empty(), &materializer);
     state.ResumeTiming();
 
     loom_type_id_t target_type_id = LOOM_TYPE_ID_INVALID;
@@ -150,8 +148,7 @@ static void BM_MaterializeWideFunction(benchmark::State& state) {
     loom_bytecode_selected_table_materializer_initialize(
         &decoder, iree_make_const_byte_span(bytecode.data(), bytecode.size()),
         &context, &metadata, &scratch_arena, module,
-        loom_bytecode_selected_symbol_resolver_empty(), iree_allocator_system(),
-        &materializer);
+        loom_bytecode_selected_symbol_resolver_empty(), &materializer);
     state.ResumeTiming();
 
     loom_type_id_t target_type_id = LOOM_TYPE_ID_INVALID;
@@ -219,8 +216,7 @@ static void BM_MaterializeLocationChain(benchmark::State& state) {
     loom_bytecode_selected_table_materializer_initialize(
         &decoder, iree_make_const_byte_span(bytecode.data(), bytecode.size()),
         &context, &metadata, &scratch_arena, module,
-        loom_bytecode_selected_symbol_resolver_empty(), iree_allocator_system(),
-        &materializer);
+        loom_bytecode_selected_symbol_resolver_empty(), &materializer);
     state.ResumeTiming();
 
     loom_location_id_t target_location_id = LOOM_LOCATION_UNKNOWN;

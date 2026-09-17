@@ -39,11 +39,11 @@ static iree_status_t loom_bytecode_selected_table_push(
       return iree_make_status(IREE_STATUS_RESOURCE_EXHAUSTED,
                               "selected table worklist capacity overflow");
     }
-    IREE_RETURN_IF_ERROR(
-        iree_allocator_grow_array(materializer->allocator, minimum_capacity,
-                                  sizeof(*materializer->worklist.values),
-                                  &materializer->worklist.capacity,
-                                  (void**)&materializer->worklist.values));
+    IREE_RETURN_IF_ERROR(iree_arena_grow_array(
+        &materializer->retained_arena, materializer->worklist.count,
+        minimum_capacity, sizeof(*materializer->worklist.values),
+        &materializer->worklist.capacity,
+        (void**)&materializer->worklist.values));
   }
   materializer->worklist.values[materializer->worklist.count++] =
       (loom_bytecode_selected_table_frame_t){
@@ -103,7 +103,6 @@ void loom_bytecode_selected_table_materializer_initialize(
     loom_context_t* context, const loom_bytecode_module_metadata_t* metadata,
     iree_arena_allocator_t* scratch_arena, loom_module_t* output_module,
     loom_bytecode_selected_symbol_resolver_t symbol_resolver,
-    iree_allocator_t allocator,
     loom_bytecode_selected_table_materializer_t* out_materializer) {
   *out_materializer = (loom_bytecode_selected_table_materializer_t){
       .decoder = decoder,
@@ -113,20 +112,20 @@ void loom_bytecode_selected_table_materializer_initialize(
       .scratch_arena = scratch_arena,
       .output_module = output_module,
       .symbol_resolver = symbol_resolver,
-      .allocator = allocator,
       .sources =
           {
               .inherited_count = output_module->sources.count,
           },
   };
-  loom_bytecode_selected_projection_initialize(allocator,
-                                               &out_materializer->projection);
+  iree_arena_initialize(scratch_arena->block_pool,
+                        &out_materializer->retained_arena);
+  loom_bytecode_selected_projection_initialize(
+      &out_materializer->retained_arena, &out_materializer->projection);
 }
 
 void loom_bytecode_selected_table_materializer_deinitialize(
     loom_bytecode_selected_table_materializer_t* materializer) {
-  loom_bytecode_selected_projection_deinitialize(&materializer->projection);
-  iree_allocator_free(materializer->allocator, materializer->worklist.values);
+  iree_arena_deinitialize(&materializer->retained_arena);
   memset(materializer, 0, sizeof(*materializer));
 }
 
