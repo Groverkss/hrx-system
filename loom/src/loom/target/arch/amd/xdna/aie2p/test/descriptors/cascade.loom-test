@@ -1,0 +1,36 @@
+// Every cascade read consumes a stream value, including unused results.
+// Repeated writes transmit repeated payloads and retain their protocol order.
+// RUN: with-low-asm pass low-cse,low-dce
+
+aie2p.target<core> @target
+
+low.func.def target<amd.xdna.aie2p.core>(@target) @forward_vectors() asm {
+  set.scd-enable 1
+  set.mcd-enable 1
+  %discarded = vmov.scd
+  %first = vmov.scd
+  %second = vmov.scd
+  vmov.mcd %first
+  vmov.mcd %first
+  vmov.mcd %second
+  return
+}
+
+// ====
+
+// Accumulator payloads use the same native 512-bit link without conversion.
+// Memory publication and cascade effects remain individually observable.
+// RUN: with-low-asm pass low-cse,low-dce
+
+aie2p.target<core> @target
+
+low.func.def target<amd.xdna.aie2p.core>(@target) @forward_accumulators(%output: reg<aie2p.ep>) asm {
+  set.scd-enable 1
+  set.mcd-enable 1
+  %discarded = vmov.scd.acc
+  %value = vmov.scd.acc
+  vst.acc %value, %output, 0
+  vmov.mcd.acc %value
+  vmov.mcd.acc %value
+  return
+}

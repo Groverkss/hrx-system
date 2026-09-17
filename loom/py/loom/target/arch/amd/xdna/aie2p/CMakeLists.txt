@@ -73,6 +73,7 @@ iree_py_library(
     "core_descriptor_specs.py"
     "core_descriptors.py"
     "core_fifo_descriptors.py"
+    "core_stream_descriptors.py"
   DEPS
     loom::py::loom::target::arch::amd::xdna::aie2p::encoding_data
     loom::py::loom::target::arch::amd::xdna::aie2p::machine_data

@@ -74,6 +74,7 @@ iree_py_library(
         "core_descriptor_specs.py",
         "core_descriptors.py",
         "core_fifo_descriptors.py",
+        "core_stream_descriptors.py",
     ],
     visibility = ["//visibility:public"],
     deps = [

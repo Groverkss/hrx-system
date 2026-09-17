@@ -571,6 +571,37 @@ def test_scalar_stream_transfers_preserve_protocol_and_status_dependencies() -> 
         )
 
 
+def test_cascade_transfers_preserve_protocol_and_enable_dependencies() -> None:
+    descriptors = {row.key: row for row in AIE2P_CORE_DESCRIPTOR_SET.descriptors}
+    classes = {row.name: row for row in AIE2P_CORE_DESCRIPTOR_SET.reg_classes}
+    separations = {
+        (row.producer_event, row.consumer_event): row.minimum_issue_separation_cycles
+        for row in AIE2P_CORE_DESCRIPTOR_SET.event_separations
+    }
+    for direction, port, register in (
+        ("read", "scd", "crSCDEn"),
+        ("write", "mcd", "crMCDEn"),
+    ):
+        enable = descriptors[f"amd.xdna.aie2p.state.{port}-enable.immediate"]
+        state_write = enable.operands[0]
+        assert state_write.flags == (OperandFlag.IMPLICIT, OperandFlag.STATE_WRITE)
+        for payload in ("vector", "accumulator"):
+            transfer = descriptors[f"amd.xdna.aie2p.cascade.{direction}.{payload}.512"]
+            assert DescriptorFlag.SIDE_EFFECTING in transfer.flags
+            assert DescriptorFlag.DEAD_REMOVABLE not in transfer.flags
+            assert [effect.kind for effect in transfer.effects] == [EffectKind.BARRIER]
+            value, state_read = transfer.operands
+            assert (
+                value.unit_count * classes[value.reg_alts[0].reg_class].alloc_unit_bits
+                == 512
+            )
+            assert state_read.flags == (OperandFlag.IMPLICIT, OperandFlag.STATE_READ)
+            state_class = state_read.reg_alts[0].reg_class
+            assert classes[state_class].physical_registers == (register,)
+            assert state_write.reg_alts[0].reg_class == state_class
+            assert (state_write.write_event, state_read.read_event) in separations
+
+
 def test_bundle_resources_exactly_model_every_extendable_physical_slot_set() -> None:
     descriptor_set = AIE2P_CORE_DESCRIPTOR_SET
     resources = {resource.name: resource for resource in descriptor_set.resources}

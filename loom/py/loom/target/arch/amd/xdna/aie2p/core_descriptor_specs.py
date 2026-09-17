@@ -33,6 +33,10 @@ from loom.target.arch.amd.xdna.aie2p.core_fifo_descriptors import (
     _fifo_store_descriptor_specs,
 )
 from loom.target.arch.amd.xdna.aie2p.core_machine_data import CORE_MACHINE_TABLE
+from loom.target.arch.amd.xdna.aie2p.core_stream_descriptors import (
+    _cascade_descriptor_specs,
+    _scalar_stream_descriptor_specs,
+)
 from loom.target.low_descriptors import (
     DescriptorOpKind,
     Effect,
@@ -1819,83 +1823,6 @@ _ASM_MNEMONIC_BY_FORM = {
 _MACHINE_FORMS = {form.name: form for form in CORE_MACHINE_TABLE.forms}
 
 
-def _scalar_stream_descriptor_specs() -> tuple[_DescriptorSpec, ...]:
-    """Exposes scalar streams, packet headers, and their completion status."""
-
-    # Stream traffic participates in a device protocol even when the payload
-    # has no SSA consumer. Preserve its issue order with memory and other
-    # protocol effects; this annotation does not add a hardware memory fence.
-    effects = (Effect(EffectKind.BARRIER),)
-    result = []
-    for nonblocking in (False, True):
-        form_infix = "nb_" if nonblocking else ""
-        key_suffix = ".nonblocking" if nonblocking else ""
-        mnemonic_suffix = ".nb" if nonblocking else ""
-        result.append(
-            _DescriptorSpec(
-                f"MOV_{form_infix}lda",
-                f"{_TARGET_KEY}.stream.read{key_suffix}.i32",
-                f"stream.read{key_suffix}.i32",
-                f"II_MOV_{form_infix}lda",
-                asm_mnemonic=f"mov.ss{mnemonic_suffix}",
-                effects=effects,
-            )
-        )
-        for form_suffix, last_key, last_mnemonic in (
-            ("mMStream_tlast_imm", "", ""),
-            ("mMStream_tlast_reg", ".last.register", ".last.reg"),
-            ("tlast", ".last", ".last"),
-        ):
-            for register_class in ("eR", "eP", "eDC", "eDJ", "eDN", "eM"):
-                stem = "st_" if form_suffix.startswith("mMStream") else ""
-                form = f"MOV_{form_infix}{stem}{form_suffix}"
-                storage_key = (
-                    "i32" if register_class == "eR" else register_class.lower()
-                )
-                storage_mnemonic = "" if register_class == "eR" else f".{storage_key}"
-                key = f"stream.write{key_suffix}{last_key}.{storage_key}"
-                result.append(
-                    _DescriptorSpec(
-                        form,
-                        f"{_TARGET_KEY}.{key}",
-                        key,
-                        f"II_{form}_{register_class}",
-                        storage_overrides=(("src", register_class),),
-                        asm_mnemonic=f"mov.ms{mnemonic_suffix}{last_mnemonic}{storage_mnemonic}",
-                        effects=effects,
-                    )
-                )
-            for header, operation in (("PH", "packet"), ("CPH", "control-packet")):
-                form = f"MOV_{header}_{form_infix}{form_suffix}"
-                key = f"stream.write.{operation}{key_suffix}{last_key}"
-                result.append(
-                    _DescriptorSpec(
-                        form,
-                        f"{_TARGET_KEY}.{key}",
-                        key,
-                        f"II_{form}",
-                        asm_mnemonic=f"mov.{header.lower()}{mnemonic_suffix}{last_mnemonic}",
-                        effects=effects,
-                    )
-                )
-    for direction, port, register_class in (
-        ("read", "ss", "mSRSS0"),
-        ("write", "ms", "mSRMS0"),
-    ):
-        result.append(
-            _DescriptorSpec(
-                "MOV_alu_mv_mv_mv_scl",
-                f"{_TARGET_KEY}.stream.{direction}.status",
-                f"stream.{direction}.status",
-                f"II_MOV_alu_mv_mv_mv_scl_eR_{register_class}",
-                storage_overrides=(("dst", "eR"), ("src", register_class)),
-                implicit_inputs=("src",),
-                asm_mnemonic=f"mov.{port}.status",
-            )
-        )
-    return tuple(result)
-
-
 def _with_ordered_memory_variants(
     specifications: tuple[_DescriptorSpec, ...],
 ) -> tuple[_DescriptorSpec, ...]:
@@ -1926,6 +1853,7 @@ def _with_ordered_memory_variants(
 _DESCRIPTOR_SPECS = (
     *_with_ordered_memory_variants(_BASE_DESCRIPTOR_SPECS),
     *_scalar_stream_descriptor_specs(),
+    *_cascade_descriptor_specs(),
     _DescriptorSpec(
         "MOV_alu_mv_mv_mv_scl",
         f"{_TARGET_KEY}.read.core.id",
