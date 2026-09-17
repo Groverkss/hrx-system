@@ -92,7 +92,7 @@ def _scalar_stream_descriptor_specs() -> tuple[_DescriptorSpec, ...]:
 
 
 def _cascade_descriptor_specs() -> tuple[_DescriptorSpec, ...]:
-    """Exposes native 512-bit transfers and their enable state."""
+    """Exposes native transfers, accumulator expansion, and enable state."""
 
     result = []
     for direction, port, native_stem, register_class in (
@@ -133,4 +133,30 @@ def _cascade_descriptor_specs() -> tuple[_DescriptorSpec, ...]:
                     effects=(Effect(EffectKind.BARRIER),),
                 )
             )
+    # Expansion produces a fresh accumulator with the incoming value in one
+    # 512-bit slot and zeros elsewhere. Register selectors outside 0..3 yield
+    # zero without consuming a stream value. Increment updates the full r31
+    # value modulo 2^32; it does not wrap the quarter index modulo four.
+    for form, suffix in (
+        ("VMOV_0_mv_scd_cm", "1024.0"),
+        ("VMOV_1_mv_scd_cm", "1024.1"),
+        ("VMOV_0_mv_scd_dm_imm", "2048.0"),
+        ("VMOV_1_mv_scd_dm_imm", "2048.1"),
+        ("VMOV_2", "2048.2"),
+        ("VMOV_3", "2048.3"),
+        ("VMOV_lda_mv_scd_dm_reg", "2048"),
+        ("VMOV_lda_mv_scd_dm_dyn", "2048.increment"),
+    ):
+        key = f"cascade.read.expand.{suffix}"
+        result.append(
+            _DescriptorSpec(
+                form,
+                f"{_TARGET_KEY}.{key}",
+                key,
+                f"II_{form}",
+                storage_overrides=(("dst", "mBMs"),),
+                asm_mnemonic=f"vmov.scd.expand.{suffix}",
+                effects=(Effect(EffectKind.BARRIER),),
+            )
+        )
     return tuple(result)

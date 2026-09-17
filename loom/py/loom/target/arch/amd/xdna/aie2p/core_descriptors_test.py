@@ -205,6 +205,7 @@ def test_core_descriptor_closure_is_complete() -> None:
                 ("aie2p.mr28_tlast", 1, 1),
                 ("aie2p.mr29_insert", 1, 1),
                 ("aie2p.mr31_divs", 1, 1),
+                ("aie2p.mr31_scd", 1, 1),
             ),
         ),
     ]
@@ -600,6 +601,48 @@ def test_cascade_transfers_preserve_protocol_and_enable_dependencies() -> None:
             assert classes[state_class].physical_registers == (register,)
             assert state_write.reg_alts[0].reg_class == state_class
             assert (state_write.write_event, state_read.read_event) in separations
+
+
+def test_cascade_expansion_retains_complete_results_and_selector_updates() -> None:
+    descriptors = {row.key: row for row in AIE2P_CORE_DESCRIPTOR_SET.descriptors}
+    classes = {row.name: row for row in AIE2P_CORE_DESCRIPTOR_SET.reg_classes}
+    for suffix, units in (
+        ("1024.0", 2),
+        ("1024.1", 2),
+        ("2048.0", 4),
+        ("2048.1", 4),
+        ("2048.2", 4),
+        ("2048.3", 4),
+        ("2048", 4),
+        ("2048.increment", 4),
+    ):
+        descriptor = descriptors[f"amd.xdna.aie2p.cascade.read.expand.{suffix}"]
+        assert [effect.kind for effect in descriptor.effects] == [EffectKind.BARRIER]
+        assert DescriptorFlag.SIDE_EFFECTING in descriptor.flags
+        assert DescriptorFlag.DEAD_REMOVABLE not in descriptor.flags
+        accumulator = descriptor.operands[0]
+        assert accumulator.unit_count == units
+        assert accumulator.reg_alts[0].reg_class == "aie2p.mbms"
+        assert accumulator.role is OperandRole.RESULT
+        # A fresh complete result has no old-accumulator input or storage tie.
+        assert all(tie.lhs_operand_index != 0 for tie in descriptor.constraints)
+        state = descriptor.operands[-1]
+        assert state.flags == (OperandFlag.IMPLICIT, OperandFlag.STATE_READ)
+        assert classes[state.reg_alts[0].reg_class].physical_registers == ("crSCDEn",)
+        if suffix == "2048.increment":
+            result, source = descriptor.operands[1:3]
+            assert result.reg_alts == source.reg_alts
+            assert Constraint(ConstraintKind.TIED, 1, 2) in descriptor.constraints
+            assert result.role is OperandRole.RESULT
+            assert source.role is OperandRole.OPERAND
+        elif suffix == "2048":
+            source = descriptor.operands[1]
+            assert source.role is OperandRole.OPERAND
+            assert not descriptor.constraints
+        else:
+            assert len(descriptor.operands) == 2
+            continue
+        assert classes[source.reg_alts[0].reg_class].physical_registers == ("r31",)
 
 
 def test_bundle_resources_exactly_model_every_extendable_physical_slot_set() -> None:
