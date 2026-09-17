@@ -163,7 +163,7 @@ control-relocation index=3 record=6 word=1 binding=3 addend=0 alignment=4
 control-relocation index=4 record=9 word=1 binding=4 addend=0 alignment=4
 
 resident-program workers=1
-resident worker=0 entry=@parallel_folded_composite_array$worker$0 tile=(0,2) code-bytes=768 resources=0 fixups=6
+resident worker=0 entry=@parallel_folded_composite_array$worker$0 tile=(0,2) code-bytes=784 resources=0 fixups=6
 
 low.func.def retain target<amd.xdna.aie2p.core>(@core_target) @parallel_folded_composite_array$worker$0() asm {
   %184 = storage {byte_alignment = 64, byte_length = 4} : low.storage<private>
@@ -173,12 +173,12 @@ low.func.def retain target<amd.xdna.aie2p.core>(@core_target) @parallel_folded_c
   %fold_record_count = mov.i32 2
   %fold_mode = mova.i32 60
   %235 = acc.clear.f32x64
-  %273 = mov.local-address 458752
-  %274 = mov.local-address 491520
-  %275 = mov.local-address 393216
-  %276 = mov.local-address 458816
-  %277 = mov.local-address 491584
-  low.br ^_bb1(%273: reg<aie2p.ep>, %274: reg<aie2p.ep>, %275: reg<aie2p.ep>, %276: reg<aie2p.ep>, %277: reg<aie2p.ep>)
+  %274 = mov.local-address 458752
+  %275 = mov.local-address 491520
+  %276 = mov.local-address 393216
+  %277 = mov.local-address 458816
+  %278 = mov.local-address 491584
+  low.br ^_bb1(%274: reg<aie2p.ep>, %275: reg<aie2p.ep>, %276: reg<aie2p.ep>, %277: reg<aie2p.ep>, %278: reg<aie2p.ep>)
 ^_bb1(%224: reg<aie2p.ep>, %225: reg<aie2p.ep>, %226: reg<aie2p.ep>, %227: reg<aie2p.ep>, %228: reg<aie2p.ep>):
   acq %acquire_delta, 52
   acq %acquire_delta, 54
@@ -232,54 +232,55 @@ low.func.def retain target<amd.xdna.aie2p.core>(@core_target) @parallel_folded_c
   %238 = vbcst.32 %237
   %239 = lda %222, 0
   %240 = mov.short 1
-  %241 = vinsert.32.reg %238, %240, %239
-  %242 = vmov.vector512.to.accumulator512 %241
-  %243 = concat(%242, %242, %242, %242) : (reg<aie2p.mbms>, reg<aie2p.mbms>, reg<aie2p.mbms>, reg<aie2p.mbms>) -> reg<aie2p.mbms x4>
-  %244 = nez %231
-  low.cond_br %244, ^_bb5, ^_bb6 : reg<aie2p.er>
+  %241 = copy %240 : reg<aie2p.er> -> reg<aie2p.mr29_insert>
+  %242 = vinsert.32.reg %238, %241, %239
+  %243 = vmov.vector512.to.accumulator512 %242
+  %244 = concat(%243, %243, %243, %243) : (reg<aie2p.mbms>, reg<aie2p.mbms>, reg<aie2p.mbms>, reg<aie2p.mbms>) -> reg<aie2p.mbms x4>
+  %245 = nez %231
+  low.cond_br %245, ^_bb5, ^_bb6 : reg<aie2p.er>
 ^_bb5:
-  low.br ^_bb7(%243: reg<aie2p.mbms x4>)
+  low.br ^_bb7(%244: reg<aie2p.mbms x4>)
 ^_bb6:
-  %245 = vadd.f32x64 %229, %243, %fold_mode
-  low.br ^_bb7(%245: reg<aie2p.mbms x4>)
+  %246 = vadd.f32x64 %229, %244, %fold_mode
+  low.br ^_bb7(%246: reg<aie2p.mbms x4>)
 ^_bb7(%236: reg<aie2p.mbms x4>):
   rel %release_delta, 48
   rel %release_delta, 50
   rel %release_delta, 32
-  %246 = mov.address-to-scalar %214
-  %247 = mov.i32 16384
-  %248 = xor %246, %247
-  %249 = mov.scalar-to-address %248
-  %250 = mov.address-to-scalar %216
-  %251 = mov.i32 16448
-  %252 = xor %250, %251
-  %253 = mov.scalar-to-address %252
-  %254 = mov.address-to-scalar %218
-  %255 = xor %254, %247
-  %256 = mov.scalar-to-address %255
-  %257 = sub %230, %release_delta
-  %258 = nez %257
-  low.cond_br %258, ^_bb8, ^_bb9 : reg<aie2p.er>
+  %247 = mov.address-to-scalar %214
+  %248 = mov.i32 16384
+  %249 = xor %247, %248
+  %250 = mov.scalar-to-address %249
+  %251 = mov.address-to-scalar %216
+  %252 = mov.i32 16448
+  %253 = xor %251, %252
+  %254 = mov.scalar-to-address %253
+  %255 = mov.address-to-scalar %218
+  %256 = xor %255, %248
+  %257 = mov.scalar-to-address %256
+  %258 = sub %230, %release_delta
+  %259 = nez %258
+  low.cond_br %259, ^_bb8, ^_bb9 : reg<aie2p.er>
 ^_bb8:
-  low.br ^_bb2(%249: reg<aie2p.ep>, %253: reg<aie2p.ep>, %256: reg<aie2p.ep>, %220: reg<aie2p.ep>, %222: reg<aie2p.ep>, %236: reg<aie2p.mbms x4>, %257: reg<aie2p.er>, %fold_zero: reg<aie2p.er>)
+  low.br ^_bb2(%250: reg<aie2p.ep>, %254: reg<aie2p.ep>, %257: reg<aie2p.ep>, %220: reg<aie2p.ep>, %222: reg<aie2p.ep>, %236: reg<aie2p.mbms x4>, %258: reg<aie2p.er>, %fold_zero: reg<aie2p.er>)
 ^_bb9:
-  %259 = slice %236[0] : reg<aie2p.mbms x4> -> reg<aie2p.mbms>
-  %260 = vmov.accumulator512.to.vector512 %259
-  %261 = vextract.32.imm %260, 0
-  st %261, %220, 0
-  %262 = slice %236[0] : reg<aie2p.mbms x4> -> reg<aie2p.mbms>
-  %263 = vmov.accumulator512.to.vector512 %262
-  %264 = vextract.32.imm %263, 1
-  st %264, %222, 0
+  %260 = slice %236[0] : reg<aie2p.mbms x4> -> reg<aie2p.mbms>
+  %261 = vmov.accumulator512.to.vector512 %260
+  %262 = vextract.32.imm %261, 0
+  st %262, %220, 0
+  %263 = slice %236[0] : reg<aie2p.mbms x4> -> reg<aie2p.mbms>
+  %264 = vmov.accumulator512.to.vector512 %263
+  %265 = vextract.32.imm %264, 1
+  st %265, %222, 0
   rel %release_delta, 53
   rel %release_delta, 55
-  %265 = mov.address-to-scalar %220
-  %266 = mov.i32 16384
-  %267 = xor %265, %266
-  %268 = mov.scalar-to-address %267
-  %269 = mov.address-to-scalar %222
-  %270 = mov.i32 16576
-  %271 = xor %269, %270
-  %272 = mov.scalar-to-address %271
-  low.br ^_bb1(%249: reg<aie2p.ep>, %253: reg<aie2p.ep>, %256: reg<aie2p.ep>, %268: reg<aie2p.ep>, %272: reg<aie2p.ep>)
+  %266 = mov.address-to-scalar %220
+  %267 = mov.i32 16384
+  %268 = xor %266, %267
+  %269 = mov.scalar-to-address %268
+  %270 = mov.address-to-scalar %222
+  %271 = mov.i32 16576
+  %272 = xor %270, %271
+  %273 = mov.scalar-to-address %272
+  low.br ^_bb1(%250: reg<aie2p.ep>, %254: reg<aie2p.ep>, %257: reg<aie2p.ep>, %269: reg<aie2p.ep>, %273: reg<aie2p.ep>)
 }

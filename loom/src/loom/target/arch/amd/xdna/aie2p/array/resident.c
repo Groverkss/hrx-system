@@ -359,7 +359,18 @@ static iree_status_t loom_aie2p_array_resident_build_insert_i32(
   IREE_RETURN_IF_ERROR(loom_aie2p_array_resident_build_constant(
       builder, ir_builder, AIE2P_CORE_DESCRIPTOR_REF_CONSTANT_I32_SHORT, lane,
       location, /*value_name=*/NULL, &lane_value));
-  const loom_value_id_t operands[] = {vector, lane_value, scalar};
+  // The insertion index is read from r29, not an encoded scalar register.
+  // Preserve that domain on the value just as source-to-Low lowering does.
+  loom_type_t index_type = loom_type_none();
+  IREE_RETURN_IF_ERROR(loom_low_build_register_type(
+      builder->descriptor_set, AIE2P_CORE_REG_CLASS_ID_AIE2P_MR29_INSERT, 1,
+      &index_type));
+  loom_op_t* index_copy = NULL;
+  IREE_RETURN_IF_ERROR(loom_low_copy_build(ir_builder, lane_value,
+                                           /*detached=*/false, index_type,
+                                           location, &index_copy));
+  const loom_value_id_t operands[] = {vector, loom_low_copy_result(index_copy),
+                                      scalar};
   return loom_aie2p_array_resident_build_op(
       builder, ir_builder, AIE2P_CORE_DESCRIPTOR_REF_INSERT_I32_REGISTER,
       operands, IREE_ARRAYSIZE(operands), loom_named_attr_slice_empty(),
