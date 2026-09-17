@@ -175,3 +175,53 @@ func.def public @entry() {
 func.def public @entry() {
   func.return
 }
+
+// ====
+
+// RUN: pass symbol-dce
+
+// Availability arrays do not keep private definitions alive.
+test.record @required
+
+func.decl @available()
+
+func.decl @unused()
+
+func.def public @entry() {
+  test.symbol_array_attrs [@required, @required] using [@available, @available]
+  func.return
+}
+
+// ----
+test.record @required
+
+func.def public @entry() {
+  test.symbol_array_attrs [@required, @required] using [@available, @available]
+  func.return
+}
+
+// ====
+
+// RUN: pass symbol-dce
+
+// Nested type references belong to the defining function, not the module.
+func.decl @required()
+
+func.decl @unused()
+
+func.def @dead(%values: test.array<i32, metadata = {callee = @unused}>) {
+  func.return
+}
+
+func.def public @entry(%values: test.array<i32, metadata = {callee = @required}>) {
+  test.use %values : test.array<i32, metadata = {callee = @required}>
+  func.return
+}
+
+// ----
+func.decl @required()
+
+func.def public @entry(%values: test.array<i32, metadata = {callee = @required}>) {
+  test.use %values : test.array<i32, metadata = {callee = @required}>
+  func.return
+}

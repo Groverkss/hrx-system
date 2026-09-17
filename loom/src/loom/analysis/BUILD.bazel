@@ -705,8 +705,14 @@ loom_cc_test(
 
 loom_cc_library(
     name = "symbol_references",
-    srcs = ["symbol_references.c"],
-    hdrs = ["symbol_references.h"],
+    srcs = [
+        "symbol_reference_summary.c",
+        "symbol_references.c",
+    ],
+    hdrs = [
+        "symbol_reference_summary.h",
+        "symbol_references.h",
+    ],
     deps = [
         ":scc",
         "//loom/src/loom/ir",
@@ -716,13 +722,17 @@ loom_cc_library(
         "//loom/src/loom/ops/template",
         "//loom/src/loom/util:adaptive_sort",
         "//runtime/src/iree/base",
+        "//runtime/src/iree/base/internal",
         "//runtime/src/iree/base/internal:arena",
     ],
 )
 
 loom_cc_test(
     name = "symbol_references_test",
-    srcs = ["symbol_references_test.cc"],
+    srcs = [
+        "symbol_reference_summary_test.cc",
+        "symbol_references_test.cc",
+    ],
     deps = [
         ":symbol_references",
         "//loom/src/loom/format/text:parser",
