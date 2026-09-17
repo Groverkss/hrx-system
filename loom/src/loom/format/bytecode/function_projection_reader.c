@@ -12,8 +12,6 @@
 #include "loom/format/bytecode/reader/selected_tables.h"
 
 struct loom_bytecode_function_projection_reader_t {
-  // Host allocator owning this reader object.
-  iree_allocator_t allocator;
   // Reset-free storage retaining decoded header payloads for the reader life.
   iree_arena_allocator_t arena;
   // Complete source bytecode retaining every indexed payload.
@@ -34,13 +32,12 @@ struct loom_bytecode_function_projection_reader_t {
 
 iree_status_t loom_bytecode_function_projection_reader_allocate(
     iree_const_byte_span_t bytecode, iree_string_view_t filename,
-    iree_arena_block_pool_t* block_pool,
     const loom_bytecode_module_metadata_t* metadata,
     loom_module_t* output_module,
     const loom_bytecode_function_projection_reader_options_t* options,
-    iree_allocator_t allocator,
+    iree_arena_allocator_t* arena,
     loom_bytecode_function_projection_reader_t** out_reader) {
-  IREE_ASSERT_ARGUMENT(block_pool);
+  IREE_ASSERT_ARGUMENT(arena);
   IREE_ASSERT_ARGUMENT(metadata);
   IREE_ASSERT_ARGUMENT(output_module);
   IREE_ASSERT_ARGUMENT(out_reader);
@@ -48,13 +45,12 @@ iree_status_t loom_bytecode_function_projection_reader_allocate(
 
   loom_bytecode_function_projection_reader_t* reader = NULL;
   IREE_RETURN_IF_ERROR(
-      iree_allocator_malloc(allocator, sizeof(*reader), (void**)&reader));
-  reader->allocator = allocator;
+      iree_arena_allocate(arena, sizeof(*reader), (void**)&reader));
   reader->bytecode = bytecode;
   reader->metadata = metadata;
   reader->output_module = output_module;
   reader->error_count = 0;
-  iree_arena_initialize(block_pool, &reader->arena);
+  iree_arena_initialize(arena->block_pool, &reader->arena);
   loom_bytecode_reader_decoder_initialize(
       options ? options->diagnostic_sink : (loom_diagnostic_sink_t){0},
       filename, &reader->error_count, &reader->decoder);
@@ -70,19 +66,19 @@ iree_status_t loom_bytecode_function_projection_reader_allocate(
       options ? options->low_repr_environment
               : (loom_low_repr_environment_t){0};
   loom_bytecode_selected_symbol_materializer_initialize(
-      &reader->decoder, block_pool, &reader->tables, &low_repr_environment,
-      &reader->symbols);
+      &reader->decoder, arena->block_pool, &reader->tables,
+      &low_repr_environment, &reader->symbols);
   *out_reader = reader;
   return iree_ok_status();
 }
 
-void loom_bytecode_function_projection_reader_free(
+void loom_bytecode_function_projection_reader_deinitialize(
     loom_bytecode_function_projection_reader_t* reader) {
-  if (reader == NULL) return;
-  const iree_allocator_t allocator = reader->allocator;
+  if (reader == NULL) {
+    return;
+  }
   loom_bytecode_selected_table_materializer_deinitialize(&reader->tables);
   iree_arena_deinitialize(&reader->arena);
-  iree_allocator_free(allocator, reader);
 }
 
 iree_status_t loom_bytecode_function_projection_reader_bind_symbol(

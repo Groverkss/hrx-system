@@ -181,9 +181,11 @@ loom_cc_test(
   NAME
     reader_test
   SRCS
+    "function_projection_reader_test.cc"
     "reader_test.cc"
   DEPS
     ::format
+    ::function_projection_reader
     ::reader
     ::selected_reader
     ::varint

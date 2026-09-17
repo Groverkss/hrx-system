@@ -28,7 +28,7 @@ typedef struct loom_link_func_contract_projection_module_t {
 struct loom_link_func_contract_projection_t {
   // Borrowed immutable provider index.
   const loom_link_module_index_t* index;
-  // Host allocator owning this object and bytecode readers.
+  // Host allocator owning this object and the private identity module.
   iree_allocator_t allocator;
   // Block pool backing the scratch arena, identity module, and readers.
   iree_arena_block_pool_t* block_pool;
@@ -316,12 +316,10 @@ static iree_status_t loom_link_func_contract_projection_initialize_reader(
           loom_link_func_contract_projection_resolve_bytecode_symbol,
       .symbol_resolver_user_data = module,
   };
-  IREE_RETURN_IF_ERROR(loom_bytecode_function_projection_reader_allocate(
-      provider->bytecode.contents, provider->bytecode.filename,
-      module->projection->block_pool, metadata,
-      module->projection->identity_module, &options,
-      module->projection->allocator, &module->bytecode_reader));
-  return iree_ok_status();
+  return loom_bytecode_function_projection_reader_allocate(
+      provider->bytecode.contents, provider->bytecode.filename, metadata,
+      module->projection->identity_module, &options, &module->projection->arena,
+      &module->bytecode_reader);
 }
 
 static iree_status_t loom_link_func_contract_projection_bytecode_load(
@@ -446,7 +444,8 @@ void loom_link_func_contract_projection_free(
     loom_link_func_contract_projection_module_t* module =
         projection->modules[i];
     if (module != NULL) {
-      loom_bytecode_function_projection_reader_free(module->bytecode_reader);
+      loom_bytecode_function_projection_reader_deinitialize(
+          module->bytecode_reader);
     }
   }
   loom_module_free(projection->identity_module);

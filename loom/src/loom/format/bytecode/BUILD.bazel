@@ -155,9 +155,13 @@ loom_cc_library(
 
 loom_cc_test(
     name = "reader_test",
-    srcs = ["reader_test.cc"],
+    srcs = [
+        "function_projection_reader_test.cc",
+        "reader_test.cc",
+    ],
     deps = [
         ":format",
+        ":function_projection_reader",
         ":reader",
         ":selected_reader",
         ":varint",

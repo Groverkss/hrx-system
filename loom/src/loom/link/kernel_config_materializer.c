@@ -1047,9 +1047,8 @@ iree_status_t loom_link_plan_project_kernel_config_module(
         .low_repr_environment = environment->low_repr_environment,
     };
     status = loom_bytecode_function_projection_reader_allocate(
-        provider->bytecode.contents, provider->bytecode.filename,
-        environment->block_pool, source_module, module, &reader_options,
-        environment->allocator, &reader);
+        provider->bytecode.contents, provider->bytecode.filename, source_module,
+        module, &reader_options, arena, &reader);
   }
   for (iree_host_size_t i = 0;
        i < selection->symbols.count && iree_status_is_ok(status); ++i) {
@@ -1089,7 +1088,7 @@ iree_status_t loom_link_plan_project_kernel_config_module(
     status = loom_link_kernel_config_materialize_projection_body(
         &source, reader, arena, module, configuration_functions[i]);
   }
-  loom_bytecode_function_projection_reader_free(reader);
+  loom_bytecode_function_projection_reader_deinitialize(reader);
 
   if (!iree_status_is_ok(status)) {
     loom_module_free(module);

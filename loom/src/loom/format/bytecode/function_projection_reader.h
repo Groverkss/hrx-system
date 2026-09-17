@@ -41,24 +41,28 @@ typedef struct loom_bytecode_function_projection_reader_options_t {
   void* symbol_resolver_user_data;
 } loom_bytecode_function_projection_reader_options_t;
 
-// Allocates a reader that projects selected source identities into
-// |output_module|.
+// Allocates a reader in |arena| that projects selected source identities into
+// |output_module|. The arena must retain the reader until it is deinitialized.
 //
 // The reader borrows every input and owns only transient projections. Source
 // symbols must be bound explicitly before a decoded header or root region
 // references them. The caller owns |output_module| and may continue building
-// it after the reader is released.
+// it after the reader is deinitialized. Decoded headers and per-fact scratch
+// use a reader-owned arena separate from |arena|, backed by its block pool.
+// Restoring scratch checkpoints never discards caller state allocated by a
+// symbol resolver.
 iree_status_t loom_bytecode_function_projection_reader_allocate(
     iree_const_byte_span_t bytecode, iree_string_view_t filename,
-    iree_arena_block_pool_t* block_pool,
     const loom_bytecode_module_metadata_t* metadata,
     loom_module_t* output_module,
     const loom_bytecode_function_projection_reader_options_t* options,
-    iree_allocator_t allocator,
+    iree_arena_allocator_t* arena,
     loom_bytecode_function_projection_reader_t** out_reader);
 
-// Frees |reader| without modifying its caller-owned output module.
-void loom_bytecode_function_projection_reader_free(
+// Releases reader-owned storage without modifying the output module. The
+// reader object remains in the caller's arena until that arena is reset.
+// Must be called before resetting the caller's arena. Accepts NULL.
+void loom_bytecode_function_projection_reader_deinitialize(
     loom_bytecode_function_projection_reader_t* reader);
 
 // Binds one module-local source symbol to an existing output-module symbol.
@@ -68,9 +72,10 @@ iree_status_t loom_bytecode_function_projection_reader_bind_symbol(
 
 // Decodes one function-like symbol header without reading root-region bytes.
 //
-// Arrays and projected IR identities in |out_header| remain valid until the
-// reader is released. Repeated reads of the same header are intentionally not
-// cached; callers retain the returned header through their projection.
+// Arrays in |out_header| remain valid until the reader is deinitialized.
+// Projected IR identities belong to the caller's output module. Repeated reads
+// of the same header are intentionally not cached; callers retain the returned
+// header through their projection.
 iree_status_t loom_bytecode_function_projection_reader_read_header(
     loom_bytecode_function_projection_reader_t* reader,
     uint32_t source_symbol_ordinal,
