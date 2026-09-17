@@ -47,18 +47,24 @@ def _fifo_load_descriptor_specs(
         )
         for lane in ("a", "b")
     ]
-    for element_type, element_bits in element_types:
-        shape = f"{element_type}x{512 // element_bits}"
+    # Pops fetch 512 bits; packed payloads consume additional buffered bytes.
+    for shape, width_bits in (
+        *((f"{element}x{512 // bits}", 512) for element, bits in element_types),
+        ("bfp16ebs16", 544),
+        ("bfp16ebs8", 576),
+    ):
+        mnemonic_shape = f"512.{shape}" if width_bits == 512 else shape
         pop_keys = {
             lane: f"{_TARGET_KEY}.load.{lane}.{shape}.fifo.pop" for lane in ("a", "b")
         }
         result.extend(
             _DescriptorSpec(
-                f"VLD{lane.upper()}_POP_512_normal_pop",
+                f"VLD{lane.upper()}_POP_{width_bits}_normal_pop",
                 pop_keys[lane],
                 f"memory.load.fifo.pop.{shape}",
-                f"II_VLD{lane.upper()}_POP_512_normal_pop",
-                asm_mnemonic=f"vld{lane}.pop.512.{shape}",
+                f"II_VLD{lane.upper()}_POP_{width_bits}_normal_pop",
+                storage_overrides=(("dst", "mEXa"),) if width_bits != 512 else (),
+                asm_mnemonic=f"vld{lane}.pop.{mnemonic_shape}",
                 schedule_alternatives=(pop_keys["b"],) if lane == "a" else (),
                 memory_width_bits=512,
             )
@@ -102,6 +108,7 @@ def _fifo_store_descriptor_specs(
                 memory_width_bits=512,
             )
         )
+    # Packed pushes write 512 bits and retain the remainder until a flush.
     for width_bits, shape, conversion, source_class in (
         (544, "bfp16ebs16", "", "mEXa"),
         (576, "bfp16ebs8", "", "mEXa"),
@@ -120,7 +127,7 @@ def _fifo_store_descriptor_specs(
                 f"II_{form}",
                 storage_overrides=(("src", source_class),),
                 asm_mnemonic=f"vst.push.{shape}{conversion_suffix}",
-                memory_width_bits=width_bits,
+                memory_width_bits=512,
             )
         )
     return tuple(result)

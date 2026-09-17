@@ -106,6 +106,49 @@ low.func.def target<amd.xdna.aie2p.core>(@target) @incomplete_load_fifo(%input: 
 
 // ====
 
+// Packed pops consume both halves of the FIFO and carry their pointer and
+// position updates across load lanes. An unused packed result cannot erase
+// the first pop: the next pop consumes its updated stream state.
+// RUN: emit source-low output=module
+
+aie2p.target<core> @target
+
+low.func.def retain target<amd.xdna.aie2p.core>(@target) @packed_input(%input: reg<aie2p.ep>, %initial_fifo: reg<aie2p.eldfiforeg>) -> (reg<aie2p.mexa>, reg<aie2p.eps>, reg<aie2p.eldfiforeg>, reg<aie2p.erf2>) asm {
+  %pointer = copy %input : reg<aie2p.ep> -> reg<aie2p.eps>
+  %position = mova.fifo.position 0
+  %first, %pointer0, %fifo0, %position0 = vlda.pop.bfp16ebs8 %pointer, %initial_fifo, %position
+  %second, %pointer1, %fifo1, %position1 = vldb.pop.bfp16ebs16 %pointer0, %fifo0, %position0
+  return %second, %pointer1, %fifo1, %position1
+}
+
+// ----
+aie2p.target<core> @target
+
+low.func.def retain target<amd.xdna.aie2p.core>(@target) @packed_input(%input: reg<aie2p.ep>, %initial_fifo: reg<aie2p.eldfiforeg>) -> (reg<aie2p.mexa>, reg<aie2p.eps>, reg<aie2p.eldfiforeg>, reg<aie2p.erf2>) asm {
+  %pointer = copy %input : reg<aie2p.ep> -> reg<aie2p.eps>
+  %position = mova.fifo.position 0
+  %first, %pointer0, %fifo0, %position0 = vlda.pop.bfp16ebs8 %pointer, %initial_fifo, %position
+  %second, %pointer1, %fifo1, %position1 = vldb.pop.bfp16ebs16 %pointer0, %fifo0, %position0
+  return %second, %pointer1, %fifo1, %position1
+}
+
+// ====
+
+// Packed data also requires a completely defined FIFO, including the bytes
+// buffered for later pops.
+// RUN: verify
+
+aie2p.target<core> @target
+
+low.func.def target<amd.xdna.aie2p.core>(@target) @incomplete_packed_fifo(%input: reg<aie2p.ep>, %pointer: reg<aie2p.eps>, %position: reg<aie2p.erf2>) asm {
+  %low = vlda.load-fifo.low512 %input, 0
+  // ERROR@+1: DOMINANCE/011 {op_name="amd.xdna.aie2p.load.b.bfp16ebs16.fifo.pop", field_name="fifo_reg"}
+  %value, %pointer0, %fifo0, %position0 = vldb.pop.bfp16ebs16 %pointer, %low, %position
+  return
+}
+
+// ====
+
 // A store of the uninitialized high half is also invalid, even when the low
 // half is readable. Undefined bytes stay undefined until explicitly produced.
 // RUN: verify

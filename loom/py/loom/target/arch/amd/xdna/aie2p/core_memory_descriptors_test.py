@@ -126,10 +126,17 @@ def test_fifo_load_descriptors_preserve_fifo_state_and_recurrence() -> None:
             frozenset(("fifo_reg", "pos")),
         }
 
-        for element_type, element_bits in AIE2P_VECTOR_MEMORY_ELEMENT_TYPES:
-            shape = f"{element_type}x{512 // element_bits}"
+        for shape, width in (
+            *(
+                (f"{element}x{512 // bits}", 512)
+                for element, bits in AIE2P_VECTOR_MEMORY_ELEMENT_TYPES
+            ),
+            ("bfp16ebs16", 544),
+            ("bfp16ebs8", 576),
+        ):
             pop = descriptors[f"amd.xdna.aie2p.load.{lane}.{shape}.fifo.pop"]
-            assert pop.mnemonic == f"vld{lane}.pop.512.{shape}"
+            mnemonic_shape = f"512.{shape}" if width == 512 else shape
+            assert pop.mnemonic == f"vld{lane}.pop.{mnemonic_shape}"
             assert [operand.field_name for operand in pop.operands] == [
                 "dst",
                 "ptr_out",
@@ -149,6 +156,12 @@ def test_fifo_load_descriptors_preserve_fifo_state_and_recurrence() -> None:
             assert pop.asm_forms[0].operands == ("ptr", "fifo_reg", "pos")
             assert pop.effects[0].kind is EffectKind.READ
             assert pop.effects[0].width_bits == 512
+            assert pop.operands[0].reg_alts[0].reg_class == (
+                "aie2p.vec256" if width == 512 else "aie2p.mexa"
+            )
+            assert pop.operands[0].unit_count == (2 if width == 512 else 1)
+            assert pop.operands[-1].reg_alts[0].reg_class == "aie2p.state.srfifo_uf"
+            assert OperandFlag.STATE_WRITE in pop.operands[-1].flags
             assert pop.schedule_alternatives == (
                 (f"amd.xdna.aie2p.load.{alternate_lane}.{shape}.fifo.pop",)
                 if alternate_lane is not None
@@ -213,13 +226,7 @@ def test_fifo_stores_preserve_the_fixed_tuple_and_overflow_state() -> None:
             else ("fifo_reg", "src", "ptr", "avail")
         )
         assert descriptor.effects[0].kind is EffectKind.WRITE
-        assert descriptor.effects[0].width_bits == (
-            544
-            if ".bfp16ebs16." in descriptor.key
-            else 576
-            if ".bfp16ebs8." in descriptor.key
-            else 512
-        )
+        assert descriptor.effects[0].width_bits == 512
         assert {
             (
                 descriptor.operands[constraint.lhs_operand_index].field_name,
