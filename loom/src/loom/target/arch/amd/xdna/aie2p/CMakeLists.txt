@@ -21,7 +21,7 @@ loom_generated_file_family(
     "descriptors/core_descriptors.h"
     "encoding/encoding_tables.inl"
     "machine/machine_tables.inl"
-    "descriptors/move_tables.inl"
+    "descriptors/register_tables.inl"
   OUTPUT_FLAGS
     "--array-descriptor-source-output"
     "--array-descriptor-header-output"
@@ -29,7 +29,7 @@ loom_generated_file_family(
     "--descriptor-header-output"
     "--encoding-output"
     "--machine-output"
-    "--move-output"
+    "--register-output"
 )
 
 loom_cc_library(
@@ -126,7 +126,7 @@ loom_cc_library(
   HDRS
     "descriptors/encoding.h"
   TEXTUAL_HDRS
-    "descriptors/move_tables.inl"
+    "descriptors/register_tables.inl"
   SRCS
     "descriptors/encoding.c"
   DEPS
@@ -407,15 +407,18 @@ loom_cc_library(
     check_provider
   HDRS
     "check/array_plan.h"
+    "check/leaf.h"
     "check/provider.h"
   SRCS
     "check/array_plan.c"
+    "check/leaf.c"
     "check/provider.c"
   DEPS
     ::array_plan
     ::array_program
     ::array_resident
     ::leaf_compile
+    ::machine
     ::provider
     iree::base
     loom::codegen::low::diagnostics
@@ -479,6 +482,7 @@ loom_check_test_suite(
     "test/descriptors/scalar_carry.loom-test"
     "test/descriptors/scalar_nonlinear.loom-test"
     "test/descriptors/scalar_stream.loom-test"
+    "test/leaf_interfaces.loom-test"
     "test/module_contracts.loom-test"
     "test/pipeline_composition.loom-test"
     "test/pipeline_ports.loom-test"
@@ -554,7 +558,9 @@ loom_cc_library(
     ::core_descriptors
     ::descriptor_encoding
     ::encoding
+    ::machine
     iree::base
+    iree::base::internal
     iree::base::internal::arena
     loom::codegen::low::frame
     loom::codegen::low::packet
@@ -592,6 +598,7 @@ loom_cc_library(
     "emit/leaf_object.c"
   DEPS
     ::bundle_plan
+    ::core_descriptors
     ::encoding
     ::relocation
     iree::base
@@ -621,6 +628,7 @@ loom_cc_library(
     iree::base
     iree::base::internal::arena
     loom::analysis::symbol_facts
+    loom::codegen::low::allocation::target_constraints
     loom::codegen::low::descriptors
     loom::codegen::low::frame
     loom::ir

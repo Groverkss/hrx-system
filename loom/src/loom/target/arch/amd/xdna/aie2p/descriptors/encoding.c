@@ -8,12 +8,17 @@
 
 #include "iree/base/internal/math.h"
 
-// Each physical register has a byte mask of applicable allocation moves in
-// descriptor order. Intersecting the source and destination masks selects the
-// first legal instruction without searching descriptors or register classes.
-#include "loom/target/arch/amd/xdna/aie2p/descriptors/move_tables.inl"
+// Allocation move membership and register-part projections are resolved from
+// the owned machine tables at generation time.
+#include "loom/target/arch/amd/xdna/aie2p/descriptors/register_tables.inl"
 
 #define LOOM_AIE2P_DESCRIPTOR_MAX_ENCODING_FIELD_COUNT 16u
+
+uint32_t loom_aie2p_descriptor_register_part_units(uint16_t register_part_id) {
+  return register_part_id == LOOM_LOW_REGISTER_PART_NONE
+             ? UINT32_MAX
+             : kRegisterPartAtomicUnitMasks[register_part_id];
+}
 
 uint32_t loom_aie2p_descriptor_select_move(
     loom_aie2p_physical_register_id_t source,

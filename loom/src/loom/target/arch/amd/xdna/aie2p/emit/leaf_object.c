@@ -12,6 +12,7 @@
 #include "loom/codegen/low/packet.h"
 #include "loom/ir/module.h"
 #include "loom/ops/op_defs.h"
+#include "loom/target/arch/amd/xdna/aie2p/descriptors/core_descriptors.h"
 #include "loom/target/arch/amd/xdna/aie2p/emit/relocation.h"
 
 static const loom_storage_space_t kStorageSpaceOrder[] = {
@@ -20,6 +21,25 @@ static const loom_storage_space_t kStorageSpaceOrder[] = {
     LOOM_STORAGE_SPACE_PRIVATE,
     LOOM_STORAGE_SPACE_WORKGROUP,
 };
+
+bool loom_aie2p_leaf_may_write_register(
+    const loom_aie2p_leaf_realization_t* realization,
+    uint16_t physical_register) {
+  const loom_low_descriptor_set_t* descriptor_set =
+      loom_aie2p_core_descriptor_set();
+  const loom_low_physical_register_t* register_row =
+      &descriptor_set->physical_registers[physical_register];
+  for (uint16_t i = 0; i < register_row->atomic_unit_count; ++i) {
+    const uint16_t unit =
+        descriptor_set
+            ->physical_register_atomic_units[register_row->atomic_unit_start +
+                                             i];
+    if (realization->register_writes.words[unit / 64] &
+        (UINT64_C(1) << (unit % 64)))
+      return true;
+  }
+  return false;
+}
 
 const loom_aie2p_leaf_storage_requirement_t*
 loom_aie2p_leaf_storage_requirement(
@@ -295,6 +315,7 @@ iree_status_t loom_aie2p_leaf_object_emit(
 
   loom_aie2p_leaf_realization_t* realization = &out_contribution->realization;
   *realization = (loom_aie2p_leaf_realization_t){
+      .register_writes = plan->register_writes,
       .target_identity = LOOM_AIE2P_LEAF_TARGET_IDENTITY,
       .abi_identity = LOOM_AIE2P_LEAF_ABI_IDENTITY,
       .entry_symbol_index = 0,

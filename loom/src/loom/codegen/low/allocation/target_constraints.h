@@ -48,7 +48,9 @@ typedef struct loom_low_allocation_fixed_value_t {
   loom_low_allocation_location_kind_t location_kind;
   // Base physical register or target ID.
   uint32_t location_base;
-  // Number of contiguous units fixed at |location_base|.
+  // Number of allocation units fixed at |location_base|. Explicit physical
+  // registers use their declared view's units; linear locations use consecutive
+  // IDs.
   uint32_t location_count;
 } loom_low_allocation_fixed_value_t;
 

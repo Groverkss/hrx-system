@@ -12,6 +12,7 @@
 #include "iree/base/api.h"
 #include "iree/base/internal/arena.h"
 #include "loom/analysis/symbol_facts.h"
+#include "loom/codegen/low/allocation/target_constraints.h"
 #include "loom/codegen/low/descriptors.h"
 #include "loom/ir/ir.h"
 #include "loom/target/arch/amd/xdna/aie2p/emit/leaf_object.h"
@@ -26,6 +27,12 @@ typedef struct loom_aie2p_leaf_compile_options_t {
   const loom_low_descriptor_registry_t* descriptor_registry;
   // Optional invocation-refined target facts for this function version.
   const loom_target_facts_t* function_target_facts;
+  // Borrowed SSA location constraints, valid for the duration of compilation.
+  // Locations are constrained only over each value's live interval. Returned
+  // values express state that must remain live through the leaf's exit.
+  const loom_low_allocation_fixed_value_t* allocation_fixed_values;
+  // Number of records in |allocation_fixed_values|.
+  iree_host_size_t allocation_fixed_value_count;
   // Diagnostic emitter receiving scheduling and allocation failures.
   iree_diagnostic_emitter_t diagnostic_emitter;
   // Optional compile report receiving exact Low planning evidence.

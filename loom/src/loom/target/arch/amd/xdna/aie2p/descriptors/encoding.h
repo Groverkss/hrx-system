@@ -53,6 +53,11 @@ typedef struct loom_aie2p_register_move_t {
 uint8_t loom_aie2p_descriptor_move_parts(
     loom_aie2p_register_move_t move, loom_aie2p_register_move_t out_parts[2]);
 
+// Returns the mask of atomic-unit ordinals touched by a register part within
+// any physical register in its declared class. NONE selects all units. The
+// generator proves this projection against every candidate's subregisters.
+uint32_t loom_aie2p_descriptor_register_part_units(uint16_t register_part_id);
+
 #ifdef __cplusplus
 }  // extern "C"
 #endif

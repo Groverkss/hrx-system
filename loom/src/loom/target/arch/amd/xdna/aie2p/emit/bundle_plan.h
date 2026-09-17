@@ -13,6 +13,7 @@
 #include "iree/base/internal/arena.h"
 #include "loom/codegen/low/frame.h"
 #include "loom/target/arch/amd/xdna/aie2p/encoding/encoding.h"
+#include "loom/target/arch/amd/xdna/aie2p/machine/machine.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -110,6 +111,10 @@ typedef struct loom_aie2p_bundle_plan_t {
   iree_host_size_t storage_fixup_count;
   // Exact byte length after variable-width bundle packing.
   iree_host_size_t encoded_byte_length;
+  // Union of atomic register units written by committed native instructions,
+  // including implicit and allocation-generated writes. One bit per unit in
+  // the frame's descriptor set.
+  loom_aie2p_register_unit_set_t register_writes;
 } loom_aie2p_bundle_plan_t;
 
 // Plans physical bundles for one successful, spill-free AIE2P Low frame.

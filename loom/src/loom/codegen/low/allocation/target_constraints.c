@@ -1038,9 +1038,17 @@ iree_status_t loom_low_allocation_target_constraints_resolve_fixed_values(
               fixed_value->location_count));
       continue;
     }
+    uint16_t reg_class_id = LOOM_LOW_REG_CLASS_NONE;
+    const loom_low_reg_class_t* reg_class = NULL;
+    IREE_RETURN_IF_ERROR(
+        loom_low_allocation_target_constraints_resolve_reg_class(
+            constraints, interval->value_class, &reg_class_id, &reg_class));
     const uint32_t alignment =
         loom_low_allocation_live_range_interval_alignment(interval);
-    if (fixed_value->location_base % alignment != 0) {
+    // Explicit physical IDs name declared register views, not linear storage
+    // offsets. The capacity check below validates the view's unit layout.
+    if (!loom_low_reg_class_uses_explicit_physical_registers(reg_class) &&
+        fixed_value->location_base % alignment != 0) {
       IREE_RETURN_IF_ERROR(
           loom_low_allocation_target_constraints_emit_fixed_value_misalignment(
               constraints, fixed_value->value_id, fixed_value->location_base,
@@ -1048,10 +1056,6 @@ iree_status_t loom_low_allocation_target_constraints_resolve_fixed_values(
       continue;
     }
 
-    uint16_t reg_class_id = LOOM_LOW_REG_CLASS_NONE;
-    IREE_RETURN_IF_ERROR(
-        loom_low_allocation_target_constraints_resolve_reg_class(
-            constraints, interval->value_class, &reg_class_id, NULL));
     bool valid_range = false;
     IREE_RETURN_IF_ERROR(
         loom_low_allocation_target_constraints_validate_register_location_capacity(

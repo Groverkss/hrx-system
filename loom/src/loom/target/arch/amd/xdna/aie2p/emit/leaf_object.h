@@ -147,7 +147,20 @@ typedef struct loom_aie2p_leaf_realization_t {
   const loom_aie2p_leaf_resource_import_t* resource_imports;
   // Number of records in resource_imports.
   iree_host_size_t resource_import_count;
+  // Native write union, one bit per AIE2P atomic register unit.
+  // Contains no IR or planning-scratch references. Register identities are
+  // build-local descriptor IDs, not serialized executable-format ABI.
+  loom_aie2p_register_unit_set_t register_writes;
 } loom_aie2p_leaf_realization_t;
+
+// Returns whether any native instruction may write storage overlapping the
+// given valid AIE2P physical-register ID. Includes implicit writes and
+// generated moves across all CFG paths. A partial write counts as a write to
+// its atomic unit; absence proves preservation, not that a returned value is
+// unchanged.
+bool loom_aie2p_leaf_may_write_register(
+    const loom_aie2p_leaf_realization_t* realization,
+    uint16_t physical_register);
 
 // Returns the retained requirement for one verified function-storage space.
 const loom_aie2p_leaf_storage_requirement_t*

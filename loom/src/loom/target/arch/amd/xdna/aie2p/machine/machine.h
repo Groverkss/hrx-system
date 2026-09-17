@@ -48,6 +48,14 @@ typedef uint16_t loom_aie2p_machine_form_id_t;
 typedef uint16_t loom_aie2p_atomic_unit_id_t;
 #define LOOM_AIE2P_ATOMIC_UNIT_ID_INVALID ((loom_aie2p_atomic_unit_id_t)0xFFFFu)
 
+// A set of atomic register storage units. Generated machine tables use byte
+// unit IDs, so the entire architectural set fits in four words.
+typedef struct loom_aie2p_register_unit_set_t {
+  // One bit per zero-based atomic-unit ID, including overlapping register
+  // views.
+  uint64_t words[(UINT8_MAX + 1u) / 64u];
+} loom_aie2p_register_unit_set_t;
+
 enum loom_aie2p_register_class_flag_bits_e {
   // Class participates in physical-register allocation.
   LOOM_AIE2P_REGISTER_CLASS_FLAG_ALLOCATABLE = 1u << 0,

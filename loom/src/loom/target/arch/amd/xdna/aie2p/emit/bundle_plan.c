@@ -9,6 +9,7 @@
 #include <stddef.h>
 #include <string.h>
 
+#include "iree/base/internal/math.h"
 #include "loom/codegen/low/packet.h"
 #include "loom/codegen/low/schedule/physical_issue.h"
 #include "loom/codegen/low/storage_layout.h"
@@ -109,6 +110,8 @@ typedef struct loom_aie2p_bundle_plan_builder_t {
       instructions[LOOM_AIE2P_ENCODING_MAX_BUNDLE_SLOT_COUNT];
   // Fixed per-group physical binding scratch, sized from generated arity.
   uint16_t* instruction_registers;
+  // Accumulated native writes, copied into the final plan.
+  loom_aie2p_register_unit_set_t register_writes;
 } loom_aie2p_bundle_plan_builder_t;
 
 static uint32_t loom_aie2p_bundle_plan_descriptor_ordinal(
@@ -803,39 +806,51 @@ static iree_status_t loom_aie2p_bundle_plan_advance(
   return iree_ok_status();
 }
 
-static iree_status_t loom_aie2p_bundle_plan_append_bundle(
-    loom_aie2p_bundle_plan_builder_t* builder, uint32_t logical_issue_cycle,
-    iree_host_size_t slot_start, iree_host_size_t slot_count) {
-  if (slot_count > LOOM_AIE2P_ENCODING_MAX_BUNDLE_SLOT_COUNT) {
-    return iree_make_status(
-        IREE_STATUS_FAILED_PRECONDITION,
-        "AIE2P logical issue cycle %u requires %zu physical slots in one "
-        "ordered segment",
-        (unsigned)logical_issue_cycle, slot_count);
-  }
-  loom_aie2p_slot_t physical_slots[LOOM_AIE2P_ENCODING_MAX_BUNDLE_SLOT_COUNT];
+static void loom_aie2p_bundle_plan_record_writes(
+    loom_aie2p_bundle_plan_builder_t* builder,
+    const loom_low_physical_instruction_t* instructions,
+    iree_host_size_t slot_count) {
+  const loom_low_descriptor_set_t* descriptor_set = builder->descriptor_set;
   for (iree_host_size_t i = 0; i < slot_count; ++i) {
-    physical_slots[i] = builder->slots[slot_start + i].encoded_slot.slot;
+    const loom_low_physical_instruction_t* instruction = &instructions[i];
+    const loom_low_descriptor_t* descriptor =
+        &descriptor_set->descriptors[instruction->descriptor_ordinal];
+    for (uint16_t j = 0; j < descriptor->operand_count; ++j) {
+      const loom_low_operand_t* operand =
+          &descriptor_set->operands[descriptor->operand_start + j];
+      if (operand->write_event_id == LOOM_LOW_TIMING_EVENT_NONE) continue;
+      const loom_low_physical_register_t* physical_register =
+          &descriptor_set
+               ->physical_registers[instruction->physical_registers[j]];
+      uint32_t part_units =
+          loom_aie2p_descriptor_register_part_units(operand->register_part_id) &
+          (UINT32_MAX >> (32u - physical_register->atomic_unit_count));
+      do {
+        const uint32_t k = iree_math_count_trailing_zeros_u32(part_units);
+        const uint16_t unit = descriptor_set->physical_register_atomic_units
+                                  [physical_register->atomic_unit_start + k];
+        builder->register_writes.words[unit / 64] |= UINT64_C(1) << (unit % 64);
+        part_units &= part_units - 1u;
+      } while (part_units != 0);
+    }
   }
-  const loom_aie2p_bundle_format_id_t format =
-      loom_aie2p_encoding_find_bundle_format_for_slots(physical_slots,
-                                                       slot_count);
-  if (format == LOOM_AIE2P_BUNDLE_FORMAT_ID_INVALID) {
-    return iree_make_status(
-        IREE_STATUS_FAILED_PRECONDITION,
-        "AIE2P logical issue cycle %u has no legal physical bundle format",
-        (unsigned)logical_issue_cycle);
-  }
+}
+
+// Commits the partition's selected format and already resolved bindings.
+static iree_status_t loom_aie2p_bundle_plan_commit_bundle(
+    loom_aie2p_bundle_plan_builder_t* builder, uint32_t logical_issue_cycle,
+    iree_host_size_t slot_start, iree_host_size_t slot_count,
+    loom_aie2p_bundle_format_id_t format,
+    const loom_low_physical_instruction_t* instructions) {
   if (builder->bundle_count >= builder->bundle_capacity) {
     return iree_make_status(IREE_STATUS_RESOURCE_EXHAUSTED,
                             "AIE2P bundle-plan bundle capacity exhausted");
   }
   const uint8_t byte_length =
       loom_aie2p_bundle_plan_format_byte_length(format, slot_count);
-  loom_aie2p_bundle_plan_instruction_group(builder, slot_start, slot_count);
   uint32_t issue_cycle = 0;
   IREE_RETURN_IF_ERROR(loom_low_physical_issue_place(
-      &builder->issue, builder->instructions, (uint16_t)slot_count,
+      &builder->issue, instructions, (uint16_t)slot_count,
       builder->next_issue_cycle, &issue_cycle));
   IREE_RETURN_IF_ERROR(loom_aie2p_bundle_plan_advance(builder, issue_cycle));
   if (builder->encoded_byte_length >
@@ -855,7 +870,27 @@ static iree_status_t loom_aie2p_bundle_plan_append_bundle(
       .slot_count = (uint8_t)slot_count,
   };
   builder->encoded_byte_length += byte_length;
+  loom_aie2p_bundle_plan_record_writes(builder, instructions, slot_count);
   return iree_ok_status();
+}
+
+static iree_status_t loom_aie2p_bundle_plan_append_single_slot(
+    loom_aie2p_bundle_plan_builder_t* builder, uint32_t logical_issue_cycle,
+    iree_host_size_t slot_start) {
+  const loom_aie2p_slot_t physical_slot =
+      builder->slots[slot_start].encoded_slot.slot;
+  const loom_aie2p_bundle_format_id_t format =
+      loom_aie2p_encoding_find_bundle_format_for_slots(&physical_slot, 1);
+  if (format == LOOM_AIE2P_BUNDLE_FORMAT_ID_INVALID) {
+    return iree_make_status(
+        IREE_STATUS_FAILED_PRECONDITION,
+        "AIE2P logical issue cycle %u has no legal single-slot bundle format",
+        (unsigned)logical_issue_cycle);
+  }
+  loom_aie2p_bundle_plan_instruction_group(builder, slot_start, 1);
+  return loom_aie2p_bundle_plan_commit_bundle(builder, logical_issue_cycle,
+                                              slot_start, 1, format,
+                                              builder->instructions);
 }
 
 // Partitions one scheduled descriptor run into the minimum number of
@@ -868,6 +903,10 @@ static iree_status_t loom_aie2p_bundle_plan_append_descriptor_run(
     loom_aie2p_bundle_plan_builder_t* builder, uint32_t logical_issue_cycle,
     iree_host_size_t slot_start, iree_host_size_t slot_count) {
   IREE_ASSERT_GT(slot_count, 0u);
+  if (slot_count == 1) {
+    return loom_aie2p_bundle_plan_append_single_slot(
+        builder, logical_issue_cycle, slot_start);
+  }
   if (slot_count > LOOM_AIE2P_ENCODING_MAX_BUNDLE_SLOT_COUNT) {
     return iree_make_status(
         IREE_STATUS_FAILED_PRECONDITION,
@@ -878,6 +917,8 @@ static iree_status_t loom_aie2p_bundle_plan_append_descriptor_run(
 
   uint8_t minimum_bundle_counts[LOOM_AIE2P_ENCODING_MAX_BUNDLE_SLOT_COUNT + 1];
   uint8_t predecessor_indices[LOOM_AIE2P_ENCODING_MAX_BUNDLE_SLOT_COUNT + 1];
+  loom_aie2p_bundle_format_id_t
+      partition_formats[LOOM_AIE2P_ENCODING_MAX_BUNDLE_SLOT_COUNT + 1];
   memset(minimum_bundle_counts, UINT8_MAX, sizeof(minimum_bundle_counts));
   memset(predecessor_indices, UINT8_MAX, sizeof(predecessor_indices));
   minimum_bundle_counts[0] = 0;
@@ -892,9 +933,10 @@ static iree_status_t loom_aie2p_bundle_plan_append_descriptor_run(
         physical_slots[i] =
             builder->slots[slot_start + begin + i].encoded_slot.slot;
       }
-      if (loom_aie2p_encoding_find_bundle_format_for_slots(
-              physical_slots, candidate_slot_count) ==
-          LOOM_AIE2P_BUNDLE_FORMAT_ID_INVALID) {
+      const loom_aie2p_bundle_format_id_t format =
+          loom_aie2p_encoding_find_bundle_format_for_slots(
+              physical_slots, candidate_slot_count);
+      if (format == LOOM_AIE2P_BUNDLE_FORMAT_ID_INVALID) {
         continue;
       }
       if (!loom_low_physical_issue_group_fits(builder->descriptor_set,
@@ -906,6 +948,7 @@ static iree_status_t loom_aie2p_bundle_plan_append_descriptor_run(
       if (candidate_bundle_count < minimum_bundle_counts[end]) {
         minimum_bundle_counts[end] = candidate_bundle_count;
         predecessor_indices[end] = (uint8_t)begin;
+        partition_formats[end] = format;
       }
     }
   }
@@ -931,8 +974,9 @@ static iree_status_t loom_aie2p_bundle_plan_append_descriptor_run(
     --partition_count;
     const iree_host_size_t begin = partition_starts[partition_count];
     const iree_host_size_t end = partition_ends[partition_count];
-    IREE_RETURN_IF_ERROR(loom_aie2p_bundle_plan_append_bundle(
-        builder, logical_issue_cycle, slot_start + begin, end - begin));
+    IREE_RETURN_IF_ERROR(loom_aie2p_bundle_plan_commit_bundle(
+        builder, logical_issue_cycle, slot_start + begin, end - begin,
+        partition_formats[end], &builder->instructions[begin]));
   }
   return iree_ok_status();
 }
@@ -951,8 +995,8 @@ static iree_status_t loom_aie2p_bundle_plan_append_nop_bundle(
       (loom_aie2p_slot_realization_t){.descriptor_ordinal =
                                           AIE2P_CORE_DESCRIPTOR_REF_NOP},
       &slot_start));
-  return loom_aie2p_bundle_plan_append_bundle(builder, logical_issue_cycle,
-                                              slot_start, 1);
+  return loom_aie2p_bundle_plan_append_single_slot(builder, logical_issue_cycle,
+                                                   slot_start);
 }
 
 static iree_status_t loom_aie2p_bundle_plan_try_place_return(
@@ -1131,8 +1175,8 @@ static iree_status_t loom_aie2p_bundle_plan_append_move(
           (loom_aie2p_slot_realization_t){.move = parts[i]}, &slot_start);
     }
     if (iree_status_is_ok(status)) {
-      status = loom_aie2p_bundle_plan_append_bundle(
-          builder, logical_issue_cycle, slot_start, 1);
+      status = loom_aie2p_bundle_plan_append_single_slot(
+          builder, logical_issue_cycle, slot_start);
     }
   }
   return status;
@@ -1190,8 +1234,8 @@ static iree_status_t loom_aie2p_bundle_plan_append_branch(
   IREE_RETURN_IF_ERROR(loom_aie2p_bundle_plan_advance(
       builder,
       quiescent_cycle > control_cycles ? quiescent_cycle - control_cycles : 0));
-  IREE_RETURN_IF_ERROR(loom_aie2p_bundle_plan_append_bundle(
-      builder, logical_issue_cycle, slot_start, 1));
+  IREE_RETURN_IF_ERROR(loom_aie2p_bundle_plan_append_single_slot(
+      builder, logical_issue_cycle, slot_start));
   if (builder->branch_fixup_count >= builder->branch_fixup_capacity) {
     return iree_make_status(IREE_STATUS_RESOURCE_EXHAUSTED,
                             "AIE2P branch-fixup capacity exhausted");
@@ -1260,8 +1304,8 @@ static iree_status_t loom_aie2p_bundle_plan_append_return(
       &return_slot_start));
   IREE_RETURN_IF_ERROR(
       loom_aie2p_bundle_plan_advance(builder, earliest_return_cycle));
-  IREE_RETURN_IF_ERROR(loom_aie2p_bundle_plan_append_bundle(
-      builder, block_analysis->terminator_issue_cycle, return_slot_start, 1));
+  IREE_RETURN_IF_ERROR(loom_aie2p_bundle_plan_append_single_slot(
+      builder, block_analysis->terminator_issue_cycle, return_slot_start));
   for (uint8_t i = 0; i < delay_slot_count; ++i) {
     IREE_RETURN_IF_ERROR(loom_aie2p_bundle_plan_append_nop_bundle(
         builder, block_analysis->terminator_issue_cycle));
@@ -1594,6 +1638,7 @@ static iree_status_t loom_aie2p_bundle_plan_build_impl(
 
   *out_plan = (loom_aie2p_bundle_plan_t){
       .frame = frame,
+      .register_writes = builder.register_writes,
       .block_byte_offsets = builder.block_byte_offsets,
       .block_count = builder.block_count,
       .bundles = builder.bundles,

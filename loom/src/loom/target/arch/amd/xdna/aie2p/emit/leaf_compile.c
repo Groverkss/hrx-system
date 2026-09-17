@@ -19,6 +19,8 @@ static iree_status_t loom_aie2p_leaf_build_frame(
   const loom_low_emission_frame_options_t frame_options = {
       .descriptor_registry = options->descriptor_registry,
       .function_target_facts = options->function_target_facts,
+      .allocation_fixed_values = options->allocation_fixed_values,
+      .allocation_fixed_value_count = options->allocation_fixed_value_count,
       .memory_access_table = loom_low_memory_access_table_empty(),
       .schedule_structural_models = loom_aie2p_low_structural_schedule_models(),
       .schedule_strategy = LOOM_LOW_SCHEDULE_STRATEGY_RESOURCE_STALL,

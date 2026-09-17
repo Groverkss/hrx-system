@@ -17,6 +17,7 @@ from loom.gen.support.c import c_string_literal
 from loom.gen.support.files import write_text_file
 from loom.gen.support.generated_file import line_comment_header
 from loom.gen.target.arch.amd.xdna.aie2p import machine_tables
+from loom.gen.target.low.compiler import compile_descriptor_set
 from loom.gen.target.low.low_descriptors import generate_descriptor_set
 from loom.target.arch.amd.xdna.aie.encoding import (
     BundleFieldEncoding,
@@ -38,7 +39,10 @@ from loom.target.arch.amd.xdna.aie2p.core_encoding_data import (
     LLVM_AIE_SOURCE_COMMIT,
     SLOT_BIT_COUNTS,
 )
-from loom.target.arch.amd.xdna.aie2p.core_machine_data import CORE_MACHINE_TABLE
+from loom.target.arch.amd.xdna.aie2p.core_machine_data import (
+    CORE_MACHINE_TABLE,
+    DIMENSION_FIELDS,
+)
 from loom.target.low_descriptors import DescriptorFlag
 
 _NATIVE_MAX_PACKET_SIZE = 16
@@ -353,8 +357,49 @@ def _emit_encoding_tables() -> str:
     return "\n".join(lines)
 
 
-def _emit_move_tables() -> str:
-    """Indexes validated allocation moves by physical-register membership."""
+def _register_part_unit_masks() -> list[int]:
+    """Projects semantic parts onto physical atomic-unit ordinals once."""
+    spec = AIE2P_CORE_DESCRIPTOR_SET
+    registers = {row.name: row for row in CORE_MACHINE_TABLE.physical_registers}
+    classes = {row.name: row for row in spec.reg_classes}
+    # Vector 128-bit halves share an indivisible 256-bit alias unit. Other
+    # parts follow the named physical subregister hierarchy, not unit-ID order.
+    paths = {
+        "aie2p.elpredicate": (("sub_l_even",), ("sub_l_odd",)),
+        "aie2p.vec256": ((), ()),
+        "aie2p.ewl": ((), ()),
+        "aie2p.eldfiforeg": (("sub_lo_fifo",), ("sub_hi_fifo",)),
+        "aie2p.mstfifo": (("sub_lo_fifo",), ("sub_hi_fifo",)),
+        **{f"aie2p.{name.lower()}": tuple(path for _, path, _ in fields) for name, fields in DIMENSION_FIELDS.items()},
+    }
+    if any(len(row.atomic_units) > 32 for row in registers.values()):
+        raise ValueError("AIE2P register units exceed uint32 ordinal masks")
+    result = []
+    for part in compile_descriptor_set(spec).register_parts:
+        if part.mask >> len(paths[part.reg_class]):
+            raise ValueError(f"{part.name}: register part has no physical projection")
+        masks = set()
+        for name in classes[part.reg_class].physical_registers:
+            register = registers[name]
+            selected_units = set()
+            for index, path in enumerate(paths[part.reg_class]):
+                if not part.mask & (1 << index):
+                    continue
+                selected = register
+                for step in path:
+                    selected = registers[selected.subregisters[selected.subregister_indices.index(step)]]
+                selected_units.update(selected.atomic_units)
+            if not selected_units or not selected_units <= set(register.atomic_units):
+                raise ValueError(f"{part.name}: invalid unit projection for {name}")
+            masks.add(sum(1 << index for index, unit in enumerate(register.atomic_units) if unit in selected_units))
+        if len(masks) != 1 or max(masks) > 255:
+            raise ValueError(f"{part.name}: candidates require distinct or wider unit masks")
+        result.append(masks.pop())
+    return result
+
+
+def _emit_register_tables() -> str:
+    """Indexes native moves and register parts by their producer-owned IDs."""
     spec = AIE2P_CORE_DESCRIPTOR_SET
     moves = tuple((ordinal, descriptor) for ordinal, descriptor in enumerate(spec.descriptors) if DescriptorFlag.ALLOCATION_MOVE in descriptor.flags)
     if not moves or len(moves) > 8:
@@ -402,6 +447,7 @@ def _emit_move_tables() -> str:
                 raise ValueError("AIE2P scalar pair parts need direct native moves")
     lines.extend(("static const uint8_t kMoveScalarPairIndices[] = {", *(f"    {value}," for value in pair_indices), "};", ""))
     lines.extend(("static const uint16_t kMoveScalarPairs[][2] = {", *(f"    {{{low}, {high}}}," for low, high in pairs), "};", ""))
+    lines.extend(("static const uint8_t kRegisterPartAtomicUnitMasks[] = {", *(f"    0x{mask:02x}," for mask in _register_part_unit_masks()), "};", ""))
     return "\n".join(lines)
 
 
@@ -418,9 +464,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         help="Path to write the native AIE2P machine table include.",
     )
     parser.add_argument(
-        "--move-output",
+        "--register-output",
         type=Path,
-        help="Path to write the AIE2P allocation move lookup tables.",
+        help="Path to write the AIE2P register projection and move tables.",
     )
     parser.add_argument(
         "--descriptor-header-output",
@@ -451,7 +497,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     output_paths = (
         args.encoding_output,
         args.machine_output,
-        args.move_output,
+        args.register_output,
         args.descriptor_header_output,
         args.descriptor_source_output,
         args.array_descriptor_header_output,
@@ -469,11 +515,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     generated_descriptors = generate_descriptor_set(AIE2P_CORE_DESCRIPTOR_SET)
     generated_array_descriptors = generate_descriptor_set(AIE2P_ARRAY_DESCRIPTOR_SET)
-    move_contents = _emit_move_tables()
+    register_contents = _emit_register_tables()
     if args.encoding_output is not None:
         write_text_file(args.encoding_output, encoding_contents)
         write_text_file(args.machine_output, machine_contents)
-        write_text_file(args.move_output, move_contents)
+        write_text_file(args.register_output, register_contents)
         write_text_file(args.descriptor_header_output, generated_descriptors.header)
         write_text_file(args.descriptor_source_output, generated_descriptors.source)
         write_text_file(
