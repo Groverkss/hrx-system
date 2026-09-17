@@ -188,12 +188,17 @@ iree_status_t loom_bytecode_resolve_function_low_descriptor_set(
     const loom_bytecode_numbering_t* numbering, loom_func_like_t func_like,
     const loom_low_repr_descriptor_set_t** out_descriptor_set);
 
-// Numbers all transitive catalog dependencies of one attribute value.
+// Numbers the strings and types owned by one attribute payload, including its
+// nested aggregates. Referenced encoding payloads belong to the ordered
+// encoding pass and are not traversed again at each use.
 iree_status_t loom_bytecode_number_attr_value(
     loom_bytecode_numbering_t* numbering, loom_attribute_t attr,
     const loom_attr_descriptor_t* descriptor);
 
-// Numbers all transitive catalog dependencies of one static encoding.
+// Numbers the catalogs owned by one static encoding payload. The writer calls
+// this once per entry in module-table order before signature/body discovery.
+// Construction restricts encoding parameters to prior entries, whose payloads
+// have therefore already been numbered.
 iree_status_t loom_bytecode_number_encoding(
     loom_bytecode_numbering_t* numbering, uint16_t encoding_id);
 

@@ -720,8 +720,15 @@ static iree_status_t loom_bytecode_number_attr_value_at_depth(
       break;
     }
     case LOOM_ATTR_ENCODING: {
-      IREE_RETURN_IF_ERROR(loom_bytecode_number_encoding(
-          numbering, loom_attr_as_encoding_id(attr)));
+      const uint16_t encoding_id = loom_attr_as_encoding_id(attr);
+      if (encoding_id == 0 ||
+          encoding_id > numbering->module->encodings.count) {
+        return iree_make_status(
+            IREE_STATUS_INVALID_ARGUMENT,
+            "encoding_id %u out of range (module has %" PRIhsz " encodings)",
+            (unsigned)encoding_id, numbering->module->encodings.count);
+      }
+      // The ordered encoding pass owns the referenced payload's catalogs.
       break;
     }
     case LOOM_ATTR_DICT: {
@@ -780,12 +787,6 @@ iree_status_t loom_bytecode_number_attr_value(
 
 iree_status_t loom_bytecode_number_encoding(
     loom_bytecode_numbering_t* numbering, uint16_t encoding_id) {
-  if (encoding_id == 0 || encoding_id > numbering->module->encodings.count) {
-    return iree_make_status(
-        IREE_STATUS_INVALID_ARGUMENT,
-        "encoding_id %u out of range (module has %" PRIhsz " encodings)",
-        (unsigned)encoding_id, numbering->module->encodings.count);
-  }
   uint32_t unused_id = 0;
   const loom_encoding_t* encoding =
       &numbering->module->encodings.entries[encoding_id - 1];

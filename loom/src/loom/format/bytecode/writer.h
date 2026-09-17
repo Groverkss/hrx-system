@@ -7,7 +7,7 @@
 // Bytecode writer: serializes loom_module_t to .loombc format.
 //
 // Streaming architecture:
-//   1. Intern module metadata (names, sources, symbols) — no output.
+//   1. Intern module metadata and static encoding payloads — no output.
 //   2. For each function: intern signature, then stream body to IR
 //      section through a page-buffered writer. Numbering tables grow
 //      as new strings/types/ops are encountered.
