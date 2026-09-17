@@ -3157,6 +3157,112 @@ TEST_F(ModuleTest, InternImplicitShapedAttachmentUsesAbsentIdentity) {
   loom_module_free(module);
 }
 
+TEST_F(ModuleTest, InternShapedTypeRequiresExistingStaticEncoding) {
+  loom_module_t* module = nullptr;
+  IREE_ASSERT_OK(loom_module_allocate(&context_, IREE_SV("test"), &block_pool_,
+                                      nullptr, iree_allocator_system(),
+                                      &module));
+  const uint16_t encoding_ids[] = {1, UINT16_MAX};
+  for (const uint16_t encoding_id : encoding_ids) {
+    const loom_type_t type =
+        loom_type_shaped_1d(LOOM_TYPE_TILE, LOOM_SCALAR_TYPE_F32,
+                            loom_dim_pack_static(4), encoding_id);
+    loom_type_id_t type_id = LOOM_TYPE_ID_INVALID;
+    IREE_EXPECT_STATUS_IS(IREE_STATUS_INVALID_ARGUMENT,
+                          loom_module_intern_type_id(module, type, &type_id));
+    EXPECT_EQ(type_id, LOOM_TYPE_ID_INVALID);
+    EXPECT_EQ(module->types.count, 0u);
+  }
+  loom_module_free(module);
+}
+
+TEST_F(ModuleTest, InternNestedTypeRequiresExistingStaticEncoding) {
+  loom_module_t* module = nullptr;
+  IREE_ASSERT_OK(loom_module_allocate(&context_, IREE_SV("test"), &block_pool_,
+                                      nullptr, iree_allocator_system(),
+                                      &module));
+  const loom_type_t type = loom_type_shaped_1d(
+      LOOM_TYPE_TILE, LOOM_SCALAR_TYPE_F32, loom_dim_pack_static(4), 1);
+  loom_type_t interned_type = {};
+  IREE_EXPECT_STATUS_IS(IREE_STATUS_INVALID_ARGUMENT,
+                        loom_module_intern_function_type(
+                            module, &type, 1, nullptr, 0, &interned_type));
+  IREE_EXPECT_STATUS_IS(IREE_STATUS_INVALID_ARGUMENT,
+                        loom_module_intern_function_type(
+                            module, nullptr, 0, &type, 1, &interned_type));
+  loom_string_id_t name_id = LOOM_STRING_ID_INVALID;
+  IREE_ASSERT_OK(
+      loom_module_intern_string(module, IREE_SV("test.nested"), &name_id));
+  IREE_EXPECT_STATUS_IS(
+      IREE_STATUS_INVALID_ARGUMENT,
+      loom_module_intern_type(module, loom_type_dialect(name_id, 1, &type),
+                              &interned_type));
+  IREE_EXPECT_STATUS_IS(
+      IREE_STATUS_INVALID_ARGUMENT,
+      loom_module_intern_register_type(module, 1, 1, type, &interned_type));
+  EXPECT_EQ(module->types.count, 0u);
+  loom_module_free(module);
+}
+
+TEST_F(ModuleTest, InternTypesRetainPriorStaticEncodingDependencies) {
+  static const loom_attr_descriptor_t kParameter = {
+      /*.name=*/LOOM_BSTRING_REF(7, "element"),
+      /*.attr_kind=*/LOOM_ATTR_TYPE,
+  };
+  static const loom_encoding_family_descriptor_t kDescriptor = {
+      /*.name=*/LOOM_BSTRING_REF(5, "typed"),
+      /*.role=*/LOOM_ENCODING_ROLE_STORAGE_SCHEMA,
+      /*.family_flags=*/{},
+      /*.parameter_count=*/1,
+      /*.parameter_descriptors=*/&kParameter,
+  };
+  static const loom_encoding_vtable_t kVtable = {
+      /*.descriptor=*/&kDescriptor,
+  };
+  loom_context_t context;
+  loom_context_initialize(iree_allocator_system(), &context);
+  IREE_ASSERT_OK(loom_context_register_encoding_vtable(&context, &kVtable));
+  IREE_ASSERT_OK(loom_context_finalize(&context));
+  loom_module_t* module = nullptr;
+  IREE_ASSERT_OK(loom_module_allocate(&context, IREE_SV("test"), &block_pool_,
+                                      nullptr, iree_allocator_system(),
+                                      &module));
+  loom_type_id_t dependency_id = LOOM_TYPE_ID_INVALID;
+  IREE_ASSERT_OK(loom_module_intern_type_id(
+      module, loom_type_scalar(LOOM_SCALAR_TYPE_F32), &dependency_id));
+  loom_named_attr_t parameter = {};
+  IREE_ASSERT_OK(loom_module_intern_string(module, IREE_SV("element"),
+                                           &parameter.name_id));
+  loom_encoding_t encoding = {};
+  IREE_ASSERT_OK(
+      loom_module_intern_string(module, IREE_SV("typed"), &encoding.name_id));
+  encoding.alias_id = LOOM_STRING_ID_INVALID;
+  encoding.attribute_count = 1;
+  encoding.attributes = &parameter;
+  for (uint16_t index = 0; index < 3; ++index) {
+    parameter.value = loom_attr_type(dependency_id);
+    uint16_t encoding_id = 0;
+    IREE_ASSERT_OK(loom_module_add_encoding(module, &encoding, &encoding_id));
+    EXPECT_EQ(encoding_id, index + 1);
+    const loom_type_t type =
+        loom_type_shaped_1d(LOOM_TYPE_TILE, LOOM_SCALAR_TYPE_F32,
+                            loom_dim_pack_static(4), encoding_id);
+    loom_type_id_t general_id = LOOM_TYPE_ID_INVALID;
+    loom_type_id_t topological_id = LOOM_TYPE_ID_INVALID;
+    IREE_ASSERT_OK(loom_module_intern_topological_type_id(module, type, nullptr,
+                                                          0, &topological_id));
+    IREE_ASSERT_OK(loom_module_intern_type_id(module, type, &general_id));
+    EXPECT_EQ(general_id, topological_id);
+    EXPECT_EQ(
+        loom_module_encoding(module, encoding_id)->attributes[0].value.type_id,
+        dependency_id);
+    dependency_id = general_id;
+  }
+  EXPECT_EQ(module->types.count, 4u);
+  loom_module_free(module);
+  loom_context_deinitialize(&context);
+}
+
 TEST_F(ModuleTest, InternRegisterTypeOwnsAndDeduplicatesValueType) {
   loom_module_t* module = NULL;
   IREE_ASSERT_OK(loom_module_allocate(&context_, IREE_SV("test"), &block_pool_,

@@ -22,6 +22,14 @@
 namespace loom {
 namespace {
 
+static const loom_encoding_family_descriptor_t kLayoutDescriptor = {
+    /*.name=*/LOOM_BSTRING_REF(11, "test.layout"),
+    /*.role=*/LOOM_ENCODING_ROLE_ADDRESS_LAYOUT,
+};
+static const loom_encoding_vtable_t kLayoutVtable = {
+    /*.descriptor=*/&kLayoutDescriptor,
+};
+
 class TypePropagationTest : public ::testing::Test {
  protected:
   void SetUp() override {
@@ -33,6 +41,8 @@ class TypePropagationTest : public ::testing::Test {
     RegisterDialect(LOOM_DIALECT_VIEW, loom_view_dialect_vtables);
     RegisterDialect(LOOM_DIALECT_VECTOR, loom_vector_dialect_vtables);
     RegisterDialect(LOOM_DIALECT_SCF, loom_scf_dialect_vtables);
+    IREE_ASSERT_OK(
+        loom_context_register_encoding_vtable(&context_, &kLayoutVtable));
     IREE_ASSERT_OK(loom_context_finalize(&context_));
     IREE_ASSERT_OK(loom_module_allocate(&context_, IREE_SV("test"),
                                         &block_pool_, NULL,
@@ -140,6 +150,14 @@ class TypePropagationTest : public ::testing::Test {
                               loom_op_t** out_op) {
     return loom_test_constant_build(&builder_, value, type,
                                     LOOM_LOCATION_UNKNOWN, out_op);
+  }
+
+  iree_status_t AddStaticLayout(uint16_t* out_encoding_id) {
+    loom_encoding_t encoding = {};
+    IREE_RETURN_IF_ERROR(loom_module_intern_string(
+        module_, IREE_SV("test.layout"), &encoding.name_id));
+    encoding.alias_id = LOOM_STRING_ID_INVALID;
+    return loom_module_add_encoding(module_, &encoding, out_encoding_id);
   }
 
   iree_arena_block_pool_t block_pool_;
@@ -372,6 +390,8 @@ TEST_F(TypePropagationTest, SameShapeNarrowsVariadicInputs) {
 }
 
 TEST_F(TypePropagationTest, SameEncodingNarrowsSsaEncodingAttachment) {
+  uint16_t encoding_id = 0;
+  IREE_ASSERT_OK(AddStaticLayout(&encoding_id));
   loom_op_t* layout_op = NULL;
   IREE_ASSERT_OK(loom_encoding_layout_dense_build(
       &builder_,
@@ -384,8 +404,9 @@ TEST_F(TypePropagationTest, SameEncodingNarrowsSsaEncodingAttachment) {
   source_type.encoding_id = (uint16_t)layout;
   source_type.encoding_flags = LOOM_ENCODING_FLAG_SSA;
 
-  loom_type_t result_type = loom_type_shaped_1d(
-      LOOM_TYPE_VIEW, LOOM_SCALAR_TYPE_F32, loom_dim_pack_static(4), 7);
+  loom_type_t result_type =
+      loom_type_shaped_1d(LOOM_TYPE_VIEW, LOOM_SCALAR_TYPE_F32,
+                          loom_dim_pack_static(4), encoding_id);
   loom_op_t* source_op = NULL;
   IREE_ASSERT_OK(BuildConstant(loom_attr_i64(0), source_type, &source_op));
   loom_value_id_t source = loom_test_constant_result(source_op);
@@ -401,7 +422,7 @@ TEST_F(TypePropagationTest, SameEncodingNarrowsSsaEncodingAttachment) {
   EXPECT_TRUE(changed);
   loom_type_t refined_source_type = loom_module_value_type(module_, source);
   EXPECT_TRUE(loom_type_has_static_encoding(refined_source_type));
-  EXPECT_EQ(refined_source_type.encoding_id, 7);
+  EXPECT_EQ(refined_source_type.encoding_id, encoding_id);
 }
 
 TEST_F(TypePropagationTest, ValueFactsNarrowDynamicDimensions) {
@@ -540,6 +561,8 @@ TEST_F(TypePropagationTest, VectorTransposeNarrowsPermutedResultShape) {
 }
 
 TEST_F(TypePropagationTest, ViewRefineNarrowsSourceStaticShapeAndEncoding) {
+  uint16_t encoding_id = 0;
+  IREE_ASSERT_OK(AddStaticLayout(&encoding_id));
   loom_op_t* layout_op = NULL;
   IREE_ASSERT_OK(loom_encoding_layout_dense_build(
       &builder_, loom_type_encoding(), LOOM_LOCATION_UNKNOWN, &layout_op));
@@ -555,8 +578,9 @@ TEST_F(TypePropagationTest, ViewRefineNarrowsSourceStaticShapeAndEncoding) {
   source_type.encoding_id = (uint16_t)layout;
   source_type.encoding_flags = LOOM_ENCODING_FLAG_SSA;
 
-  loom_type_t result_type = loom_type_shaped_1d(
-      LOOM_TYPE_VIEW, LOOM_SCALAR_TYPE_F32, loom_dim_pack_static(16), 7);
+  loom_type_t result_type =
+      loom_type_shaped_1d(LOOM_TYPE_VIEW, LOOM_SCALAR_TYPE_F32,
+                          loom_dim_pack_static(16), encoding_id);
 
   loom_op_t* source_op = NULL;
   IREE_ASSERT_OK(BuildConstant(loom_attr_i64(0), source_type, &source_op));
@@ -574,7 +598,7 @@ TEST_F(TypePropagationTest, ViewRefineNarrowsSourceStaticShapeAndEncoding) {
   EXPECT_FALSE(loom_type_dim_is_dynamic_at(refined_source, 0));
   EXPECT_EQ(loom_type_dim_static_size_at(refined_source, 0), 16);
   EXPECT_TRUE(loom_type_has_static_encoding(refined_source));
-  EXPECT_EQ(refined_source.encoding_id, 7);
+  EXPECT_EQ(refined_source.encoding_id, encoding_id);
 }
 
 TEST_F(TypePropagationTest, RegionBranchNarrowsResultFromYieldedValues) {

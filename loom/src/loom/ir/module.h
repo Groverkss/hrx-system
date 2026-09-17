@@ -485,8 +485,11 @@ loom_module_encoding_family_descriptor(const loom_module_t* module,
 // already exists, returns the existing entry by value. Otherwise appends a new
 // entry. Structural dependencies such as shaped element types, function
 // argument/result types, and dialect type parameters are interned first so the
-// type table always contains the closure required by serializers. Any
-// heap-backed payload owned by |type| (overflow dims, function signatures,
+// type table always contains the closure required by serializers. Static
+// encodings referenced by the type or its dependencies must already
+// exist in the module. Encoding parameters likewise reference only existing
+// types and encodings, keeping the combined dependency graph acyclic.
+// Heap-backed payload owned by |type| (overflow dims, function signatures,
 // dialect params, typed register payloads) is recursively copied into the
 // module arena before storage, so callers may pass temporary or
 // foreign-allocator payloads.
@@ -509,6 +512,7 @@ iree_status_t loom_module_intern_type_id(loom_module_t* module,
 // Shaped scalar element types are interned implicitly to preserve the module's
 // serializer closure even when a selective reader has not reached a separate
 // scalar type-table entry.
+// All static encoding attachments must already exist in the module.
 //
 // This is the topological construction path for validated serialized type
 // tables. General callers with arbitrary recursive type values use

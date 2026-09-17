@@ -125,7 +125,7 @@ class SiteCollectionTest : public ::testing::Test {
 
   loom_op_t* BuildViewValue(loom_value_id_t input_value_id) {
     loom_type_t view_type = loom_type_shaped_1d(
-        LOOM_TYPE_VIEW, LOOM_SCALAR_TYPE_F32, loom_dim_pack_static(4), 1);
+        LOOM_TYPE_VIEW, LOOM_SCALAR_TYPE_F32, loom_dim_pack_static(4), 0);
     loom_op_t* op = NULL;
     IREE_CHECK_OK(loom_test_convert_build(&builder_, input_value_id, view_type,
                                           LOOM_LOCATION_UNKNOWN, &op));

@@ -4293,11 +4293,8 @@ static iree_status_t loom_module_retain_type_from_context(
 // before type hashing and interning. Dynamic attachments remain explicit SSA
 // references, and all non-default static families retain their module IDs.
 static loom_type_t loom_module_canonicalize_shaped_type_attachment(
-    const loom_module_t* module, loom_type_t type) {
-  if (!loom_type_has_static_encoding(type)) return type;
-  const loom_encoding_t* encoding =
-      loom_module_encoding(module, type.encoding_id);
-  if (!encoding || !loom_encoding_is_implicit_shaped_attachment(encoding)) {
+    loom_type_t type, const loom_encoding_t* encoding) {
+  if (!loom_encoding_is_implicit_shaped_attachment(encoding)) {
     return type;
   }
   type.encoding_id = 0;
@@ -4336,7 +4333,10 @@ iree_status_t loom_module_intern_topological_type_id(
   }
   *out_type_id = LOOM_TYPE_ID_INVALID;
 
-  type = loom_module_canonicalize_shaped_type_attachment(module, type);
+  if (loom_type_has_static_encoding(type)) {
+    type = loom_module_canonicalize_shaped_type_attachment(
+        type, loom_module_encoding(module, type.encoding_id));
+  }
   iree_host_size_t expected_dependency_count = 0;
   switch (loom_type_kind(type)) {
     case LOOM_TYPE_TILE:
@@ -4395,7 +4395,18 @@ iree_status_t loom_module_intern_topological_type_id(
 static iree_status_t loom_module_intern_type_with_dependencies(
     loom_module_t* module, loom_type_t type, loom_type_t* out_interned_type,
     loom_type_id_t* out_type_id) {
-  type = loom_module_canonicalize_shaped_type_attachment(module, type);
+  if (loom_type_has_static_encoding(type)) {
+    const loom_encoding_t* encoding =
+        loom_module_encoding(module, type.encoding_id);
+    if (!encoding) {
+      return iree_make_status(
+          IREE_STATUS_INVALID_ARGUMENT,
+          "static encoding id %u is out of range for module with %" PRIhsz
+          " encodings",
+          (unsigned)type.encoding_id, module->encodings.count);
+    }
+    type = loom_module_canonicalize_shaped_type_attachment(type, encoding);
+  }
   const loom_type_id_t recent_type_id =
       loom_module_find_recent_exact_type(module, type);
   if (recent_type_id != LOOM_TYPE_ID_INVALID) {
