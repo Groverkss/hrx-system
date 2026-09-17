@@ -1,0 +1,8 @@
+low.func.def target<amdgpu.rdna3.core> @sum(%lhs: reg<amdgpu.vgpr>, %rhs: reg<amdgpu.vgpr>) -> (reg<amdgpu.vgpr>) asm {
+  %sum = v_add_f32 %lhs, %rhs
+  return %sum
+}
+
+low.func.def target<amdgpu.rdna3.core> @unselected(%value: reg<amdgpu.vgpr : f32>) -> (reg<amdgpu.vgpr : f32>) asm {
+  return %value
+}

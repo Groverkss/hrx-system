@@ -30,6 +30,22 @@ endif()
 if(LOOM_TARGET_ARCH_AMDGPU AND LOOM_EMIT_AMDGPU)
 iree_execution_test_suite(
   NAME
+    loom_link_execution_test
+  MANIFESTS
+    "loom-link-amdgpu.test.json"
+  TOOLS
+    "loom-format=loom::tools::loom-format"
+    "loom-link=loom::tools::loom-link"
+  DATA
+    "${PROJECT_SOURCE_DIR}/loom/src/loom/tooling/target/amdgpu/test/loom_link_low.loom"
+  LABELS
+    "hostonly"
+)
+endif()
+
+if(LOOM_TARGET_ARCH_AMDGPU AND LOOM_EMIT_AMDGPU)
+iree_execution_test_suite(
+  NAME
     loom_opt_execution_test
   MANIFESTS
     "loom-opt-amdgpu.test.json"

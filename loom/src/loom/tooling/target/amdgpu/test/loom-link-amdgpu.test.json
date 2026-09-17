@@ -1,0 +1,88 @@
+{
+  "version": 1,
+  "cases": [
+    {
+      "name": "prints selected Low text input as target assembly",
+      "run": {
+        "tool": "loom-link",
+        "args": ["--root=sum", "{srcdir}/loom_link_low.loom"]
+      },
+      "stdout": {
+        "contains": [
+          "@sum(%lhs: reg<amdgpu.vgpr>, %rhs: reg<amdgpu.vgpr>) -> (reg<amdgpu.vgpr>) asm {",
+          "%sum = v_add_f32 %lhs, %rhs",
+          "return %sum"
+        ],
+        "not_contains": ["@unselected", "low.op<", "low.return"]
+      },
+      "stderr": {"empty": true}
+    },
+    {
+      "name": "writes merged Low assembly that can be parsed again",
+      "steps": [
+        {
+          "name": "merge",
+          "run": {
+            "tool": "loom-link",
+            "args": [
+              "--mode=merge",
+              "--output={tmp}/merged.loom",
+              "{srcdir}/loom_link_low.loom"
+            ]
+          },
+          "files": [
+            {
+              "path": "{tmp}/merged.loom",
+              "contains": [
+                "%sum = v_add_f32 %lhs, %rhs",
+                "@unselected(%value: reg<amdgpu.vgpr : f32>) -> (reg<amdgpu.vgpr : f32>) asm {"
+              ],
+              "not_contains": ["low.op<", "low.return"]
+            }
+          ],
+          "stderr": {"empty": true}
+        },
+        {
+          "name": "check-assembly",
+          "run": {
+            "tool": "loom-format",
+            "args": ["--check", "{tmp}/merged.loom"]
+          },
+          "stderr": {"empty": true}
+        }
+      ]
+    },
+    {
+      "name": "prints selected Low bytecode input as target assembly",
+      "steps": [
+        {
+          "name": "encode",
+          "run": {
+            "tool": "loom-format",
+            "args": [
+              "--to=bc",
+              "--output={tmp}/input.loombc",
+              "{srcdir}/loom_link_low.loom"
+            ]
+          }
+        },
+        {
+          "name": "link",
+          "run": {
+            "tool": "loom-link",
+            "args": ["--root=sum", "{tmp}/input.loombc"]
+          },
+          "stdout": {
+            "contains": [
+              "@sum(%lhs: reg<amdgpu.vgpr>, %rhs: reg<amdgpu.vgpr>) -> (reg<amdgpu.vgpr>) asm {",
+              "%sum = v_add_f32 %lhs, %rhs",
+              "return %sum"
+            ],
+            "not_contains": ["@unselected", "low.op<", "low.return"]
+          },
+          "stderr": {"empty": true}
+        }
+      ]
+    }
+  ]
+}

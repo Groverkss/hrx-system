@@ -921,11 +921,20 @@ static iree_status_t loom_link_cli_collect_source_entries(
 static iree_status_t loom_link_cli_write_text_output(
     const loom_module_t* module, loom_format_output_t* out_output,
     iree_allocator_t allocator) {
+  loom_target_low_descriptor_registry_t low_registry = {0};
+  IREE_RETURN_IF_ERROR(
+      loom_target_environment_initialize_low_descriptor_registry(
+          loom_configured_target_environment(), &low_registry));
+  loom_low_descriptor_text_print_context_t print_context;
+  loom_low_descriptor_text_print_context_initialize(&low_registry.registry,
+                                                    &print_context);
+  print_context.options.flags |= LOOM_TEXT_PRINT_PREFER_LOW_ASM;
+
   iree_string_builder_t builder;
   iree_string_builder_initialize(allocator, &builder);
 
-  iree_status_t status = loom_text_print_module_to_builder(
-      module, &builder, LOOM_TEXT_PRINT_DEFAULT);
+  iree_status_t status = loom_text_print_module_to_builder_with_options(
+      module, &builder, &print_context.options);
   if (iree_status_is_ok(status)) {
     out_output->length = iree_string_builder_size(&builder);
     out_output->data = (uint8_t*)iree_string_builder_take_storage(&builder);

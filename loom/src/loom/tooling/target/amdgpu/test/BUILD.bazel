@@ -45,6 +45,18 @@ iree_execution_test_suite(
 )
 
 iree_execution_test_suite(
+    name = "loom_link_execution_test",
+    data = ["loom_link_low.loom"],
+    manifests = ["loom-link-amdgpu.test.json"],
+    tags = ["hostonly"],
+    target_compatible_with = _AMDGPU_ARTIFACTS_COMPATIBLE_WITH,
+    tools = {
+        "loom-format": "//loom/src/loom/tools/loom-format",
+        "loom-link": "//loom/src/loom/tools/loom-link",
+    },
+)
+
+iree_execution_test_suite(
     name = "loom_opt_execution_test",
     data = ["loom_opt_f32_arith.loom"],
     manifests = ["loom-opt-amdgpu.test.json"],
