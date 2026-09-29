@@ -439,13 +439,11 @@ TEST_F(HostQueueAtomicTest, HostWaitForEarlierValueIgnoresLaterProducerEpoch) {
 TEST_F(HostQueueAtomicTest, DirectWaitBeforeStoreOnIndependentQueue) {
   iree_hal_amdgpu_logical_device_options_t options;
   iree_hal_amdgpu_logical_device_options_initialize(&options);
+  iree_hal_amdgpu_topology_t topology = topology_;
+  topology.gpu_agent_queue_count = 2;
   TestLogicalDevice test_device;
   IREE_ASSERT_OK(
-      test_device.Initialize(&options, &libhsa_, &topology_, host_allocator_));
-  if (test_device.logical_device()->system->topology.gpu_agent_queue_count <
-      2) {
-    GTEST_SKIP() << "test requires two physical queues on one GPU";
-  }
+      test_device.Initialize(&options, &libhsa_, &topology, host_allocator_));
 
   iree_hal_queue_t* wait_queue = test_device.queue(/*family_ordinal=*/0,
                                                    /*queue_ordinal=*/0);
